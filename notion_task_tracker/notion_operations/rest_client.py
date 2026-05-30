@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -52,9 +51,9 @@ class NotionRestClient:
         )
 
     @classmethod
-    def from_credentials_path(cls, credentials_path: Path | None) -> "NotionRestClient":
+    def from_environment(cls) -> "NotionRestClient":
         return cls(
-            access_token=_notion_rest_access_token_from_environment_or_path(credentials_path),
+            access_token=_notion_rest_access_token_from_environment(),
             base_url=DEFAULT_NOTION_API_BASE_URL,
             notion_version=DEFAULT_NOTION_API_VERSION,
         )
@@ -420,23 +419,10 @@ class NotionRestClient:
         raise ValueError(f"Unsupported Notion REST SDK request {method} {path}")
 
 
-def _notion_rest_access_token_from_environment_or_path(credentials_path: Path | None) -> str:
+def _notion_rest_access_token_from_environment() -> str:
     access_token = os.environ.get("NOTION_API_KEY")
     if access_token:
         return access_token
-
-    if credentials_path is None:
-        raise PermissionError("Set NOTION_API_KEY to the ntn_ Notion integration token before using the REST client.")
-
-    credentials = json.loads(credentials_path.read_text(encoding="utf-8"))
-    credential_tokens = [
-        value.get("access_token")
-        for key, value in credentials.items()
-        if key.startswith("Notion|") and isinstance(value, dict)
-    ]
-    for credential_token in credential_tokens:
-        if isinstance(credential_token, str) and credential_token.startswith("ntn_"):
-            return credential_token
 
     raise PermissionError("Set NOTION_API_KEY to the ntn_ Notion integration token before using the REST client.")
 

@@ -4,7 +4,7 @@ from notion_task_tracker.notion_operations.client import (
     CreatedTaskDatabasePage,
     NotionClient,
     NotionWriteExecutionResult,
-    notion_client_from_credentials_path,
+    notion_client_from_environment,
 )
 from notion_task_tracker.notion_operations.page_registry import (
     NotionPageReference,
@@ -26,6 +26,6 @@ __all__ = [
     "NotionWriteExecutionResult",
     "NotionWriteIntent",
     "canonical_notion_page_id",
-    "notion_client_from_credentials_path",
+    "notion_client_from_environment",
     "notion_page_id_from_url",
 ]

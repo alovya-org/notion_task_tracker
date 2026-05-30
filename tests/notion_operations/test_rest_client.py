@@ -4,6 +4,7 @@ import json
 from notion_task_tracker import NotionPageReference, NotionPageRegistry, NotionWriteIntent
 from notion_task_tracker.notion_operations.rest_client import (
     NotionRestClient,
+    _notion_rest_access_token_from_environment,
     _notion_rest_error_message,
     _task_database_row_from_rest_page,
 )
@@ -49,6 +50,41 @@ def test_fetch_page_goes_through_notion_sdk_page_endpoint():
     assert notion_client.client.pages.requests == [
         ("retrieve", "22222222222222222222222222222222")
     ]
+
+
+def test_from_environment_uses_notion_api_key(monkeypatch):
+    monkeypatch.setenv("NOTION_API_KEY", "ntn_test")
+
+    notion_client = NotionRestClient.from_environment()
+
+    assert notion_client.access_token == "ntn_test"
+
+
+def test_from_environment_requires_notion_api_key(monkeypatch):
+    monkeypatch.delenv("NOTION_API_KEY", raising=False)
+
+    try:
+        NotionRestClient.from_environment()
+    except PermissionError as error:
+        assert "Set NOTION_API_KEY" in str(error)
+    else:
+        raise AssertionError("Expected PermissionError")
+
+
+def test_rest_auth_ignores_credentials_file_without_notion_api_key(monkeypatch, tmp_path):
+    monkeypatch.delenv("NOTION_API_KEY", raising=False)
+    credentials_path = tmp_path / ".credentials.json"
+    credentials_path.write_text(
+        json.dumps({"Notion|workspace": {"access_token": "ntn_from_file"}}),
+        encoding="utf-8",
+    )
+
+    try:
+        _notion_rest_access_token_from_environment()
+    except PermissionError as error:
+        assert "Set NOTION_API_KEY" in str(error)
+    else:
+        raise AssertionError("Expected PermissionError")
 
 
 def test_query_data_source_maps_rest_pages_to_database_rows():
