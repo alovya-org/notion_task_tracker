@@ -18,3 +18,6 @@ notion-task-tracker = "notion_task_tracker.run_notion_task_tracker:main"
 
 [tool.setuptools.packages.find]
 include = ["notion_task_tracker*"]
+
+[tool.setuptools.data-files]
+"share/notion-task-tracker" = ["SKILL.md"]

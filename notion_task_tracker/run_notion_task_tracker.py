@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
+from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.notion_operations.client import notion_client_from_credentials_path
 from notion_task_tracker.notion_operations.create_task_database_page import (
     should_create_task_database_page_for_command,
@@ -45,6 +46,10 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         _run_requested_cli_action(args)
+    except FileExistsError as error:
+        parser.exit(1, f"{error}\n")
+    except FileNotFoundError as error:
+        parser.exit(1, f"{error}\n")
     except PermissionError as error:
         parser.exit(1, f"{error}\n")
     except ValueError as error:
@@ -62,6 +67,7 @@ def parse_args(
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument("--install-skill", action="store_true")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -89,6 +95,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 
 def _run_requested_cli_action(args: argparse.Namespace) -> None:
+    if args.install_skill:
+        install_skill()
+        return
+
     command = build_tracker_command_from_cli_action(args)
     execution_summary = execute_tracker_command(
         command=command,

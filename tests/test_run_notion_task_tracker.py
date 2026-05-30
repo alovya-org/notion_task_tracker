@@ -24,6 +24,12 @@ def test_parse_args_reads_explicit_read_action():
     assert args.ticket_number == [67, 68]
 
 
+def test_parse_args_reads_install_skill_action():
+    args = parse_args(["--install-skill"])
+
+    assert args.install_skill is True
+
+
 def test_main_rejects_missing_action():
     with pytest.raises(SystemExit) as error:
         main(["--notion-transport", "rest"])

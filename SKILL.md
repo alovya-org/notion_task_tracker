@@ -1,5 +1,5 @@
 ---
-name: notion_task
+name: notion_task_tracker
 description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA task progress, complete or cancel ALOVYA tasks, capture miscellaneous notes, or create synthesis notes from the personal Notion task graph. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], notion_task misc [title] NOTES, notion_task synth [title] SOURCES NOTES, asks to continue an existing ALOVYA task, or asks to write task/misc/synthesis context to Notion.
 ---
 
@@ -9,9 +9,7 @@ description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA t
 
 1. Let `codex_home` be `$CODEX_HOME` if set, otherwise `~/.codex`.
 2. Let `memories_dir` be `codex_home / "memories"`.
-3. Read `memories_dir / "notion_task_tracker" / "README.md"` before creating commands or interpreting command results.
-4. Read `memories_dir / "notion_task_tracker" / "DESIGN.md"` only when page shape, priority behaviour, or fuzzy boundaries are unclear.
-5. Use `memories_dir / "notion_tasks_graph.json"` as the canonical tracker state.
+3. Use `memories_dir / "notion_tasks_graph.json"` as the canonical tracker state.
 
 The README is the API guide. Do not rederive schemas from memory.
 
@@ -34,11 +32,10 @@ Footgun: never set `allow_deleting_content` automatically. If Notion rejects rep
 
 Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The default path calls the Notion REST API with `NOTION_API_KEY`.
 
-Use the venv Python and request command escalation for live Notion commands:
+Use the installed `ntt` CLI and request command escalation for live Notion commands:
 
 ```bash
-PYTHONPATH=/home/alovyachowdhury/.codex/memories \
-  /workspace/venv/bin/python -m notion_task_tracker ...
+ntt ...
 ```
 
 If the explicit MCP fallback reaches `https://mcp.notion.com/mcp` but returns `401 Unauthorized`, refresh auth with:
