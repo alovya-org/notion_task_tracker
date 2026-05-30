@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-PACKAGE_PATH = Path(__file__).resolve().parents[1]
+PACKAGE_PATH = Path(__file__).resolve().parents[1] / "notion_task_tracker"
 
 
 def test_rest_client_does_not_import_mcp_symbols():

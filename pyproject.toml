@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notion-task-tracker"
+version = "0.1.0"
+description = "CLI tools for turning explicit task-tracker actions into Notion writes."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "notion-client==3.1.0",
+]
+
+[project.scripts]
+ntt = "notion_task_tracker.run_notion_task_tracker:main"
+notion-task-tracker = "notion_task_tracker.run_notion_task_tracker:main"
+
+[tool.setuptools.packages.find]
+include = ["notion_task_tracker*"]

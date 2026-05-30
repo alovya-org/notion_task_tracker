@@ -34,11 +34,25 @@ cd /home/alovyachowdhury/.codex/memories
 
 REST execution needs `NOTION_API_KEY` to contain the `ntn_` Notion integration token. MCP remains available as an explicit fallback with `--notion-transport mcp`.
 
-Install runtime dependencies into the local venv with:
+Install the package into the local venv with:
 
 ```bash
-/workspace/venv/bin/python -m pip install -r /home/alovyachowdhury/agents/requirements.txt
+/workspace/venv/bin/python -m pip install /home/alovyachowdhury/notion_task_tracker
 ```
+
+Install it from GitHub with:
+
+```bash
+python -m pip install git+https://github.com/alovya/notion_task_tracker.git
+```
+
+During local development, install it as editable:
+
+```bash
+/workspace/venv/bin/python -m pip install -e /home/alovyachowdhury/notion_task_tracker
+```
+
+The package installs `ntt` and `notion-task-tracker` console commands. `python -m notion_task_tracker` remains supported.
 
 Mutating action output contains:
 
@@ -341,26 +355,27 @@ This replaces the local existing-page mention list with exactly the page mention
 
 The package is Python metadata and Notion write execution code. Live fetch/write execution uses the authenticated Notion REST client by default through `notion-client`. The MCP client is a temporary fallback while REST reliability is proven.
 
-- `__main__.py`: tiny shim for `python -m notion_task_tracker`.
-- `build_tracker_command.py`: build deterministic tracker commands from explicit CLI flags.
-- `run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full database reconciliation.
-- `apply_tracker_command.py`: apply one already-built tracker command to local state and derive Notion write intents.
-- `tasks/dependency_graph.py`: task dependency graph validation, priority rollup, and task-write orchestration.
-- `tasks/database.py`: task database projection and database-row parsing.
-- `tasks/task.py`: task, priority, status, timeline-entry data, task property refresh intents, and timeline-log update intents.
-- `tasks/landing_pages.py`: ongoing and completed task landing-page rendering and refresh intents.
-- `tasks/timeline_log.py`: task page body parsing for timeline logs.
-- `tasks/create_task.py`: local task graph changes for creating parent, child, and sibling tasks.
-- `tasks/derive_task_timeline_log.py`: timeline-log facts derived from fetched task page content.
-- `tasks/refresh_task_tracker_state.py`: local task graph refresh from Notion database rows.
-- `notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, live clients, and write execution.
-- `fixed_pages.py`: names and local keys for fixed tracker pages.
-- `miscellaneous_pages.py`: dated miscellaneous notes.
-- `synthesis_pages.py`: flat synthesis root mentions and synthesis subpages with sources.
+- `pyproject.toml`: package metadata, runtime dependencies, and console scripts.
+- `notion_task_tracker/__main__.py`: tiny shim for `python -m notion_task_tracker`.
+- `notion_task_tracker/build_tracker_command.py`: build deterministic tracker commands from explicit CLI flags.
+- `notion_task_tracker/run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full database reconciliation.
+- `notion_task_tracker/apply_tracker_command.py`: apply one already-built tracker command to local state and derive Notion write intents.
+- `notion_task_tracker/tasks/dependency_graph.py`: task dependency graph validation, priority rollup, and task-write orchestration.
+- `notion_task_tracker/tasks/database.py`: task database projection and database-row parsing.
+- `notion_task_tracker/tasks/task.py`: task, priority, status, timeline-entry data, task property refresh intents, and timeline-log update intents.
+- `notion_task_tracker/tasks/landing_pages.py`: ongoing and completed task landing-page rendering and refresh intents.
+- `notion_task_tracker/tasks/timeline_log.py`: task page body parsing for timeline logs.
+- `notion_task_tracker/tasks/create_task.py`: local task graph changes for creating parent, child, and sibling tasks.
+- `notion_task_tracker/tasks/derive_task_timeline_log.py`: timeline-log facts derived from fetched task page content.
+- `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task graph refresh from Notion database rows.
+- `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, live clients, and write execution.
+- `notion_task_tracker/fixed_pages.py`: names and local keys for fixed tracker pages.
+- `notion_task_tracker/miscellaneous_pages.py`: dated miscellaneous notes.
+- `notion_task_tracker/synthesis_pages.py`: flat synthesis root mentions and synthesis subpages with sources.
 
 ## Tests
 
 ```bash
-cd /home/alovyachowdhury/.codex/memories
-/workspace/venv/bin/python -m pytest notion_task_tracker
+cd /home/alovyachowdhury/notion_task_tracker
+/workspace/venv/bin/python -m pytest tests notion_task_tracker/notion_operations/tests notion_task_tracker/tasks/tests
 ```
