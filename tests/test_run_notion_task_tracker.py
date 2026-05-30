@@ -14,7 +14,6 @@ from notion_task_tracker.run_notion_task_tracker import (
     _run_read_task_pages,
     main,
     parse_args,
-    resolve_credentials_path,
     resolve_tracker_state_path,
     repair_and_write_refreshed_tracker_state,
 )
@@ -33,9 +32,16 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
-def test_main_rejects_missing_action():
+def test_main_rejects_removed_notion_transport_flag():
     with pytest.raises(SystemExit) as error:
-        main(["--notion-transport", "rest"])
+        main(["--notion-transport", "mcp"])
+
+    assert error.value.code == 2
+
+
+def test_main_rejects_removed_credentials_path_flag():
+    with pytest.raises(SystemExit) as error:
+        main(["--credentials-path", "credentials.json"])
 
     assert error.value.code == 2
 
@@ -50,15 +56,12 @@ def test_main_rejects_unknown_flag():
 def test_default_tracker_paths_are_constant_app_paths():
     assert resolve_tracker_state_path() == DEFAULT_TRACKER_STATE_PATH
     assert resolve_tracker_state_path() == Path.home() / ".notion-task-tracker" / "notion_tasks_graph.json"
-    assert resolve_credentials_path() is None
 
 
 def test_explicit_tracker_paths_override_defaults(tmp_path: Path):
     tracker_state_path = tmp_path / "explicit_state.json"
-    credentials_path = tmp_path / "explicit_credentials.json"
 
     assert resolve_tracker_state_path(tracker_state_path) == tracker_state_path
-    assert resolve_credentials_path(credentials_path) == credentials_path
 
 
 def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_task(
@@ -159,9 +162,7 @@ def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_wr
     tracker_state = build_tracker_state_with_root_task()
     tracker_state_path = tmp_path / "tracker_state.json"
     output_path = tmp_path / "read_summary.json"
-    credentials_path = tmp_path / "credentials.json"
     tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
-    credentials_path.write_text("{}", encoding="utf-8")
 
     notion_client = FakeNotionClient(
         fetched_page_content_by_id={
@@ -193,7 +194,6 @@ def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_wr
             task_ids=["ALOVYA-1"],
             tracker_state_path=tracker_state_path,
             output_path=output_path,
-            credentials_path=credentials_path,
             notion_client=notion_client,
         )
     )
