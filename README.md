@@ -20,7 +20,7 @@ Notion page ids live in tracker state because Notion assigns them. The task data
 5. Read the output JSON for completed operation keys, read summaries, and warnings.
 6. Treat a CLI failure as a failed write. Do not manually send Notion writes unless debugging with the user.
 
-The default tracker state path is `~/.notion-task-tracker/notion_tasks_graph.json`. Override it only with `--tracker-state-path`. REST authentication uses `NOTION_API_KEY`; `--credentials-path` is only for the explicit MCP fallback.
+The default tracker state path is `~/.notion-task-tracker/notion_tasks_graph.json`. Override it only with `--tracker-state-path`. Authentication uses `NOTION_API_KEY`.
 
 Run an explicit action from an environment where `notion-task-tracker` is installed:
 
@@ -31,7 +31,7 @@ ntt \
   --content-path /tmp/notion_task_log.json
 ```
 
-REST execution needs `NOTION_API_KEY` to contain the `ntn_` Notion integration token. MCP remains available as an explicit fallback with `--notion-transport mcp`.
+Execution needs `NOTION_API_KEY` to contain the `ntn_` Notion integration token.
 
 Install the package into the local venv with:
 
@@ -69,7 +69,7 @@ Mutating action output contains:
 4. `tracker_state_path`: canonical tracker-state path written after Notion writes succeeded.
 5. `warnings`: non-fatal reconciliation warnings.
 
-The live path uses the Notion REST client by default. The MCP client remains in-tree as a temporary fallback; delete it once REST is reliable for task creation, logging, completion, reconciliation, and landing-page rendering.
+The live path uses the Notion REST client for task creation, logging, completion, reconciliation, and landing-page rendering.
 
 ## Explicit CLI Actions
 
@@ -359,7 +359,7 @@ This replaces the local existing-page mention list with exactly the page mention
 
 ## Package Shape
 
-The package is Python metadata and Notion write execution code. Live fetch/write execution uses the authenticated Notion REST client by default through `notion-client`. The MCP client is a temporary fallback while REST reliability is proven.
+The package is Python metadata and Notion write execution code. Live fetch/write execution uses the authenticated Notion REST client through `notion-client`.
 
 - `pyproject.toml`: package metadata, runtime dependencies, and console scripts.
 - `notion_task_tracker/__main__.py`: tiny shim for `python -m notion_task_tracker`.

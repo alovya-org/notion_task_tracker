@@ -195,7 +195,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
 
 
 class TestParseSynthesisRootPageMentions:
-    def test_extracts_page_ids_and_optional_titles_from_mcp_markdown(self):
+    def test_extracts_page_ids_and_optional_titles_from_notion_mention_markdown(self):
         page_mentions = parse_synthesis_root_page_mentions(
             '<mention-page url="https://www.notion.so/wayve/Guide-'
             '77777777777777777777777777777777">Guide</mention-page>\n'

@@ -209,8 +209,6 @@ update page Markdown
 
 After miscellaneous or synthesis page creation, the CLI records the returned page id and runs the needed refresh command. Task creation captures the new database row and assigned `Ticket ID` during live command execution.
 
-The MCP client remains as a temporary fallback. Delete it once REST is reliable for task creation, logging, completion, reconciliation, and landing-page rendering.
-
 Footgun: page replacement overwrites the whole page body Markdown. Use it only for tracker-owned landing, miscellaneous, or synthesis pages.
 
 ## Runtime

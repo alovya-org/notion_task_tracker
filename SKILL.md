@@ -20,7 +20,7 @@ Before any command that creates or updates task, miscellaneous, or synthesis met
 5. Treat CLI errors as failed writes. Do not manually send Notion writes unless debugging with the user.
 6. If page creation still needs a captured page id, stop and report the blocker instead of guessing.
 
-If `NOTION_API_KEY` is missing, stop and report that REST execution needs the `ntn_` Notion integration token. Use `--notion-transport mcp` only as a temporary fallback while REST reliability is being proven.
+If `NOTION_API_KEY` is missing, stop and report that execution needs the `ntn_` Notion integration token.
 
 Footgun: never set `allow_deleting_content` automatically. If Notion rejects replacement due to physical child content, stop and explain the blocker.
 
@@ -59,7 +59,7 @@ Use concise prose only after the raw mechanics, commands, paths, and errors have
 
 ## Runtime And Auth
 
-Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The default path calls the Notion REST API with `NOTION_API_KEY`.
+Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The tracker calls the Notion REST API with `NOTION_API_KEY`.
 
 Use the installed `ntt` CLI and request command escalation for live Notion commands:
 
@@ -67,13 +67,7 @@ Use the installed `ntt` CLI and request command escalation for live Notion comma
 ntt ...
 ```
 
-If the explicit MCP fallback reaches `https://mcp.notion.com/mcp` but returns `401 Unauthorized`, refresh auth with:
-
-```bash
-codex mcp login Notion
-```
-
-For REST, diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
+Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
 
 ## Command Forms
 
