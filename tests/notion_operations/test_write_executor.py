@@ -2,8 +2,8 @@ import asyncio
 
 from notion_task_tracker import NotionPageReference, NotionPageRegistry, NotionWriteIntent
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
-from notion_task_tracker.notion_operations.client import NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
+from tests.notion_operations.helpers import FakeNotionClient
 
 
 def test_execute_command_result_writes_sends_intents_to_selected_client():
@@ -52,17 +52,3 @@ def test_execute_command_result_writes_sends_intents_to_selected_client():
         "replace:ongoing_landing_page",
         "update_properties:task:ALOVYA-1",
     ]
-
-
-class FakeNotionClient:
-    def __init__(self):
-        self.calls = []
-
-    async def execute_command_result(self, command_result: TrackerCommandResult):
-        self.calls.extend(command_result.write_intents)
-        return NotionWriteExecutionResult(
-            completed_operation_keys=[
-                write_intent.operation_key
-                for write_intent in command_result.write_intents
-            ],
-        )

@@ -12,12 +12,7 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
     tracker_state = build_tracker_state_with_root_task()
     tracker_state["task_database"] = default_task_database_tracker_state()
     notion_client = FakeNotionClient(
-        results=[
-            {"result": {"text": "https://www.notion.so/33333333333333333333333333333333"}},
-            {"result": {"text": ""}},
-            {"result": {"text": ""}},
-            {"result": {"text": ""}},
-        ],
+        created_page_ids=["33333333333333333333333333333333"],
         fetched_page_content_by_id={
             "33333333333333333333333333333333": "\n".join(
                 [
@@ -67,18 +62,15 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
         "update_timeline_log:task:ALOVYA-1:2026-05-25",
         "replace:ongoing_landing_page",
     ]
-    assert notion_client.calls[0].tool_name == "notion-create-pages"
-    assert notion_client.calls[0].arguments["parent"] == {
-        "type": "data_source_id",
-        "data_source_id": "36b03da5-d69a-8080-91d1-000b5d7c1c8d",
-    }
-    assert notion_client.calls[0].arguments["pages"][0]["properties"] == {
+    assert notion_client.calls[0].operation_name == "create_task_database_page"
+    assert notion_client.calls[0].arguments["data_source_id"] == "36b03da5-d69a-8080-91d1-000b5d7c1c8d"
+    assert notion_client.calls[0].arguments["properties"] == {
         "Ticket page": "Child task",
         "Priority": "P2",
         "Status": "Active",
         "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
     }
-    assert notion_client.calls[0].arguments["pages"][0]["content"] == "\n".join(
+    assert notion_client.calls[0].arguments["content"] == "\n".join(
         [
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
@@ -88,11 +80,12 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
     assert notion_client.calls[1].arguments["properties"] == {
         "Ticket page": "Child task",
     }
-    assert notion_client.calls[2].arguments["new_str"] == "\n".join(
+    assert notion_client.calls[2].operation_name == "replace_page_markdown"
+    assert notion_client.calls[2].arguments["markdown"] == "\n".join(
         [
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
             '- Spawned child task: <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>.',
         ]
     )
-    assert notion_client.calls[-1].arguments["command"] == "replace_content"
+    assert notion_client.calls[-1].operation_name == "replace_page_markdown"
