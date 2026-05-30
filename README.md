@@ -383,5 +383,5 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 
 ```bash
 cd /home/alovyachowdhury/notion_task_tracker
-/workspace/venv/bin/python -m pytest tests notion_task_tracker/notion_operations/tests notion_task_tracker/tasks/tests
+/workspace/venv/bin/python -m pytest tests
 ```

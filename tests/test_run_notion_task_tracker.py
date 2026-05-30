@@ -7,8 +7,8 @@ import pytest
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.notion_operations.client import NotionWriteExecutionResult
-from notion_task_tracker.notion_operations.tests.helpers import FakeNotionClient
-from notion_task_tracker.tasks.tests.build_task_command_fixtures import build_tracker_state_with_root_task
+from tests.notion_operations.helpers import FakeNotionClient
+from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
 from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _run_read_task_pages,

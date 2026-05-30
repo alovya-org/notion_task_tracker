@@ -4,7 +4,7 @@ from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write 
     plan_context_repair_result,
 )
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
-from notion_task_tracker.tasks.tests.build_task_command_fixtures import build_tracker_state_with_root_task
+from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
 
 
 def test_plan_context_repair_result_plans_repairs_without_writing_them():

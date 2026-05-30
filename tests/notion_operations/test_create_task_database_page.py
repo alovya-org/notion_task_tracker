@@ -1,8 +1,8 @@
 import asyncio
 
 from notion_task_tracker.notion_operations.create_task_database_page import execute_create_task_database_page_command
-from notion_task_tracker.notion_operations.tests.helpers import FakeNotionClient
-from notion_task_tracker.tasks.tests.build_task_command_fixtures import (
+from tests.notion_operations.helpers import FakeNotionClient
+from tests.tasks.build_task_command_fixtures import (
     build_tracker_state_with_root_task,
 )
 from notion_task_tracker.tasks.database import default_task_database_tracker_state

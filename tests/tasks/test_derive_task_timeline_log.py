@@ -1,4 +1,4 @@
-from notion_task_tracker.tasks.tests.build_task_command_fixtures import build_tracker_state_with_root_task
+from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
 from notion_task_tracker.tasks.derive_task_timeline_log import (
     derive_task_timeline_log_from_fetched_page_content,
     record_known_task_timeline_dates,

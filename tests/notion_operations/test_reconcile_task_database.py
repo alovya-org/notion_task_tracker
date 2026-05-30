@@ -6,8 +6,8 @@ from notion_task_tracker.notion_operations.reconcile_task_database import (
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
 )
-from notion_task_tracker.notion_operations.tests.helpers import FakeNotionClient
-from notion_task_tracker.tasks.tests.build_task_command_fixtures import (
+from tests.notion_operations.helpers import FakeNotionClient
+from tests.tasks.build_task_command_fixtures import (
     build_fetched_task_page,
     build_tracker_state_with_root_and_child_task,
     build_tracker_state_with_root_task,
