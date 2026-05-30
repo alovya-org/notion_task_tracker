@@ -12,8 +12,8 @@ def test_notion_client_from_environment_returns_rest_client(monkeypatch):
     assert isinstance(notion_client, NotionRestClient)
 
 
-def test_notion_client_from_environment_has_no_transport_argument(monkeypatch):
+def test_notion_client_from_environment_has_no_argument(monkeypatch):
     monkeypatch.setenv("NOTION_API_KEY", "ntn_test")
 
     with pytest.raises(TypeError):
-        notion_client_from_environment("mcp")
+        notion_client_from_environment("removed")

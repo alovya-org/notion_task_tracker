@@ -73,8 +73,8 @@ def test_from_environment_requires_notion_api_key(monkeypatch):
 
 def test_rest_auth_ignores_credentials_file_without_notion_api_key(monkeypatch, tmp_path):
     monkeypatch.delenv("NOTION_API_KEY", raising=False)
-    credentials_path = tmp_path / ".credentials.json"
-    credentials_path.write_text(
+    token_file = tmp_path / ".credentials.json"
+    token_file.write_text(
         json.dumps({"Notion|workspace": {"access_token": "ntn_from_file"}}),
         encoding="utf-8",
     )

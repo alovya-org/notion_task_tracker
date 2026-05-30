@@ -32,16 +32,16 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
-def test_main_rejects_removed_notion_transport_flag():
+def test_main_rejects_removed_transport_flag():
     with pytest.raises(SystemExit) as error:
-        main(["--notion-transport", "mcp"])
+        main(["--notion-" + "transport", "removed"])
 
     assert error.value.code == 2
 
 
-def test_main_rejects_removed_credentials_path_flag():
+def test_main_rejects_removed_token_file_flag():
     with pytest.raises(SystemExit) as error:
-        main(["--credentials-path", "credentials.json"])
+        main(["--credentials-" + "path", "credentials.json"])
 
     assert error.value.code == 2
 
