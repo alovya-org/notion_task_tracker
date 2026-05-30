@@ -52,7 +52,7 @@ class NotionRestClient:
         )
 
     @classmethod
-    def from_credentials_path(cls, credentials_path: Path) -> "NotionRestClient":
+    def from_credentials_path(cls, credentials_path: Path | None) -> "NotionRestClient":
         return cls(
             access_token=_notion_rest_access_token_from_environment_or_path(credentials_path),
             base_url=DEFAULT_NOTION_API_BASE_URL,
@@ -420,10 +420,13 @@ class NotionRestClient:
         raise ValueError(f"Unsupported Notion REST SDK request {method} {path}")
 
 
-def _notion_rest_access_token_from_environment_or_path(credentials_path: Path) -> str:
+def _notion_rest_access_token_from_environment_or_path(credentials_path: Path | None) -> str:
     access_token = os.environ.get("NOTION_API_KEY")
     if access_token:
         return access_token
+
+    if credentials_path is None:
+        raise PermissionError("Set NOTION_API_KEY to the ntn_ Notion integration token before using the REST client.")
 
     credentials = json.loads(credentials_path.read_text(encoding="utf-8"))
     credential_tokens = [

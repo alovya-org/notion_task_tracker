@@ -13,23 +13,22 @@ Notion page ids live in tracker state because Notion assigns them. The task data
 
 ## Agent Workflow
 
-1. Read the current tracker state, usually `~/.codex/memories/notion_tasks_graph.json`.
-2. Choose one explicit CLI action such as `--log`, `--child`, or `--read`.
-3. Put multi-paragraph or nested content in a JSON file passed through `--content-path`.
+1. Choose one explicit CLI action such as `--log`, `--child`, or `--read`.
+2. Put multi-paragraph or nested content in a JSON file passed through `--content-path`.
+3. Let the CLI resolve tracker state, credentials, and output paths from its defaults.
 4. The CLI fetches only task pages needed by that action, updates their local metadata projection, applies the command, writes to Notion when the action is mutating, and saves tracker state after successful writes.
 5. Read the output JSON for completed operation keys, read summaries, and warnings.
 6. Treat a CLI failure as a failed write. Do not manually send Notion writes unless debugging with the user.
 
-Run an explicit action from the local virtual environment:
+The default tracker state path is `~/.notion-task-tracker/notion_tasks_graph.json`. Override it only with `--tracker-state-path`. REST authentication uses `NOTION_API_KEY`; `--credentials-path` is only for the explicit MCP fallback.
+
+Run an explicit action from an environment where `notion-task-tracker` is installed:
 
 ```bash
-cd /home/alovyachowdhury/.codex/memories
-/workspace/venv/bin/python -m notion_task_tracker \
+ntt \
   --log \
   --ticket-number 67 \
-  --content-path /tmp/notion_task_log.json \
-  --tracker-state-path notion_tasks_graph.json \
-  --output-path command_result.json
+  --content-path /tmp/notion_task_log.json
 ```
 
 REST execution needs `NOTION_API_KEY` to contain the `ntn_` Notion integration token. MCP remains available as an explicit fallback with `--notion-transport mcp`.
@@ -139,8 +138,7 @@ Synthesis content files use this shape:
 Use this when the user edited task rows in the Notion UI:
 
 ```bash
-PYTHONPATH=/home/alovyachowdhury/.codex/memories \
-  /workspace/venv/bin/python -m notion_task_tracker --reconcile-from-notion
+ntt --reconcile-from-notion
 ```
 
 This command creates a timestamped backup under `/tmp`, queries the saved `Alovya's task database` view, rebuilds the local graph projection from row properties, and repairs derived landing pages or task titles when needed.

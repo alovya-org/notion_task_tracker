@@ -34,9 +34,9 @@ from notion_task_tracker.tasks import TaskDependencyGraph
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 
 
-DEFAULT_CODEX_HOME_PATH = Path.home() / ".codex"
-DEFAULT_CREDENTIALS_PATH = DEFAULT_CODEX_HOME_PATH / ".credentials.json"
-DEFAULT_TRACKER_STATE_PATH = DEFAULT_CODEX_HOME_PATH / "memories" / "notion_tasks_graph.json"
+APP_HOME_PATH = Path.home() / ".notion-task-tracker"
+TRACKER_STATE_FILE_NAME = "notion_tasks_graph.json"
+DEFAULT_TRACKER_STATE_PATH = APP_HOME_PATH / TRACKER_STATE_FILE_NAME
 DEFAULT_OUTPUT_PATH = Path("/tmp/notion_task_refreshed_result.json")
 
 
@@ -102,9 +102,9 @@ def _run_requested_cli_action(args: argparse.Namespace) -> None:
     command = build_tracker_command_from_cli_action(args)
     execution_summary = execute_tracker_command(
         command=command,
-        tracker_state_path=args.tracker_state_path or DEFAULT_TRACKER_STATE_PATH,
-        output_path=args.output_path or DEFAULT_OUTPUT_PATH,
-        credentials_path=args.credentials_path or DEFAULT_CREDENTIALS_PATH,
+        tracker_state_path=args.tracker_state_path,
+        output_path=args.output_path,
+        credentials_path=args.credentials_path,
         notion_client=args.notion_transport,
     )
     print(json.dumps(execution_summary.to_json_summary(), indent=2, sort_keys=True))
@@ -112,33 +112,33 @@ def _run_requested_cli_action(args: argparse.Namespace) -> None:
 
 def execute_tracker_command(
     command: dict[str, Any],
-    tracker_state_path: str | Path = DEFAULT_TRACKER_STATE_PATH,
-    output_path: str | Path = DEFAULT_OUTPUT_PATH,
-    credentials_path: str | Path = DEFAULT_CREDENTIALS_PATH,
+    tracker_state_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    credentials_path: str | Path | None = None,
     backup_path: str | Path | None = None,
     notion_client: str = "rest",
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        credentials_path=credentials_path,
+        tracker_state_path=resolve_tracker_state_path(tracker_state_path),
+        output_path=resolve_output_path(output_path),
+        credentials_path=resolve_credentials_path(credentials_path),
         backup_path=backup_path,
         notion_client=notion_client,
     ))
 
 
 def refresh_task_tracker_from_notion(
-    credentials_path: str | Path = DEFAULT_CREDENTIALS_PATH,
-    tracker_state_path: str | Path = DEFAULT_TRACKER_STATE_PATH,
-    output_path: str | Path = DEFAULT_OUTPUT_PATH,
+    credentials_path: str | Path | None = None,
+    tracker_state_path: str | Path | None = None,
+    output_path: str | Path | None = None,
     backup_path: str | Path | None = None,
     notion_client: str = "rest",
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_reconcile_tracker_from_notion_command(
-        credentials_path=credentials_path,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
+        credentials_path=resolve_credentials_path(credentials_path),
+        tracker_state_path=resolve_tracker_state_path(tracker_state_path),
+        output_path=resolve_output_path(output_path),
         backup_path=backup_path,
         notion_client=notion_client,
     ))
@@ -146,26 +146,47 @@ def refresh_task_tracker_from_notion(
 
 def read_task_pages(
     task_ids: list[str],
-    tracker_state_path: str | Path = DEFAULT_TRACKER_STATE_PATH,
-    output_path: str | Path = DEFAULT_OUTPUT_PATH,
-    credentials_path: str | Path = DEFAULT_CREDENTIALS_PATH,
+    tracker_state_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    credentials_path: str | Path | None = None,
     notion_client: str = "rest",
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_read_task_pages(
         action_name="read",
         task_ids=task_ids,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        credentials_path=credentials_path,
+        tracker_state_path=resolve_tracker_state_path(tracker_state_path),
+        output_path=resolve_output_path(output_path),
+        credentials_path=resolve_credentials_path(credentials_path),
         notion_client=notion_client,
     ))
+
+
+def resolve_credentials_path(credentials_path: str | Path | None = None) -> Path | None:
+    if credentials_path:
+        return Path(credentials_path).expanduser()
+
+    return None
+
+
+def resolve_tracker_state_path(tracker_state_path: str | Path | None = None) -> Path:
+    if tracker_state_path:
+        return Path(tracker_state_path).expanduser()
+
+    return DEFAULT_TRACKER_STATE_PATH
+
+
+def resolve_output_path(output_path: str | Path | None = None) -> Path:
+    if output_path:
+        return Path(output_path).expanduser()
+
+    return DEFAULT_OUTPUT_PATH
 
 
 async def _run_tracker_command(
     command: dict[str, Any],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    credentials_path: str | Path,
+    credentials_path: str | Path | None,
     backup_path: str | Path | None,
     notion_client: str,
 ) -> "TrackerActionExecutionSummary":
@@ -198,7 +219,7 @@ async def _run_tracker_command(
 
 
 async def _run_reconcile_tracker_from_notion_command(
-    credentials_path: str | Path,
+    credentials_path: str | Path | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
@@ -227,7 +248,7 @@ async def _run_read_task_pages_command(
     command: dict[str, Any],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    credentials_path: str | Path,
+    credentials_path: str | Path | None,
     notion_client: str,
 ) -> "TrackerActionExecutionSummary":
     return await _run_read_task_pages(
@@ -244,7 +265,7 @@ async def _run_write_tracker_command(
     command: dict[str, Any],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    credentials_path: str | Path,
+    credentials_path: str | Path | None,
     backup_path: str | Path | None,
     notion_client: str,
 ) -> "TrackerActionExecutionSummary":
@@ -318,7 +339,7 @@ async def _run_read_task_pages(
     task_ids: list[str],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    credentials_path: str | Path,
+    credentials_path: str | Path | None,
     notion_client: str,
 ) -> "TrackerActionExecutionSummary":
     source_tracker_state_path = Path(tracker_state_path)
@@ -520,15 +541,17 @@ def _read_json(source_path: Path) -> dict[str, Any]:
 
 
 def _write_json(destination_path: Path, tracker_state: dict[str, Any]) -> None:
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
     destination_path.write_text(
         json.dumps(tracker_state, indent=2, sort_keys=True),
         encoding="utf-8",
     )
 
 
-def _notion_client_from_name_or_instance(credentials_path: str | Path, notion_client):
+def _notion_client_from_name_or_instance(credentials_path: str | Path | None, notion_client):
     if isinstance(notion_client, str):
-        return notion_client_from_credentials_path(Path(credentials_path), notion_client)
+        resolved_credentials_path = Path(credentials_path) if credentials_path is not None else None
+        return notion_client_from_credentials_path(resolved_credentials_path, notion_client)
 
     return notion_client
 

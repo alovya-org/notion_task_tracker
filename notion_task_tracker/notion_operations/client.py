@@ -51,7 +51,7 @@ class NotionClient(Protocol):
         raise NotImplementedError
 
 
-def notion_client_from_credentials_path(credentials_path: Path, notion_client: str = "rest") -> NotionClient:
+def notion_client_from_credentials_path(credentials_path: Path | None, notion_client: str = "rest") -> NotionClient:
     if notion_client == "rest":
         from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 
@@ -59,6 +59,9 @@ def notion_client_from_credentials_path(credentials_path: Path, notion_client: s
 
     if notion_client == "mcp":
         from notion_task_tracker.notion_operations.mcp_client import NotionMcpClient
+
+        if credentials_path is None:
+            raise PermissionError("Pass --credentials-path when using --notion-transport mcp.")
 
         return NotionMcpClient.from_credentials_path(credentials_path)
 

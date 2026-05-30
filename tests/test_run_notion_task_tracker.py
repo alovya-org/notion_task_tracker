@@ -10,9 +10,12 @@ from notion_task_tracker.notion_operations.client import NotionWriteExecutionRes
 from notion_task_tracker.notion_operations.tests.helpers import FakeNotionClient
 from notion_task_tracker.tasks.tests.build_task_command_fixtures import build_tracker_state_with_root_task
 from notion_task_tracker.run_notion_task_tracker import (
+    DEFAULT_TRACKER_STATE_PATH,
     _run_read_task_pages,
     main,
     parse_args,
+    resolve_credentials_path,
+    resolve_tracker_state_path,
     repair_and_write_refreshed_tracker_state,
 )
 
@@ -42,6 +45,20 @@ def test_main_rejects_unknown_flag():
         main(["--unknown-flag", "result.json"])
 
     assert error.value.code == 2
+
+
+def test_default_tracker_paths_are_constant_app_paths():
+    assert resolve_tracker_state_path() == DEFAULT_TRACKER_STATE_PATH
+    assert resolve_tracker_state_path() == Path.home() / ".notion-task-tracker" / "notion_tasks_graph.json"
+    assert resolve_credentials_path() is None
+
+
+def test_explicit_tracker_paths_override_defaults(tmp_path: Path):
+    tracker_state_path = tmp_path / "explicit_state.json"
+    credentials_path = tmp_path / "explicit_credentials.json"
+
+    assert resolve_tracker_state_path(tracker_state_path) == tracker_state_path
+    assert resolve_credentials_path(credentials_path) == credentials_path
 
 
 def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_task(

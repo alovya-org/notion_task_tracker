@@ -7,11 +7,7 @@ description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA t
 
 ## First Steps
 
-1. Let `codex_home` be `$CODEX_HOME` if set, otherwise `~/.codex`.
-2. Let `memories_dir` be `codex_home / "memories"`.
-3. Use `memories_dir / "notion_tasks_graph.json"` as the canonical tracker state.
-
-The README is the API guide. Do not rederive schemas from memory.
+Use the installed `ntt` CLI for task tracker reads and writes. Let the CLI use its default tracker state at `~/.notion-task-tracker/notion_tasks_graph.json`; pass explicit `--tracker-state-path` only when the user asks for a non-default location.
 
 ## Shared Workflow
 
