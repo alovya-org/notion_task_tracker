@@ -24,6 +24,39 @@ If `NOTION_API_KEY` is missing, stop and report that REST execution needs the `n
 
 Footgun: never set `allow_deleting_content` automatically. If Notion rejects replacement due to physical child content, stop and explain the blocker.
 
+## Logging Quality Bar
+
+Do not compress useful technical context into vague summaries. Notion logs should preserve the operational facts that would let a future agent or human resume the work without rereading the chat.
+
+For design decisions, implementation notes, debugging, command output, errors, or agent/tool behaviour:
+
+1. Prefer `timeline_entry.blocks` over `timeline_entry.lines`.
+2. Use paragraph blocks for the conclusion, decision, and why it matters.
+3. Use code blocks for exact commands, transcript shapes, stack traces, error messages, JSON/YAML payloads, diffs, file layouts, and multi-line outputs.
+4. Include the concrete command or file path when one was discussed.
+5. Include the actual observed error or output when it matters.
+6. Preserve the distinction between what was observed, what was inferred, and what follow-up was proposed.
+7. Do not write bland entries such as "Discussed X" or "Captured Y" when the useful content is the concrete mechanics of X or Y.
+
+Good log entries look like:
+
+```json
+{
+  "type": "paragraph",
+  "text": "`codex exec` streams a human transcript to stdout; Ralph captures stdout and stderr together into `worker-output.txt`."
+}
+```
+
+```json
+{
+  "type": "code",
+  "language": "text",
+  "text": "exec\n/usr/bin/bash -lc '...'\n succeeded in 123ms:\n<command output>\n\ncodex\nFinal answer text"
+}
+```
+
+Use concise prose only after the raw mechanics, commands, paths, and errors have been preserved.
+
 ## Runtime And Auth
 
 Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The default path calls the Notion REST API with `NOTION_API_KEY`.
@@ -72,7 +105,7 @@ Normal task commands do not query the full saved database view. They use targete
 
 1. Resolve `<number>` to `ALOVYA-<number>`.
 2. Fail if the task does not exist.
-3. Summarise relevant current conversation context plus `[notes]` as concise timeline lines.
+3. Capture the useful current conversation context plus `[notes]` at the detail level needed to resume the work. Do not collapse commands, errors, outputs, or design mechanics into vague summaries.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
 6. Run `python -m notion_task_tracker --log --ticket-number <number> --content-path <content-path>`.
@@ -86,7 +119,7 @@ Normal task commands do not query the full saved database view. They use targete
 
 1. Resolve `<number>` to `ALOVYA-<number>`.
 2. Fail if the task does not exist.
-3. Summarise relevant current conversation context plus `[notes]` as concise completion lines.
+3. Capture the relevant completed work plus `[notes]` with concrete commands, files, outputs, and decisions when they matter.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
 6. Run `python -m notion_task_tracker --complete --ticket-number <number> --content-path <content-path>`.
@@ -96,7 +129,7 @@ Normal task commands do not query the full saved database view. They use targete
 
 1. Resolve `<number>` to `ALOVYA-<number>`.
 2. Fail if the task does not exist.
-3. Summarise relevant current conversation context plus `[notes]` as concise cancellation lines.
+3. Capture the cancellation reason plus `[notes]` with concrete blockers, commands, errors, and paths when they matter.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
 6. Run `python -m notion_task_tracker --cancel --ticket-number <number> --content-path <content-path>`.
@@ -108,7 +141,7 @@ Normal task commands do not query the full saved database view. They use targete
 2. Default status is `Active`.
 3. Use `[title]` when provided; ask for a title if the user did not provide one.
 4. If the user asks to log, capture, file, or record a new problem, bug, investigation, incident, or context while creating the task, include that context in the same `create_top_level_task` command as `timeline_entry`. Do not create a bare task and then append the first log afterwards when the initial context is already available.
-5. Summarise relevant current conversation context into concise initial timeline content. Use `timeline_entry.blocks` for paragraph prose and code blocks. Put inline technical text in backticks inside paragraph text. Use code blocks for full commands, command output, stack traces, paths grouped with outputs, structured observations, and multi-line snippets. Use `timeline_entry.lines` only when the user explicitly wants bullet-style notes.
+5. Capture relevant current conversation context into detailed initial timeline content. Use `timeline_entry.blocks` for paragraph prose and code blocks. Put inline technical text in backticks inside paragraph text. Use code blocks for full commands, command output, stack traces, paths grouped with outputs, structured observations, and multi-line snippets. Use `timeline_entry.lines` only when the user explicitly wants bullet-style notes.
 6. Use today's date for `entry_date`.
 7. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
 8. Run `python -m notion_task_tracker --parent --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
@@ -139,7 +172,7 @@ Do not use `new` for top-level tasks; use `parent`.
 
 `notion_task misc [title] <user-notes>` appends to today's miscellaneous notes.
 
-1. Summarise relevant current conversation context.
+1. Capture relevant current conversation context at useful technical detail.
 2. Combine that summary with `<user-notes>`.
 3. Use today's date.
 4. Run `python -m notion_task_tracker --misc --content-path <content-path>`.
