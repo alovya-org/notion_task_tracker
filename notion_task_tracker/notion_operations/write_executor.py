@@ -1,16 +1,16 @@
-"""Execute planned Notion writes through the selected Notion client."""
+"""Execute planned Notion writes through the Notion REST client."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.notion_operations.client import NotionClient
+from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 
 
 async def execute_command_result_writes(
     command_result: TrackerCommandResult,
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     if not command_result.write_intents:
         return command_result.tracker_state, []

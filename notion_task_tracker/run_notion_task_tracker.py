@@ -13,7 +13,7 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.install_skill import install_skill
-from notion_task_tracker.notion_operations.client import notion_client_from_environment
+from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.create_task_database_page import (
     should_create_task_database_page_for_command,
     execute_create_task_database_page_command,
@@ -111,7 +111,7 @@ def execute_tracker_command(
     tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
     backup_path: str | Path | None = None,
-    notion_client: Any | None = None,
+    notion_client: NotionRestClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
@@ -126,7 +126,7 @@ def refresh_task_tracker_from_notion(
     tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
     backup_path: str | Path | None = None,
-    notion_client: Any | None = None,
+    notion_client: NotionRestClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_reconcile_tracker_from_notion_command(
         tracker_state_path=resolve_tracker_state_path(tracker_state_path),
@@ -140,7 +140,7 @@ def read_task_pages(
     task_ids: list[str],
     tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
-    notion_client: Any | None = None,
+    notion_client: NotionRestClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_read_task_pages(
         action_name="read",
@@ -524,7 +524,7 @@ def _write_json(destination_path: Path, tracker_state: dict[str, Any]) -> None:
 
 def _notion_client_from_instance(notion_client):
     if notion_client is None:
-        return notion_client_from_environment()
+        return NotionRestClient.from_environment()
 
     return notion_client
 

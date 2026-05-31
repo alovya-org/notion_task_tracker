@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.notion_operations.client import NotionClient
+from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.task import UPDATE_TIMELINE_LOG_OPERATION_NAME
 from notion_task_tracker.tasks.timeline_log import render_initialised_task_timeline_markdown
@@ -52,7 +52,7 @@ def merge_context_repairs_into_command_result(
 async def prepare_command_result_from_current_task_page(
     command: dict[str, Any],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> TrackerCommandResult:
     task_id = find_task_id_whose_timeline_is_written_by_command(command)
     if task_id is None:

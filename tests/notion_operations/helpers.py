@@ -1,6 +1,6 @@
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
-from notion_task_tracker.notion_operations.client import CreatedTaskDatabasePage, NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
+from notion_task_tracker.notion_operations.rest_client import CreatedTaskDatabasePage, NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TITLE_PROPERTY,

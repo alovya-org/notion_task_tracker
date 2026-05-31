@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.notion_operations.client import NotionClient
+from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.tasks import TaskDependencyGraph
 from notion_task_tracker.tasks.refresh_task_tracker_state import (
     find_task_ids_to_refresh_before_command,
@@ -21,7 +21,7 @@ from notion_task_tracker.tasks.database import (
 
 async def refresh_tracker_state_from_notion_task_database(
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> TrackerCommandResult:
     if "task_database" not in tracker_state:
         raise ValueError("Task reconciliation requires task_database in tracker state")
@@ -57,7 +57,7 @@ def plan_repairs_for_task_graph_changes(
 async def refresh_tracker_state_for_task_command(
     command: dict[str, Any],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> TrackerCommandResult:
     if not _needs_task_context_for_command(command):
         return TrackerCommandResult(tracker_state=tracker_state, warnings=[])
@@ -77,7 +77,7 @@ async def refresh_tracker_state_for_task_command(
 async def refresh_tracker_state_for_task_ids(
     task_ids: list[str],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> TrackerCommandResult:
     database_rows_by_task_id = await _fetch_database_rows_for_task_ids(
         task_ids=task_ids,
@@ -94,7 +94,7 @@ async def refresh_tracker_state_for_task_ids(
 async def _fetch_database_rows_for_command_tasks(
     command: dict[str, Any],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> dict[str, TaskDatabaseRow]:
     work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
     database_rows_by_task_id = {}
@@ -120,7 +120,7 @@ async def _fetch_database_rows_for_command_tasks(
 async def _fetch_database_rows_for_task_ids(
     task_ids: list[str],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> dict[str, TaskDatabaseRow]:
     work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
     database_rows_by_task_id = {}
@@ -146,7 +146,7 @@ async def _fetch_database_rows_for_task_ids(
 async def _fetch_known_task_database_row(
     task_id: str,
     work_graph: TaskDependencyGraph,
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> TaskDatabaseRow:
     if task_id not in work_graph.tasks:
         raise ValueError(f"Task {task_id} is not in local tracker state; run notion_task update")

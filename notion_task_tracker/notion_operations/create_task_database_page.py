@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from notion_task_tracker.apply_tracker_command import apply_command_to_tracker_state
-from notion_task_tracker.notion_operations.client import NotionClient
+from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import prepare_command_result_from_current_task_page
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.tasks import TaskDependencyGraph
@@ -30,7 +30,7 @@ from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
 async def execute_create_task_database_page_command(
     command: dict[str, Any],
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
     task_creation = derive_task_creation_from_command(command, work_graph)
@@ -78,7 +78,7 @@ async def _create_database_page_and_read_ticket_id(
     task_creation: TaskCreation,
     tracker_state: dict[str, Any],
     work_graph: TaskDependencyGraph,
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> tuple[str, str, list[str]]:
     create_operation_key = f"create_database_task:{task_creation.command_name}"
     created_page = await notion_client.create_task_database_page(
@@ -117,7 +117,7 @@ async def _write_task_creation_timeline_entry(
     task_creation: TaskCreation,
     tracker_state: dict[str, Any],
     created_task_id: str,
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     timeline_command = _build_created_task_timeline_command(
         task_creation=task_creation,
@@ -141,7 +141,7 @@ async def _write_task_creation_timeline_entry(
 
 async def _refresh_derived_task_landing_pages(
     tracker_state: dict[str, Any],
-    notion_client: NotionClient,
+    notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     landing_refresh_result = apply_command_to_tracker_state(
         command={

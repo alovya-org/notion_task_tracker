@@ -31,7 +31,6 @@ def test_workflow_modules_do_not_import_notion_protocol_details():
     forbidden_text = [
         "Notion" + ("m" + "cp").title() + "ToolCall",
         "Notion" + ("m" + "cp").title() + "CallPlanner",
-        "NotionRestClient",
         "execute_write_intent",
         "send_call",
     ]
@@ -43,6 +42,19 @@ def test_workflow_modules_do_not_import_notion_protocol_details():
     for workflow_file in workflow_files:
         source = _source(workflow_file)
         assert not any(forbidden in source for forbidden in forbidden_text), workflow_file
+
+
+def test_redundant_client_wrapper_boundary_is_removed():
+    assert not (PACKAGE_PATH / "notion_operations/client.py").exists()
+
+    forbidden_text = [
+        "notion_operations.client",
+        "NotionClient",
+        "notion_client_from_environment",
+    ]
+    for source_path in PACKAGE_PATH.rglob("*.py"):
+        source = source_path.read_text(encoding="utf-8")
+        assert not any(forbidden in source for forbidden in forbidden_text), source_path
 
 
 def test_tracker_metadata_modules_do_not_import_notion_operations():

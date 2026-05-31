@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,7 +22,6 @@ from notion_task_tracker.notion_operations.database_properties import (
     plain_text_from_rich_text_items,
     rich_text_items,
 )
-from notion_task_tracker.notion_operations.client import CreatedTaskDatabasePage, NotionWriteExecutionResult
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DATA_SOURCE_ID,
     TASK_DATABASE_PARENT_PROPERTY,
@@ -37,6 +37,19 @@ from notion_task_tracker.tasks.database import (
 
 DEFAULT_NOTION_API_BASE_URL = "https://api.notion.com"
 DEFAULT_NOTION_API_VERSION = "2026-03-11"
+
+
+@dataclass(frozen=True)
+class CreatedTaskDatabasePage:
+    notion_page_id: str
+    operation_keys: list[str]
+
+
+@dataclass(frozen=True)
+class NotionWriteExecutionResult:
+    completed_operation_keys: list[str] = field(default_factory=list)
+    captured_page_ids: dict[str, str] = field(default_factory=dict)
+    blocked_operation_count: int = 0
 
 
 class NotionRestClient:

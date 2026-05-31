@@ -1,10 +1,9 @@
 """Notion read/write boundary for the tracker."""
 
-from notion_task_tracker.notion_operations.client import (
+from notion_task_tracker.notion_operations.rest_client import (
     CreatedTaskDatabasePage,
-    NotionClient,
     NotionWriteExecutionResult,
-    notion_client_from_environment,
+    NotionRestClient,
 )
 from notion_task_tracker.notion_operations.page_registry import (
     NotionPageReference,
@@ -19,13 +18,12 @@ from notion_task_tracker.notion_operations.write_intent import (
 
 __all__ = [
     "CreatedTaskDatabasePage",
-    "NotionClient",
+    "NotionRestClient",
     "NotionPageReference",
     "NotionPageRegistry",
     "NotionPlanningError",
     "NotionWriteExecutionResult",
     "NotionWriteIntent",
     "canonical_notion_page_id",
-    "notion_client_from_environment",
     "notion_page_id_from_url",
 ]
