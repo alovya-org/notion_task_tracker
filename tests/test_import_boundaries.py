@@ -5,22 +5,22 @@ from pathlib import Path
 PACKAGE_PATH = Path(__file__).resolve().parents[1] / "notion_task_tracker"
 
 
-def test_rest_client_does_not_import_removed_transport_symbols():
+def test_rest_client_does_not_import_removed_integration_symbols():
     source = _source("notion_operations/rest_client.py")
 
-    removed_transport_name = "m" + "cp"
-    assert f"notion_task_tracker.{removed_transport_name}" not in source
-    assert f"Notion{removed_transport_name.title()}" not in source
+    removed_integration_name = "m" + "cp"
+    assert f"notion_task_tracker.{removed_integration_name}" not in source
+    assert f"Notion{removed_integration_name.title()}" not in source
 
 
-def test_package_has_no_removed_transport_runtime_imports():
-    removed_transport_name = "m" + "cp"
-    removed_transport_title = removed_transport_name.title()
+def test_package_has_no_removed_integration_runtime_imports():
+    removed_integration_name = "m" + "cp"
+    removed_integration_title = removed_integration_name.title()
     forbidden_text = [
-        f"{removed_transport_name}_client",
-        f"Notion{removed_transport_title}",
-        f"Notion{removed_transport_title}ToolCall",
-        f"Notion{removed_transport_title}CallPlanner",
+        f"{removed_integration_name}_client",
+        f"Notion{removed_integration_title}",
+        f"Notion{removed_integration_title}ToolCall",
+        f"Notion{removed_integration_title}CallPlanner",
     ]
 
     for source_path in PACKAGE_PATH.rglob("*.py"):
@@ -46,16 +46,28 @@ def test_workflow_modules_do_not_import_notion_protocol_details():
 
 
 def test_redundant_client_wrapper_boundary_is_removed():
-    assert not (PACKAGE_PATH / "notion_operations/client.py").exists()
+    removed_wrapper_path = PACKAGE_PATH / "notion_operations" / ("client" + ".py")
+    assert not removed_wrapper_path.exists()
 
     forbidden_text = [
         "notion_operations.client",
         "NotionClient",
-        "notion_client_from_environment",
+        "notion_client_from_" + "environment",
     ]
     for source_path in PACKAGE_PATH.rglob("*.py"):
         source = source_path.read_text(encoding="utf-8")
         assert not any(forbidden in source for forbidden in forbidden_text), source_path
+
+
+def test_removed_cli_and_auth_shapes_are_absent():
+    source = _source("run_notion_task_tracker.py")
+    forbidden_text = [
+        "--notion-" + "trans" + "port",
+        "notion_client_from_" + "credentials" + "_path",
+        "credentials" + "_path",
+    ]
+
+    assert not any(forbidden in source for forbidden in forbidden_text)
 
 
 def test_workflow_client_surface_is_rest_client_oriented():
@@ -101,7 +113,7 @@ def test_tracker_metadata_modules_do_not_import_notion_operations():
         assert "notion_task_tracker.notion_operations" not in source, metadata_file
 
 
-def test_rest_client_uses_notion_sdk_not_raw_http_transport():
+def test_rest_client_uses_notion_sdk_not_raw_http_layer():
     source = _source("notion_operations/rest_client.py")
 
     assert "from notion_client import AsyncClient" in source

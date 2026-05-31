@@ -15,7 +15,7 @@ Notion page ids live in tracker state because Notion assigns them. The task data
 
 1. Choose one explicit CLI action such as `--log`, `--child`, or `--read`.
 2. Put multi-paragraph or nested content in a JSON file passed through `--content-path`.
-3. Let the CLI resolve tracker state, credentials, and output paths from its defaults.
+3. Let the CLI resolve tracker state, the Notion API token, and output paths from its defaults.
 4. The CLI fetches only task pages needed by that action, updates their local metadata projection, applies the command, writes to Notion when the action is mutating, and saves tracker state after successful writes.
 5. Read the output JSON for completed operation keys, read summaries, and warnings.
 6. Treat a CLI failure as a failed write. Do not manually send Notion writes unless debugging with the user.
@@ -374,7 +374,7 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `notion_task_tracker/tasks/create_task.py`: local task graph changes for creating parent, child, and sibling tasks.
 - `notion_task_tracker/tasks/derive_task_timeline_log.py`: timeline-log facts derived from fetched task page content.
 - `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task graph refresh from Notion database rows.
-- `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, live clients, and write execution.
+- `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, the REST client, and write execution.
 - `notion_task_tracker/fixed_pages.py`: names and local keys for fixed tracker pages.
 - `notion_task_tracker/miscellaneous_pages.py`: dated miscellaneous notes.
 - `notion_task_tracker/synthesis_pages.py`: flat synthesis root mentions and synthesis subpages with sources.
