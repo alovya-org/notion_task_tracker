@@ -50,7 +50,7 @@ def test_redundant_client_wrapper_boundary_is_removed():
     assert not removed_wrapper_path.exists()
 
     forbidden_text = [
-        "notion_operations.client",
+        "notion_operations." + "client",
         "NotionClient",
         "notion_client_from_" + "environment",
     ]
