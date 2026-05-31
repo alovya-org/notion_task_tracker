@@ -61,10 +61,17 @@ Use concise prose only after the raw mechanics, commands, paths, and errors have
 
 Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The tracker calls the Notion REST API with `NOTION_API_KEY`.
 
-Use the installed `ntt` CLI and request command escalation for live Notion commands:
+The `ntt` CLI is often installed in a Python venv. Activate the venv before running commands:
 
 ```bash
+source /path/to/venv/bin/activate  # e.g. /workspace/venv/bin/activate
 ntt ...
+```
+
+Alternatively, invoke via the venv Python directly:
+
+```bash
+/path/to/venv/bin/python -m notion_task_tracker ...
 ```
 
 Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
