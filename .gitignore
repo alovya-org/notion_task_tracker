@@ -1,6 +1,6 @@
 __pycache__/
 .pytest_cache/
-*.pyc
+*.py[cod]
 *.egg-info/
 build/
 dist/
