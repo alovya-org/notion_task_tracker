@@ -42,6 +42,7 @@ def install_skill(
     codex_home_path: str | Path | None = None,
     home_path: str | Path | None = None,
     output_stream: TextIO = sys.stdout,
+    force: bool = False,
 ) -> list[SkillInstallResult]:
     source_skill_path = find_source_skill_path()
     targets = skill_install_targets(
@@ -49,7 +50,7 @@ def install_skill(
         home_path=home_path,
     )
     results = [
-        install_skill_for_target(source_skill_path, target)
+        install_skill_for_target(source_skill_path, target, force=force)
         for target in targets
     ]
     print(json.dumps([result.to_json_summary() for result in results], indent=2), file=output_stream)
@@ -95,6 +96,7 @@ def skill_install_targets(
 def install_skill_for_target(
     source_skill_path: Path,
     target: SkillInstallTarget,
+    force: bool = False,
 ) -> SkillInstallResult:
     if target.skill_path.exists():
         if filecmp.cmp(source_skill_path, target.skill_path, shallow=False):
@@ -104,9 +106,17 @@ def install_skill_for_target(
                 status="already_installed",
             )
 
-        raise FileExistsError(
-            f"{target.skill_path} already exists and differs from {source_skill_path}. "
-            "Move it aside before reinstalling."
+        if not force:
+            raise FileExistsError(
+                f"{target.skill_path} already exists and differs from {source_skill_path}. "
+                "Use --force to overwrite."
+            )
+
+        shutil.copy2(source_skill_path, target.skill_path)
+        return SkillInstallResult(
+            tool_name=target.tool_name,
+            skill_path=target.skill_path,
+            status="overwritten",
         )
 
     target.skill_path.parent.mkdir(parents=True, exist_ok=True)

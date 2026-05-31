@@ -68,6 +68,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     action_group = parser.add_mutually_exclusive_group()
     action_group.add_argument("--install-skill", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -94,7 +95,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
 
 def _run_requested_cli_action(args: argparse.Namespace) -> None:
     if args.install_skill:
-        install_skill()
+        install_skill(force=args.force)
         return
 
     command = build_tracker_command_from_cli_action(args)
