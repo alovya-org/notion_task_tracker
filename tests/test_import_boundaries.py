@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 
@@ -55,6 +56,27 @@ def test_redundant_client_wrapper_boundary_is_removed():
     for source_path in PACKAGE_PATH.rglob("*.py"):
         source = source_path.read_text(encoding="utf-8")
         assert not any(forbidden in source for forbidden in forbidden_text), source_path
+
+
+def test_workflow_client_surface_is_rest_client_oriented():
+    source = _source("run_notion_task_tracker.py")
+    module = ast.parse(source)
+
+    removed_helper_name = "_notion_" + "client_from_instance"
+    assert removed_helper_name not in source
+    assert "NotionRestClient.from_environment()" in source
+
+    for node in ast.walk(module):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        for argument in node.args.args + node.args.kwonlyargs:
+            if argument.arg != "notion_client":
+                continue
+            assert argument.annotation is not None, node.name
+            annotation = ast.unparse(argument.annotation)
+            assert annotation != "Any", node.name
+            assert not annotation.startswith("Any |"), node.name
+            assert not annotation.endswith("| Any"), node.name
 
 
 def test_tracker_metadata_modules_do_not_import_notion_operations():

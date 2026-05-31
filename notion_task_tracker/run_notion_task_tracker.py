@@ -170,7 +170,7 @@ async def _run_tracker_command(
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
-    notion_client,
+    notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
     if command["command"] == "reconcile_from_notion":
         return await _run_reconcile_tracker_from_notion_command(
@@ -201,7 +201,7 @@ async def _run_reconcile_tracker_from_notion_command(
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
-    notion_client,
+    notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
     source_tracker_state_path = Path(tracker_state_path)
     destination_output_path = Path(output_path)
@@ -210,7 +210,7 @@ async def _run_reconcile_tracker_from_notion_command(
     tracker_state = _read_json(source_tracker_state_path)
     _write_json(destination_backup_path, tracker_state)
 
-    client = _notion_client_from_instance(notion_client)
+    client = _notion_rest_client_from_optional_instance(notion_client)
     refreshed_result = await refresh_tracker_state_from_notion_task_database(tracker_state, client)
     return await repair_and_write_refreshed_tracker_state(
         source_tracker_state_path=source_tracker_state_path,
@@ -226,7 +226,7 @@ async def _run_read_task_pages_command(
     command: dict[str, Any],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    notion_client,
+    notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
     return await _run_read_task_pages(
         action_name=_action_name_from_tracker_command(command),
@@ -242,7 +242,7 @@ async def _run_write_tracker_command(
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
-    notion_client,
+    notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
     source_tracker_state_path = Path(tracker_state_path)
     destination_output_path = Path(output_path)
@@ -251,7 +251,7 @@ async def _run_write_tracker_command(
     tracker_state = _read_json(source_tracker_state_path)
     _write_json(destination_backup_path, tracker_state)
 
-    client = _notion_client_from_instance(notion_client)
+    client = _notion_rest_client_from_optional_instance(notion_client)
     command_ready_result = await refresh_tracker_state_for_task_command(
         command=command,
         tracker_state=tracker_state,
@@ -285,7 +285,7 @@ async def _run_notion_writes_for_write_command(
     before_tracker_state: dict[str, Any],
     command_ready_result,
     command_ready_tracker_state: dict[str, Any],
-    notion_client,
+    notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str], list[dict[str, str]]]:
     if should_create_task_database_page_for_command(command, command_ready_tracker_state):
         command_tracker_state, command_operation_keys = await execute_create_task_database_page_command(
@@ -314,13 +314,13 @@ async def _run_read_task_pages(
     task_ids: list[str],
     tracker_state_path: str | Path,
     output_path: str | Path,
-    notion_client,
+    notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
     source_tracker_state_path = Path(tracker_state_path)
     destination_output_path = Path(output_path)
     tracker_state = _read_json(source_tracker_state_path)
 
-    client = _notion_client_from_instance(notion_client)
+    client = _notion_rest_client_from_optional_instance(notion_client)
     refreshed_result = await refresh_tracker_state_for_task_ids(
         task_ids=task_ids,
         tracker_state=tracker_state,
@@ -355,7 +355,7 @@ async def _run_read_task_pages(
 async def _fetch_task_page_content_by_task_id(
     task_ids: list[str],
     tracker_state: dict[str, Any],
-    notion_client,
+    notion_client: NotionRestClient,
 ) -> dict[str, str]:
     page_content_by_task_id = {}
     for task_id in task_ids:
@@ -427,7 +427,7 @@ async def repair_and_write_refreshed_tracker_state(
     destination_backup_path: Path,
     before_tracker_state: dict[str, Any],
     refreshed_result,
-    notion_client,
+    notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
     task_changes = TaskDependencyGraph.changes_between_tracker_states(
         before_tracker_state,
@@ -522,7 +522,9 @@ def _write_json(destination_path: Path, tracker_state: dict[str, Any]) -> None:
     )
 
 
-def _notion_client_from_instance(notion_client):
+def _notion_rest_client_from_optional_instance(
+    notion_client: NotionRestClient | None,
+) -> NotionRestClient:
     if notion_client is None:
         return NotionRestClient.from_environment()
 
