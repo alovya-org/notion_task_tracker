@@ -103,6 +103,12 @@ def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
             "title": "Add explicit CLI actions",
             "configured_priority": "P2",
             "status": "Active",
+            "dependency_task_ids": [],
+            "dependant_task_ids": [],
+            "deadline": None,
+            "external_coordination": "No",
+            "uncertainty": "Low",
+            "friction": "None",
         },
         "parent_timeline_entry": {
             "entry_date": "2026-05-30",
@@ -114,6 +120,116 @@ def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
                 }
             ],
         },
+    }
+
+
+def test_parent_action_builds_task_creation_command_with_dependencies():
+    command = build_tracker_command_from_cli_action(
+        _arguments(
+            parent=True,
+            title="Create dependent task",
+            dependency_ticket_number=[10, 12],
+            deadline="2026-06-15",
+            external_coordination="Yes",
+            uncertainty="High",
+            friction="Charged",
+        )
+    )
+
+    assert command["task"] == {
+        "title": "Create dependent task",
+        "configured_priority": "P1",
+        "status": "Active",
+        "dependency_task_ids": ["ALOVYA-10", "ALOVYA-12"],
+        "dependant_task_ids": [],
+        "deadline": "2026-06-15",
+        "external_coordination": "Yes",
+        "uncertainty": "High",
+        "friction": "Charged",
+    }
+
+
+def test_parent_action_rejects_dependencies_and_dependants_together():
+    with pytest.raises(ValueError, match="Choose dependencies or dependants"):
+        build_tracker_command_from_cli_action(
+            _arguments(
+                parent=True,
+                title="Ambiguous relation task",
+                dependency_ticket_number=[10],
+                dependant_ticket_number=[12],
+            )
+        )
+
+
+def test_set_dependencies_action_builds_field_specific_command():
+    command = build_tracker_command_from_cli_action(
+        _arguments(
+            set_dependencies=True,
+            ticket_number=[67],
+            dependency_ticket_number=[10, 12],
+        )
+    )
+
+    assert command == {
+        "command": "set_task_dependencies",
+        "task_id": "ALOVYA-67",
+        "dependency_task_ids": ["ALOVYA-10", "ALOVYA-12"],
+    }
+
+
+def test_set_dependants_action_builds_field_specific_command():
+    command = build_tracker_command_from_cli_action(
+        _arguments(
+            set_dependants=True,
+            ticket_number=[67],
+            dependant_ticket_number=[10, 12],
+        )
+    )
+
+    assert command == {
+        "command": "set_task_dependants",
+        "task_id": "ALOVYA-67",
+        "dependant_task_ids": ["ALOVYA-10", "ALOVYA-12"],
+    }
+
+
+def test_set_deadline_actions_build_field_specific_commands():
+    assert build_tracker_command_from_cli_action(
+        _arguments(set_deadline=True, ticket_number=[67], deadline="2026-06-15")
+    ) == {
+        "command": "set_task_deadline",
+        "task_id": "ALOVYA-67",
+        "deadline": "2026-06-15",
+    }
+    assert build_tracker_command_from_cli_action(
+        _arguments(clear_deadline=True, ticket_number=[67])
+    ) == {
+        "command": "clear_task_deadline",
+        "task_id": "ALOVYA-67",
+    }
+
+
+def test_set_enum_field_actions_build_field_specific_commands():
+    assert build_tracker_command_from_cli_action(
+        _arguments(set_external_coordination=True, ticket_number=[67], external_coordination="Yes")
+    ) == {
+        "command": "set_task_external_coordination",
+        "task_id": "ALOVYA-67",
+        "external_coordination": "Yes",
+    }
+    assert build_tracker_command_from_cli_action(
+        _arguments(set_uncertainty=True, ticket_number=[67], uncertainty="High")
+    ) == {
+        "command": "set_task_uncertainty",
+        "task_id": "ALOVYA-67",
+        "uncertainty": "High",
+    }
+    assert build_tracker_command_from_cli_action(
+        _arguments(set_friction=True, ticket_number=[67], friction="Stale")
+    ) == {
+        "command": "set_task_friction",
+        "task_id": "ALOVYA-67",
+        "friction": "Stale",
     }
 
 
@@ -174,6 +290,13 @@ def _arguments(**overrides):
         "log": False,
         "complete": False,
         "cancel": False,
+        "set_dependencies": False,
+        "set_dependants": False,
+        "set_deadline": False,
+        "clear_deadline": False,
+        "set_external_coordination": False,
+        "set_uncertainty": False,
+        "set_friction": False,
         "parent": False,
         "child": False,
         "sibling": False,
@@ -184,6 +307,12 @@ def _arguments(**overrides):
         "sibling_ticket_number": None,
         "title": None,
         "priority": "P1",
+        "dependency_ticket_number": [],
+        "dependant_ticket_number": [],
+        "deadline": None,
+        "external_coordination": None,
+        "uncertainty": None,
+        "friction": None,
         "content_path": None,
         "synthesis_key": None,
         "entry_date": "2026-05-30",

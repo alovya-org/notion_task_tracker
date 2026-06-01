@@ -295,6 +295,56 @@ class TestApplyCommandToTrackerState:
             "66666666666666666666666666666666"
         )
 
+    def test_set_task_dependencies_updates_dependency_relation(self):
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "set_task_dependencies",
+                "task_id": "ALOVYA-1",
+                "dependency_task_ids": ["ALOVYA-2"],
+            },
+            tracker_state=_combined_tracker_state_with_two_tasks(),
+        )
+
+        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["dependency_task_ids"] == ["ALOVYA-2"]
+        assert command_result.tracker_state["tasks"]["ALOVYA-2"]["dependant_task_ids"] == ["ALOVYA-1"]
+        assert command_result.write_intents[0].operation_key == "update_dependencies:task:ALOVYA-1"
+        assert command_result.write_intents[0].arguments["properties"] == {
+            "Dependencies": ["task:ALOVYA-2"],
+        }
+
+    def test_set_task_dependants_updates_dependants_relation(self):
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "set_task_dependants",
+                "task_id": "ALOVYA-1",
+                "dependant_task_ids": ["ALOVYA-2"],
+            },
+            tracker_state=_combined_tracker_state_with_two_tasks(),
+        )
+
+        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["dependant_task_ids"] == ["ALOVYA-2"]
+        assert command_result.tracker_state["tasks"]["ALOVYA-2"]["dependency_task_ids"] == ["ALOVYA-1"]
+        assert command_result.write_intents[0].operation_key == "update_dependants:task:ALOVYA-1"
+        assert command_result.write_intents[0].arguments["properties"] == {
+            "Dependants": ["task:ALOVYA-2"],
+        }
+
+    def test_set_task_deadline_updates_deadline_field(self):
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "set_task_deadline",
+                "task_id": "ALOVYA-1",
+                "deadline": "2026-06-15",
+            },
+            tracker_state=_combined_tracker_state(),
+        )
+
+        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["deadline"] == "2026-06-15"
+        assert command_result.write_intents[0].operation_key == "update_deadline:task:ALOVYA-1"
+        assert command_result.write_intents[0].arguments["properties"] == {
+            "Deadline": "2026-06-15",
+        }
+
 
 def test_cancel_task_updates_status_and_produces_write_intents():
     tracker_state = _combined_tracker_state()
@@ -362,6 +412,21 @@ def _combined_tracker_state():
         "pages": {},
     }
     return tracker_state
+
+
+def _combined_tracker_state_with_two_tasks():
+    tracker_state = _combined_tracker_state()
+    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
+    work_graph.add_task(
+        Task(
+            task_id="ALOVYA-2",
+            title="Second task",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            notion_page_id="33333333333333333333333333333333",
+        )
+    )
+    return work_graph.replace_task_graph_in_tracker_state(tracker_state)
 
 
 def _task_tracker_state():

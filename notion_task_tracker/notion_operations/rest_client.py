@@ -26,6 +26,7 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DATA_SOURCE_ID,
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
+    TASK_DATABASE_DEPENDANTS_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
@@ -469,6 +470,9 @@ def _task_database_row_from_rest_page(page: dict[str, Any]) -> dict[str, Any]:
         TASK_DATABASE_DEPENDENCIES_PROPERTY: json.dumps(
             _relation_urls_from_property(properties.get(TASK_DATABASE_DEPENDENCIES_PROPERTY))
         ),
+        TASK_DATABASE_DEPENDANTS_PROPERTY: json.dumps(
+            _relation_urls_from_property(properties.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
+        ),
         TASK_DATABASE_DEADLINE_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_DEADLINE_PROPERTY)),
         TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: _plain_property_value(
             properties.get(TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY)
@@ -497,7 +501,11 @@ def _rest_database_properties(
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
         elif property_name == TASK_DATABASE_DEADLINE_PROPERTY:
             rest_properties[property_name] = {"date": None if property_value in {None, ""} else {"start": str(property_value)}}
-        elif property_name in {TASK_DATABASE_PARENT_PROPERTY, TASK_DATABASE_DEPENDENCIES_PROPERTY}:
+        elif property_name in {
+            TASK_DATABASE_PARENT_PROPERTY,
+            TASK_DATABASE_DEPENDENCIES_PROPERTY,
+            TASK_DATABASE_DEPENDANTS_PROPERTY,
+        }:
             rest_properties[property_name] = {
                 "relation": _convert_relation_property_to_notion_page_references(property_value, page_registry)
             }

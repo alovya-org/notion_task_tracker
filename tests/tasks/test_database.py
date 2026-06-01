@@ -184,6 +184,7 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
                 _build_task_database_row(
                     ticket_page="Dependency task",
                     ticket_id="1",
+                    dependant_page_ids=["22222222222222222222222222222222"],
                     page_id="11111111111111111111111111111111",
                 ),
                 _build_task_database_row(
@@ -210,6 +211,29 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
         assert work_graph.tasks["ALOVYA-2"].external_coordination == ExternalCoordination.YES
         assert work_graph.tasks["ALOVYA-2"].uncertainty == Uncertainty.HIGH
         assert work_graph.tasks["ALOVYA-2"].friction == Friction.CHARGED
+
+    def test_rejects_dependency_and_dependant_relation_mismatch(self):
+        with pytest.raises(ValueError, match="Dependants for task ALOVYA-1 do not match"):
+            task_dependency_graph_from_database_query_results(
+                query_results=[
+                    _build_task_database_row(
+                        ticket_page="Dependency task",
+                        ticket_id="1",
+                        page_id="11111111111111111111111111111111",
+                    ),
+                    _build_task_database_row(
+                        ticket_page="Dependant task",
+                        ticket_id="2",
+                        dependency_page_ids=["11111111111111111111111111111111"],
+                        page_id="22222222222222222222222222222222",
+                    ),
+                ],
+                landing_page=TrackedPage(
+                    local_page_key="ongoing_landing_page",
+                    title=ONGOING_LANDING_PAGE_TITLE,
+                    notion_page_id="landing-page-id",
+                ),
+            )
 
     def test_rejects_task_metadata_rows_without_required_enum_fields(self):
         row = _build_task_database_row(
@@ -341,6 +365,7 @@ def _build_task_database_row(
     status: str = "Active",
     parent_page_ids: list[str] | None = None,
     dependency_page_ids: list[str] | None = None,
+    dependant_page_ids: list[str] | None = None,
     deadline: str | None = None,
     external_coordination: str = "No",
     uncertainty: str = "Low",
@@ -353,6 +378,7 @@ def _build_task_database_row(
         "Status": status,
         "Parent": _render_relation_urls(parent_page_ids or []),
         "Dependencies": _render_relation_urls(dependency_page_ids or []),
+        "Dependants": _render_relation_urls(dependant_page_ids or []),
         "Deadline": deadline or "",
         "External coordination": external_coordination,
         "Uncertainty": uncertainty,

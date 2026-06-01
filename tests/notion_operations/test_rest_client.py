@@ -109,6 +109,7 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
         {
             "Deadline": "2026-06-15",
             "Dependencies": '["https://www.notion.so/33333333333333333333333333333333"]',
+            "Dependants": '["https://www.notion.so/44444444444444444444444444444444"]',
             "External coordination": "Yes",
             "Friction": "Charged",
             "Ticket page": "Root task",
@@ -142,6 +143,7 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "Priority": "P2",
                         "Status": "Blocked",
                         "Dependencies": ["task:ALOVYA-2"],
+                        "Dependants": ["task:ALOVYA-3"],
                         "Deadline": "2026-06-15",
                         "External coordination": "Yes",
                         "Uncertainty": "High",
@@ -164,6 +166,9 @@ def test_update_properties_call_uses_rest_page_property_shape():
                     "Status": {"select": {"name": "Blocked"}},
                     "Dependencies": {
                         "relation": [{"id": "33333333333333333333333333333333"}],
+                    },
+                    "Dependants": {
+                        "relation": [{"id": "44444444444444444444444444444444"}],
                     },
                     "Deadline": {"date": {"start": "2026-06-15"}},
                     "External coordination": {"select": {"name": "Yes"}},
@@ -363,6 +368,11 @@ def _page_registry() -> NotionPageRegistry:
                 title="Dependency task",
                 notion_page_id="33333333333333333333333333333333",
             ),
+            "task:ALOVYA-3": NotionPageReference(
+                local_page_key="task:ALOVYA-3",
+                title="Dependant task",
+                notion_page_id="44444444444444444444444444444444",
+            ),
         }
     )
 
@@ -393,6 +403,12 @@ def _task_properties(ticket_number: int) -> dict:
             "type": "relation",
             "relation": [
                 {"id": "33333333-3333-3333-3333-333333333333"},
+            ],
+        },
+        "Dependants": {
+            "type": "relation",
+            "relation": [
+                {"id": "44444444-4444-4444-4444-444444444444"},
             ],
         },
         "Deadline": {

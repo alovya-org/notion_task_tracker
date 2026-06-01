@@ -46,6 +46,7 @@ from notion_task_tracker.tasks.task import (
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
+    TASK_DATABASE_DEPENDANTS_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
@@ -123,16 +124,83 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
                 TASK_DATABASE_TITLE_PROPERTY: task.page_title(),
                 TASK_DATABASE_PRIORITY_PROPERTY: task.configured_priority.value,
                 TASK_DATABASE_STATUS_PROPERTY: task.status.value,
-                TASK_DATABASE_DEPENDENCIES_PROPERTY: [
-                    f"task:{dependency_task_id}"
-                    for dependency_task_id in task.dependency_task_ids
-                ],
                 TASK_DATABASE_DEADLINE_PROPERTY: task.deadline,
                 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: task.external_coordination.value,
                 TASK_DATABASE_UNCERTAINTY_PROPERTY: task.uncertainty.value,
                 TASK_DATABASE_FRICTION_PROPERTY: task.friction.value,
             }
         },
+    )
+
+
+def build_task_dependencies_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_dependencies:{task.local_page_key}",
+        properties={
+            TASK_DATABASE_DEPENDENCIES_PROPERTY: [
+                f"task:{dependency_task_id}"
+                for dependency_task_id in task.dependency_task_ids
+            ]
+        },
+    )
+
+
+def build_task_dependants_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_dependants:{task.local_page_key}",
+        properties={
+            TASK_DATABASE_DEPENDANTS_PROPERTY: [
+                f"task:{dependant_task_id}"
+                for dependant_task_id in task.dependant_task_ids
+            ]
+        },
+    )
+
+
+def build_task_deadline_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_deadline:{task.local_page_key}",
+        properties={TASK_DATABASE_DEADLINE_PROPERTY: task.deadline},
+    )
+
+
+def build_task_external_coordination_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_external_coordination:{task.local_page_key}",
+        properties={TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: task.external_coordination.value},
+    )
+
+
+def build_task_uncertainty_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_uncertainty:{task.local_page_key}",
+        properties={TASK_DATABASE_UNCERTAINTY_PROPERTY: task.uncertainty.value},
+    )
+
+
+def build_task_friction_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_friction:{task.local_page_key}",
+        properties={TASK_DATABASE_FRICTION_PROPERTY: task.friction.value},
+    )
+
+
+def _build_task_property_update_intent(
+    task: Task,
+    operation_key: str,
+    properties: dict,
+) -> NotionWriteIntent:
+    return NotionWriteIntent(
+        operation_key=operation_key,
+        operation_name="update_page_properties",
+        target_page_key=task.local_page_key,
+        arguments={"properties": properties},
     )
 
 

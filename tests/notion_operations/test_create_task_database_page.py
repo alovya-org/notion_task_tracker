@@ -35,6 +35,12 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
                     "title": "Child task",
                     "configured_priority": "P2",
                     "status": "Active",
+                    "dependency_task_ids": [],
+                    "dependant_task_ids": [],
+                    "deadline": None,
+                    "external_coordination": "No",
+                    "uncertainty": "Low",
+                    "friction": "None",
                 },
                 "parent_timeline_entry": {
                     "entry_date": "2026-05-25",
@@ -66,7 +72,6 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
     assert notion_client.calls[0].arguments["data_source_id"] == "36b03da5-d69a-8080-91d1-000b5d7c1c8d"
     assert notion_client.calls[0].arguments["properties"] == {
         "Deadline": None,
-        "Dependencies": [],
         "External coordination": "No",
         "Friction": "None",
         "Ticket page": "Child task",
@@ -75,6 +80,7 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
         "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
         "Uncertainty": "Low",
     }
+    assert "Dependencies" not in notion_client.calls[0].arguments["properties"]
     assert "Dependants" not in notion_client.calls[0].arguments["properties"]
     assert notion_client.calls[0].arguments["content"] == "\n".join(
         [

@@ -30,7 +30,7 @@ from notion_task_tracker.notion_operations.reconcile_task_database import (
     refresh_tracker_state_from_notion_task_database,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.tasks import TaskDependencyGraph
+from notion_task_tracker.tasks import ExternalCoordination, Friction, TaskDependencyGraph, Uncertainty
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 
 
@@ -75,6 +75,13 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--log", action="store_true")
     action_group.add_argument("--complete", action="store_true")
     action_group.add_argument("--cancel", action="store_true")
+    action_group.add_argument("--set-dependencies", action="store_true")
+    action_group.add_argument("--set-dependants", action="store_true")
+    action_group.add_argument("--set-deadline", action="store_true")
+    action_group.add_argument("--clear-deadline", action="store_true")
+    action_group.add_argument("--set-external-coordination", action="store_true")
+    action_group.add_argument("--set-uncertainty", action="store_true")
+    action_group.add_argument("--set-friction", action="store_true")
     action_group.add_argument("--parent", action="store_true")
     action_group.add_argument("--child", action="store_true")
     action_group.add_argument("--sibling", action="store_true")
@@ -87,10 +94,20 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sibling-ticket-number", type=int)
     parser.add_argument("--title")
     parser.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default="P1")
+    parser.add_argument("--dependency-ticket-number", action="append", type=int, default=[])
+    parser.add_argument("--dependant-ticket-number", action="append", type=int, default=[])
+    parser.add_argument("--deadline")
+    parser.add_argument("--external-coordination", choices=_enum_values(ExternalCoordination))
+    parser.add_argument("--uncertainty", choices=_enum_values(Uncertainty))
+    parser.add_argument("--friction", choices=_enum_values(Friction))
     parser.add_argument("--content-path")
     parser.add_argument("--synthesis-key")
     parser.add_argument("--entry-date")
     return parser
+
+
+def _enum_values(enum_type) -> list[str]:
+    return [enum_value.value for enum_value in enum_type]
 
 
 def _run_requested_cli_action(args: argparse.Namespace) -> None:

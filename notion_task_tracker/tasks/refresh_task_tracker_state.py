@@ -75,6 +75,7 @@ def _refresh_task_ids_in_work_graph(
         database_row = _require_database_row_for_known_task(task_id, database_rows_by_task_id, work_graph)
         parent_task_id = _derive_parent_task_id_from_database_row(database_row, work_graph)
         dependency_task_ids = _derive_dependency_task_ids_from_database_row(database_row, work_graph)
+        dependant_task_ids = _derive_dependant_task_ids_from_database_row(database_row, work_graph)
         work_graph.refresh_task_from_database_row(
             task_id=task_id,
             title=database_row.title,
@@ -83,6 +84,7 @@ def _refresh_task_ids_in_work_graph(
             notion_page_id=database_row.notion_page_id,
             parent_task_id=parent_task_id,
             dependency_task_ids=dependency_task_ids,
+            dependant_task_ids=dependant_task_ids,
             deadline=database_row.deadline,
             external_coordination=database_row.external_coordination,
             uncertainty=database_row.uncertainty,
@@ -168,3 +170,20 @@ def _derive_dependency_task_ids_from_database_row(
         dependency_task_ids.append(dependency_task_id)
 
     return dependency_task_ids
+
+
+def _derive_dependant_task_ids_from_database_row(
+    database_row: TaskDatabaseRow,
+    work_graph: TaskDependencyGraph,
+) -> list[str]:
+    dependant_task_ids = []
+    for dependant_page_id in database_row.dependant_notion_page_ids:
+        dependant_task_id = work_graph.task_id_for_notion_page_id(dependant_page_id)
+        if dependant_task_id is None:
+            raise ValueError(
+                f"Dependant page {dependant_page_id} for task {database_row.task_id} "
+                "is not in local tracker state; run notion_task update"
+            )
+        dependant_task_ids.append(dependant_task_id)
+
+    return dependant_task_ids

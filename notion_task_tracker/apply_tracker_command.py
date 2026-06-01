@@ -12,6 +12,12 @@ from notion_task_tracker.notion_operations.page_registry import NotionPageRegist
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     plan_completion_write_intents,
     plan_notion_writes_for_task_graph,
+    build_task_deadline_update_intent,
+    build_task_dependencies_update_intent,
+    build_task_dependants_update_intent,
+    build_task_external_coordination_update_intent,
+    build_task_friction_update_intent,
+    build_task_uncertainty_update_intent,
     build_page_registry_for_task_graph,
     build_timeline_log_write_intent,
 )
@@ -59,6 +65,27 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
 
     if command_name == "cancel_task":
         return _apply_task_command(command, tracker_state, _cancel_task)
+
+    if command_name == "set_task_dependencies":
+        return _set_task_dependencies(command, tracker_state)
+
+    if command_name == "set_task_dependants":
+        return _set_task_dependants(command, tracker_state)
+
+    if command_name == "set_task_deadline":
+        return _set_task_deadline(command, tracker_state)
+
+    if command_name == "clear_task_deadline":
+        return _clear_task_deadline(command, tracker_state)
+
+    if command_name == "set_task_external_coordination":
+        return _set_task_external_coordination(command, tracker_state)
+
+    if command_name == "set_task_uncertainty":
+        return _set_task_uncertainty(command, tracker_state)
+
+    if command_name == "set_task_friction":
+        return _set_task_friction(command, tracker_state)
 
     if command_name == "refresh_task_pages":
         return _refresh_task_pages(command, tracker_state)
@@ -168,6 +195,94 @@ def _cancel_task(
     return work_graph.cancel_task(
         task_id=command["task_id"],
         timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+    )
+
+
+def _set_task_dependencies(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_dependencies(
+            command["task_id"],
+            list(command["dependency_task_ids"]),
+        ),
+        build_write_intent=build_task_dependencies_update_intent,
+    )
+
+
+def _set_task_dependants(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_dependants(
+            command["task_id"],
+            list(command["dependant_task_ids"]),
+        ),
+        build_write_intent=build_task_dependants_update_intent,
+    )
+
+
+def _set_task_deadline(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_deadline(command["task_id"], command["deadline"]),
+        build_write_intent=build_task_deadline_update_intent,
+    )
+
+
+def _clear_task_deadline(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.clear_task_deadline(command["task_id"]),
+        build_write_intent=build_task_deadline_update_intent,
+    )
+
+
+def _set_task_external_coordination(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_external_coordination(
+            command["task_id"],
+            command["external_coordination"],
+        ),
+        build_write_intent=build_task_external_coordination_update_intent,
+    )
+
+
+def _set_task_uncertainty(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_uncertainty(command["task_id"], command["uncertainty"]),
+        build_write_intent=build_task_uncertainty_update_intent,
+    )
+
+
+def _set_task_friction(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda work_graph: work_graph.set_task_friction(command["task_id"], command["friction"]),
+        build_write_intent=build_task_friction_update_intent,
+    )
+
+
+def _apply_task_property_update(
+    command: dict[str, Any],
+    tracker_state: dict[str, Any],
+    update_task,
+    build_write_intent,
+) -> TrackerCommandResult:
+    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
+    update_task(work_graph)
+    page_registry = build_page_registry_for_task_graph(work_graph)
+    return TrackerCommandResult(
+        tracker_state=_replace_task_pages_in_tracker_state(tracker_state, work_graph),
+        write_intents=[build_write_intent(work_graph.tasks[command["task_id"]])],
+        page_registry=page_registry,
     )
 
 

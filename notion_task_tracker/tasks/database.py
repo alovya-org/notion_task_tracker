@@ -85,6 +85,7 @@ class TaskDatabaseRow:
     notion_page_url: str
     parent_notion_page_ids: list[str]
     dependency_notion_page_ids: list[str]
+    dependant_notion_page_ids: list[str]
     deadline: str | None
     external_coordination: ExternalCoordination
     uncertainty: Uncertainty
@@ -220,6 +221,10 @@ def _database_row_from_query_result(query_result: dict[str, Any]) -> TaskDatabas
             notion_page_id_from_url(dependency_page_url)
             for dependency_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDENCIES_PROPERTY))
         ],
+        dependant_notion_page_ids=[
+            notion_page_id_from_url(dependant_page_url)
+            for dependant_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
+        ],
         deadline=_optional_text_property(query_result, TASK_DATABASE_DEADLINE_PROPERTY),
         external_coordination=_required_enum_property(
             query_result,
@@ -284,11 +289,53 @@ def _link_database_parent_rows(
             task_id_by_page_id,
         )
     work_graph.derive_dependant_task_ids_from_dependencies()
+    _validate_dependants_match_database_rows(work_graph, database_rows, task_id_by_page_id)
 
 
 def _sort_child_task_ids(work_graph: TaskDependencyGraph) -> None:
     for task in work_graph.tasks.values():
         task.child_task_ids.sort(key=task_id_sort_key)
+
+
+def _validate_dependants_match_database_rows(
+    work_graph: TaskDependencyGraph,
+    database_rows: list[TaskDatabaseRow],
+    task_id_by_page_id: dict[str, str],
+) -> None:
+    for database_row in database_rows:
+        task = work_graph.tasks[database_row.task_id]
+        dependant_task_ids = _require_dependant_task_ids_referenced_by_database_row(
+            database_row,
+            task_id_by_page_id,
+        )
+        if sorted(dependant_task_ids, key=task_id_sort_key) != task.dependant_task_ids:
+            raise NotionPlanningError(
+                f"Dependants for task {database_row.task_id} do not match the inverse Dependencies relation"
+            )
+
+
+def _require_dependant_task_ids_referenced_by_database_row(
+    database_row: TaskDatabaseRow,
+    task_id_by_page_id: dict[str, str],
+) -> list[str]:
+    return [
+        _require_dependant_task_id_for_page_id(database_row, dependant_page_id, task_id_by_page_id)
+        for dependant_page_id in database_row.dependant_notion_page_ids
+    ]
+
+
+def _require_dependant_task_id_for_page_id(
+    database_row: TaskDatabaseRow,
+    dependant_page_id: str,
+    task_id_by_page_id: dict[str, str],
+) -> str:
+    dependant_task_id = task_id_by_page_id.get(dependant_page_id)
+    if dependant_task_id is None:
+        raise NotionPlanningError(
+            f"Dependant page {dependant_page_id} for task {database_row.task_id} is not in the local task graph"
+        )
+
+    return dependant_task_id
 
 
 def _require_dependency_task_ids_referenced_by_database_row(

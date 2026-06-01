@@ -18,6 +18,7 @@ from notion_task_tracker.tasks.create_task import (
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
+    TASK_DATABASE_DEPENDANTS_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
@@ -93,6 +94,12 @@ async def _create_database_page_and_read_ticket_id(
             configured_priority=task_creation.configured_priority.value,
             status=task_creation.status.value,
             parent_task_id=task_creation.parent_task_id,
+            dependency_task_ids=task_creation.dependency_task_ids,
+            dependant_task_ids=task_creation.dependant_task_ids,
+            deadline=task_creation.deadline,
+            external_coordination=task_creation.external_coordination.value,
+            uncertainty=task_creation.uncertainty.value,
+            friction=task_creation.friction.value,
             work_graph=work_graph,
         ),
         content=_render_new_task_page_initial_content(
@@ -198,18 +205,33 @@ def _build_new_task_database_row_properties(
     configured_priority: str,
     status: str,
     parent_task_id: str | None,
+    dependency_task_ids: list[str],
+    dependant_task_ids: list[str],
+    deadline: str | None,
+    external_coordination: str,
+    uncertainty: str,
+    friction: str,
     work_graph: TaskDependencyGraph,
 ) -> dict[str, Any]:
     properties = {
         TASK_DATABASE_TITLE_PROPERTY: task_title,
         TASK_DATABASE_PRIORITY_PROPERTY: configured_priority,
         TASK_DATABASE_STATUS_PROPERTY: status,
-        TASK_DATABASE_DEPENDENCIES_PROPERTY: [],
-        TASK_DATABASE_DEADLINE_PROPERTY: None,
-        TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: "No",
-        TASK_DATABASE_UNCERTAINTY_PROPERTY: "Low",
-        TASK_DATABASE_FRICTION_PROPERTY: "None",
+        TASK_DATABASE_DEADLINE_PROPERTY: deadline,
+        TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: external_coordination,
+        TASK_DATABASE_UNCERTAINTY_PROPERTY: uncertainty,
+        TASK_DATABASE_FRICTION_PROPERTY: friction,
     }
+    if dependency_task_ids:
+        properties[TASK_DATABASE_DEPENDENCIES_PROPERTY] = json.dumps([
+            _build_task_notion_url(work_graph, dependency_task_id)
+            for dependency_task_id in dependency_task_ids
+        ])
+    elif dependant_task_ids:
+        properties[TASK_DATABASE_DEPENDANTS_PROPERTY] = json.dumps([
+            _build_task_notion_url(work_graph, dependant_task_id)
+            for dependant_task_id in dependant_task_ids
+        ])
     if parent_task_id is not None:
         properties[TASK_DATABASE_PARENT_PROPERTY] = json.dumps([
             _build_task_notion_url(work_graph, parent_task_id)

@@ -292,7 +292,6 @@ class TestTaskDependencyGraphBuildNotionWritePlan:
 
         assert title_refresh_intent.arguments["properties"] == {
             "Deadline": None,
-            "Dependencies": [],
             "External coordination": "No",
             "Friction": "None",
             "Priority": "P3",
@@ -526,7 +525,7 @@ class TestTaskDependencyGraphFromTrackerState:
         assert loaded_work_graph.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
         assert loaded_work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
 
-    def test_requires_new_task_metadata_fields_in_tracker_state(self):
+    def test_requires_new_task_database_fields_in_tracker_state(self):
         tracker_state = TaskDependencyGraph().to_tracker_state()
         tracker_state["tasks"]["ALOVYA-1"] = {
             "task_id": "ALOVYA-1",

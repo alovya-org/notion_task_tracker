@@ -167,6 +167,7 @@ class TaskDependencyGraph:
         notion_page_id: str,
         parent_task_id: str | None,
         dependency_task_ids: list[str],
+        dependant_task_ids: list[str],
         deadline: str | None,
         external_coordination: ExternalCoordination,
         uncertainty: Uncertainty,
@@ -178,6 +179,7 @@ class TaskDependencyGraph:
         task.status = status
         task.notion_page_id = notion_page_id
         task.dependency_task_ids = list(dependency_task_ids)
+        self._replace_task_dependants(task_id, list(dependant_task_ids))
         task.deadline = deadline
         task.external_coordination = external_coordination
         task.uncertainty = uncertainty
@@ -217,6 +219,34 @@ class TaskDependencyGraph:
         self.validate()
         self.recalculate_display_priorities()
         return cancellation_change
+
+    def set_task_dependencies(self, task_id: str, dependency_task_ids: list[str]) -> None:
+        self.tasks[task_id].dependency_task_ids = list(dependency_task_ids)
+        self._validate_after_task_field_change()
+
+    def set_task_dependants(self, task_id: str, dependant_task_ids: list[str]) -> None:
+        self._replace_task_dependants(task_id, dependant_task_ids)
+        self._validate_after_task_field_change()
+
+    def set_task_deadline(self, task_id: str, deadline: str) -> None:
+        self.tasks[task_id].deadline = deadline
+        self._validate_after_task_field_change()
+
+    def clear_task_deadline(self, task_id: str) -> None:
+        self.tasks[task_id].deadline = None
+        self._validate_after_task_field_change()
+
+    def set_task_external_coordination(self, task_id: str, external_coordination: str) -> None:
+        self.tasks[task_id].external_coordination = ExternalCoordination(external_coordination)
+        self._validate_after_task_field_change()
+
+    def set_task_uncertainty(self, task_id: str, uncertainty: str) -> None:
+        self.tasks[task_id].uncertainty = Uncertainty(uncertainty)
+        self._validate_after_task_field_change()
+
+    def set_task_friction(self, task_id: str, friction: str) -> None:
+        self.tasks[task_id].friction = Friction(friction)
+        self._validate_after_task_field_change()
 
     def task_ids_grouped_for_landing_page(self) -> dict[Priority, list[str]]:
         self.recalculate_display_priorities()
@@ -380,6 +410,21 @@ class TaskDependencyGraph:
             current_task = self.tasks.get(parent_task_id)
 
         return ancestor_task_ids
+
+    def _validate_after_task_field_change(self) -> None:
+        self.derive_dependant_task_ids_from_dependencies()
+        self.validate()
+        self.recalculate_display_priorities()
+
+    def _replace_task_dependants(self, task_id: str, dependant_task_ids: list[str]) -> None:
+        for task in self.tasks.values():
+            if task_id in task.dependency_task_ids:
+                task.dependency_task_ids.remove(task_id)
+
+        for dependant_task_id in dependant_task_ids:
+            dependant_task = self.tasks[dependant_task_id]
+            if task_id not in dependant_task.dependency_task_ids:
+                dependant_task.dependency_task_ids.append(task_id)
 
 
 def _highest_priority(priorities: list[Priority]) -> Priority:
