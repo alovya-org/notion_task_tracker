@@ -28,6 +28,8 @@ Footgun: never set `allow_deleting_content` automatically. If Notion rejects rep
 
 Do not compress useful technical context into vague summaries. Notion logs should preserve the operational facts that would let a future agent or human resume the work without rereading the chat.
 
+When the user says to log work on, in, or for a specific task, write the detailed log to that task. Parent timeline updates created automatically by child or sibling creation are bookkeeping links, not a substitute for the requested task log. If a create command both creates a task and includes detailed context, the detailed context belongs in the newly created task's initial timeline entry unless the user explicitly names another destination.
+
 For design decisions, implementation notes, debugging, command output, errors, or agent/tool behaviour:
 
 1. Prefer `timeline_entry.blocks` over `timeline_entry.lines`.
@@ -61,17 +63,10 @@ Use concise prose only after the raw mechanics, commands, paths, and errors have
 
 Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The tracker calls the Notion REST API with `NOTION_API_KEY`.
 
-The `ntt` CLI is often installed in a Python venv. Activate the venv before running commands:
+Use the installed `ntt` CLI and request command escalation for live Notion commands:
 
 ```bash
-source /path/to/venv/bin/activate  # e.g. /workspace/venv/bin/activate
 ntt ...
-```
-
-Alternatively, invoke via the venv Python directly:
-
-```bash
-/path/to/venv/bin/python -m notion_task_tracker ...
 ```
 
 Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
@@ -86,6 +81,30 @@ Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permi
 4. If the saved view query fails, stop and report that task database reconciliation failed.
 
 Normal task commands do not query the full saved database view. They use targeted task-page fetches; run `notion_task update` only for explicit reconciliation or when targeted preflight says the local tracker state is missing a related page.
+
+## Task Field Arguments
+
+Creation commands `--parent`, `--child`, and `--sibling` accept the task database field flags below:
+
+- `--dependency-ticket-number <number>` may be repeated. It writes the new task's `Dependencies` relation.
+- `--dependant-ticket-number <number>` may be repeated. It writes the new task's `Dependants` relation, for the case where known existing tasks should depend on the newly created task.
+- Do not pass dependency and dependant ticket numbers in the same creation command. Choose one direction at request time based on what the user said.
+- `--deadline <value>` writes `Deadline`.
+- `--external-coordination No|Yes` writes `External coordination`.
+- `--uncertainty Low|High` writes `Uncertainty`.
+- `--friction "Insufficiently decomposed"|Charged|Stale|None` writes `Friction`.
+
+Existing tasks can be updated with explicit field actions:
+
+- `--set-dependencies --ticket-number <task> --dependency-ticket-number <number> [...]`
+- `--set-dependants --ticket-number <task> --dependant-ticket-number <number> [...]`
+- `--set-deadline --ticket-number <task> --deadline <value>`
+- `--clear-deadline --ticket-number <task>`
+- `--set-external-coordination --ticket-number <task> --external-coordination No|Yes`
+- `--set-uncertainty --ticket-number <task> --uncertainty Low|High`
+- `--set-friction --ticket-number <task> --friction "Insufficiently decomposed"|Charged|Stale|None`
+
+Use these field-specific actions directly. Do not invent or use a generic metadata update command.
 
 `notion_task read <number> [<number> ...]` reads and summarises existing tasks.
 
@@ -166,7 +185,7 @@ Normal task commands do not query the full saved database view. They use targete
 5. Use `[title]` when provided; ask for a title if the user did not provide one.
 6. Run `python -m notion_task_tracker --sibling --sibling-ticket-number <existing-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
 7. If the existing task has a parent, the new task gets the same parent. If the existing task is top-level, the new task is also top-level.
-8. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page.
+8. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page. This parent entry is only a backlink. Any detailed log requested with the sibling creation belongs in the new sibling task's initial timeline entry.
 
 Never silently create a task from `notion_task <number>`.
 Do not use `new` for top-level tasks; use `parent`.
