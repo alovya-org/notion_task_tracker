@@ -77,6 +77,84 @@ class TestTaskDependencyGraphValidate:
         with pytest.raises(ValueError, match="Task hierarchy has a cycle"):
             work_graph.validate()
 
+    def test_rejects_dependency_without_matching_dependant(self):
+        work_graph = _build_dependency_work_graph()
+        work_graph.tasks["ALOVYA-1"].dependant_task_ids = []
+
+        with pytest.raises(ValueError, match="Task ALOVYA-1 should list ALOVYA-2 as a dependant"):
+            work_graph.validate()
+
+    def test_rejects_dependant_without_matching_dependency(self):
+        work_graph = _build_dependency_work_graph()
+        work_graph.tasks["ALOVYA-2"].dependency_task_ids = []
+
+        with pytest.raises(ValueError, match="Task ALOVYA-2 should depend on ALOVYA-1"):
+            work_graph.validate()
+
+    def test_rejects_dependency_that_does_not_exist(self):
+        work_graph = TaskDependencyGraph()
+        work_graph.add_task(
+            Task(
+                task_id="ALOVYA-1",
+                title="Needs missing dependency",
+                configured_priority=Priority.P1,
+                status=TaskStatus.ACTIVE,
+                dependency_task_ids=["ALOVYA-404"],
+            )
+        )
+
+        with pytest.raises(ValueError, match="Task ALOVYA-404 does not exist"):
+            work_graph.validate()
+
+    def test_rejects_task_that_depends_on_itself(self):
+        work_graph = TaskDependencyGraph()
+        work_graph.add_task(
+            Task(
+                task_id="ALOVYA-1",
+                title="Self dependency",
+                configured_priority=Priority.P1,
+                status=TaskStatus.ACTIVE,
+                dependency_task_ids=["ALOVYA-1"],
+            )
+        )
+
+        with pytest.raises(ValueError, match="Task ALOVYA-1 cannot depend on itself"):
+            work_graph.validate()
+
+    def test_normalises_duplicate_dependencies_and_dependants(self):
+        work_graph = TaskDependencyGraph()
+        work_graph.add_task(
+            Task(
+                task_id="ALOVYA-1",
+                title="First dependency",
+                configured_priority=Priority.P1,
+                status=TaskStatus.ACTIVE,
+            )
+        )
+        work_graph.add_task(
+            Task(
+                task_id="ALOVYA-2",
+                title="Second dependency",
+                configured_priority=Priority.P1,
+                status=TaskStatus.ACTIVE,
+            )
+        )
+        work_graph.add_task(
+            Task(
+                task_id="ALOVYA-3",
+                title="Depends on both",
+                configured_priority=Priority.P1,
+                status=TaskStatus.ACTIVE,
+                dependency_task_ids=["ALOVYA-2", "ALOVYA-1", "ALOVYA-2"],
+            )
+        )
+
+        work_graph.derive_dependant_task_ids_from_dependencies()
+
+        assert work_graph.tasks["ALOVYA-3"].dependency_task_ids == ["ALOVYA-1", "ALOVYA-2"]
+        assert work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-3"]
+        assert work_graph.tasks["ALOVYA-2"].dependant_task_ids == ["ALOVYA-3"]
+
 
 class TestTaskDependencyGraphFromSnapshot:
     def test_loads_null_completed_landing_page_as_missing_page_id(self):
@@ -213,9 +291,14 @@ class TestTaskDependencyGraphBuildNotionWritePlan:
         )
 
         assert title_refresh_intent.arguments["properties"] == {
+            "Deadline": None,
+            "Dependencies": [],
+            "External coordination": "No",
+            "Friction": "None",
             "Priority": "P3",
             "Status": "Complete",
             "Ticket page": _visible_strikethrough_text("Complete calibration branch"),
+            "Uncertainty": "Low",
         }
 
 
@@ -434,3 +517,53 @@ class TestTaskDependencyGraphFromTrackerState:
 
         assert loaded_work_graph.ongoing_tasks_landing_page.page.title == ONGOING_LANDING_PAGE_TITLE
         assert loaded_work_graph.ongoing_tasks_landing_page.page.notion_page_id == "landing-page-id"
+
+    def test_round_trips_dependency_source_and_dependant_inverse(self):
+        work_graph = _build_dependency_work_graph()
+
+        loaded_work_graph = TaskDependencyGraph.from_tracker_state(work_graph.to_tracker_state())
+
+        assert loaded_work_graph.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
+        assert loaded_work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
+
+    def test_requires_new_task_metadata_fields_in_tracker_state(self):
+        tracker_state = TaskDependencyGraph().to_tracker_state()
+        tracker_state["tasks"]["ALOVYA-1"] = {
+            "task_id": "ALOVYA-1",
+            "title": "Incomplete persisted task",
+            "configured_priority": "P1",
+            "displayed_priority": "P1",
+            "status": "Active",
+            "status_update": "",
+            "parent_task_id": None,
+            "child_task_ids": [],
+            "timeline_entries": [],
+            "links": [],
+            "notion_page_id": "11111111111111111111111111111111",
+        }
+
+        with pytest.raises(KeyError, match="dependency_task_ids"):
+            TaskDependencyGraph.from_tracker_state(tracker_state)
+
+
+def _build_dependency_work_graph() -> TaskDependencyGraph:
+    work_graph = TaskDependencyGraph()
+    work_graph.add_task(
+        Task(
+            task_id="ALOVYA-1",
+            title="Dependency",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+        )
+    )
+    work_graph.add_task(
+        Task(
+            task_id="ALOVYA-2",
+            title="Dependant",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependency_task_ids=["ALOVYA-1"],
+        )
+    )
+    work_graph.derive_dependant_task_ids_from_dependencies()
+    return work_graph

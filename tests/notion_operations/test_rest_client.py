@@ -107,11 +107,16 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
 
     assert rows == [
         {
+            "Deadline": "2026-06-15",
+            "Dependencies": '["https://www.notion.so/33333333333333333333333333333333"]',
+            "External coordination": "Yes",
+            "Friction": "Charged",
             "Ticket page": "Root task",
             "Ticket ID": "7",
             "Priority": "P1",
             "Status": "Active",
             "Parent": "[]",
+            "Uncertainty": "High",
             "url": "https://www.notion.so/22222222222222222222222222222222",
         }
     ]
@@ -136,6 +141,11 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "Ticket page": "Root task",
                         "Priority": "P2",
                         "Status": "Blocked",
+                        "Dependencies": ["task:ALOVYA-2"],
+                        "Deadline": "2026-06-15",
+                        "External coordination": "Yes",
+                        "Uncertainty": "High",
+                        "Friction": "Charged",
                     },
                 },
             ),
@@ -152,6 +162,13 @@ def test_update_properties_call_uses_rest_page_property_shape():
                     "Ticket page": {"title": [{"type": "text", "text": {"content": "Root task"}}]},
                     "Priority": {"select": {"name": "P2"}},
                     "Status": {"select": {"name": "Blocked"}},
+                    "Dependencies": {
+                        "relation": [{"id": "33333333333333333333333333333333"}],
+                    },
+                    "Deadline": {"date": {"start": "2026-06-15"}},
+                    "External coordination": {"select": {"name": "Yes"}},
+                    "Uncertainty": {"select": {"name": "High"}},
+                    "Friction": {"select": {"name": "Charged"}},
                 }
             },
         )
@@ -341,6 +358,11 @@ def _page_registry() -> NotionPageRegistry:
                 title="Root task",
                 notion_page_id="22222222222222222222222222222222",
             ),
+            "task:ALOVYA-2": NotionPageReference(
+                local_page_key="task:ALOVYA-2",
+                title="Dependency task",
+                notion_page_id="33333333333333333333333333333333",
+            ),
         }
     )
 
@@ -366,5 +388,27 @@ def _task_properties(ticket_number: int) -> dict:
         "Parent": {
             "type": "relation",
             "relation": [],
+        },
+        "Dependencies": {
+            "type": "relation",
+            "relation": [
+                {"id": "33333333-3333-3333-3333-333333333333"},
+            ],
+        },
+        "Deadline": {
+            "type": "date",
+            "date": {"start": "2026-06-15"},
+        },
+        "External coordination": {
+            "type": "select",
+            "select": {"name": "Yes"},
+        },
+        "Uncertainty": {
+            "type": "select",
+            "select": {"name": "High"},
+        },
+        "Friction": {
+            "type": "select",
+            "select": {"name": "Charged"},
         },
     }

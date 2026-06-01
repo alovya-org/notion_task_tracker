@@ -24,11 +24,16 @@ from notion_task_tracker.notion_operations.database_properties import (
 )
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DATA_SOURCE_ID,
+    TASK_DATABASE_DEADLINE_PROPERTY,
+    TASK_DATABASE_DEPENDENCIES_PROPERTY,
+    TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
+    TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
     TASK_DATABASE_PRIORITY_PROPERTY,
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
+    TASK_DATABASE_UNCERTAINTY_PROPERTY,
     task_database_data_source_url_from_tracker_state,
     task_database_query_for_tracker_state,
     task_database_view_url_from_tracker_state,
@@ -223,6 +228,7 @@ class NotionRestClient:
         updated_page = await self.update_page_properties(
             page_id=page_registry.page_id(_required_target_page_key(write_intent)),
             properties=write_intent.arguments["properties"],
+            page_registry=page_registry,
         )
         return _write_result(write_intent.operation_key, None, updated_page)
 
@@ -326,16 +332,21 @@ class NotionRestClient:
             "/v1/pages",
             {
                 "parent": parent,
-                "properties": _rest_database_properties(properties),
+                "properties": _rest_database_properties(properties, page_registry=None),
                 "markdown": markdown,
             },
         )
 
-    async def update_page_properties(self, page_id: str, properties: dict[str, Any]) -> dict[str, Any]:
+    async def update_page_properties(
+        self,
+        page_id: str,
+        properties: dict[str, Any],
+        page_registry: NotionPageRegistry | None = None,
+    ) -> dict[str, Any]:
         return await self._send_json(
             "PATCH",
             f"/v1/pages/{page_id}",
-            {"properties": _rest_database_properties(properties)},
+            {"properties": _rest_database_properties(properties, page_registry)},
         )
 
     async def replace_page_content(
@@ -455,11 +466,23 @@ def _task_database_row_from_rest_page(page: dict[str, Any]) -> dict[str, Any]:
         TASK_DATABASE_PRIORITY_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_PRIORITY_PROPERTY)),
         TASK_DATABASE_STATUS_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_STATUS_PROPERTY)),
         TASK_DATABASE_PARENT_PROPERTY: json.dumps(_relation_urls_from_property(properties.get(TASK_DATABASE_PARENT_PROPERTY))),
+        TASK_DATABASE_DEPENDENCIES_PROPERTY: json.dumps(
+            _relation_urls_from_property(properties.get(TASK_DATABASE_DEPENDENCIES_PROPERTY))
+        ),
+        TASK_DATABASE_DEADLINE_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_DEADLINE_PROPERTY)),
+        TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: _plain_property_value(
+            properties.get(TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY)
+        ),
+        TASK_DATABASE_UNCERTAINTY_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_UNCERTAINTY_PROPERTY)),
+        TASK_DATABASE_FRICTION_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_FRICTION_PROPERTY)),
         "url": page.get("url") or f"https://www.notion.so/{canonical_notion_page_id(page['id'])}",
     }
 
 
-def _rest_database_properties(properties: dict[str, Any]) -> dict[str, Any]:
+def _rest_database_properties(
+    properties: dict[str, Any],
+    page_registry: NotionPageRegistry | None,
+) -> dict[str, Any]:
     rest_properties = {}
     for property_name, property_value in properties.items():
         if property_name in {"title", TASK_DATABASE_TITLE_PROPERTY}:
@@ -468,8 +491,16 @@ def _rest_database_properties(properties: dict[str, Any]) -> dict[str, Any]:
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
         elif property_name == TASK_DATABASE_STATUS_PROPERTY:
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
-        elif property_name == TASK_DATABASE_PARENT_PROPERTY:
-            rest_properties[property_name] = {"relation": _relation_items_from_property_value(property_value)}
+        elif property_name in {TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY, TASK_DATABASE_UNCERTAINTY_PROPERTY}:
+            rest_properties[property_name] = {"select": {"name": str(property_value)}}
+        elif property_name == TASK_DATABASE_FRICTION_PROPERTY:
+            rest_properties[property_name] = {"select": {"name": str(property_value)}}
+        elif property_name == TASK_DATABASE_DEADLINE_PROPERTY:
+            rest_properties[property_name] = {"date": None if property_value in {None, ""} else {"start": str(property_value)}}
+        elif property_name in {TASK_DATABASE_PARENT_PROPERTY, TASK_DATABASE_DEPENDENCIES_PROPERTY}:
+            rest_properties[property_name] = {
+                "relation": _convert_relation_property_to_notion_page_references(property_value, page_registry)
+            }
         else:
             rest_properties[property_name] = property_value
     return rest_properties
@@ -495,6 +526,8 @@ def _plain_property_value(property_value: dict[str, Any] | None) -> str:
         return "" if value is None else str(value)
     if property_type == "relation":
         return json.dumps(_relation_urls_from_property(property_value))
+    if property_type == "date":
+        return "" if value is None else str(value.get("start", ""))
 
     return "" if value is None else str(value)
 
@@ -509,15 +542,30 @@ def _relation_urls_from_property(property_value: dict[str, Any] | None) -> list[
     ]
 
 
-def _relation_items_from_property_value(property_value: Any) -> list[dict[str, str]]:
-    if property_value in {None, ""}:
+def _convert_relation_property_to_notion_page_references(
+    property_value: Any,
+    page_registry: NotionPageRegistry | None,
+) -> list[dict[str, str]]:
+    if property_value is None or property_value == "":
         return []
 
-    page_urls = json.loads(property_value) if isinstance(property_value, str) else list(property_value)
+    page_urls_or_keys = json.loads(property_value) if isinstance(property_value, str) else list(property_value)
     return [
-        {"id": notion_page_id_from_url(page_url)}
-        for page_url in page_urls
+        {"id": _resolve_relation_page_id(page_url_or_key, page_registry)}
+        for page_url_or_key in page_urls_or_keys
     ]
+
+
+def _resolve_relation_page_id(
+    page_url_or_key: str,
+    page_registry: NotionPageRegistry | None,
+) -> str:
+    if page_url_or_key.startswith("task:"):
+        if page_registry is None:
+            raise ValueError(f"Cannot resolve local relation key {page_url_or_key!r} without a page registry")
+        return page_registry.page_id(page_url_or_key)
+
+    return notion_page_id_from_url(page_url_or_key)
 
 
 def _fetched_database_page_content(page: dict[str, Any], markdown: str) -> str:

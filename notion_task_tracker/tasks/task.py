@@ -43,6 +43,29 @@ class Priority(str, Enum):
     P3 = "P3"
 
 
+class ExternalCoordination(str, Enum):
+    """Whether a task needs external coordination."""
+
+    NO = "No"
+    YES = "Yes"
+
+
+class Uncertainty(str, Enum):
+    """Task uncertainty level."""
+
+    LOW = "Low"
+    HIGH = "High"
+
+
+class Friction(str, Enum):
+    """Task execution friction marker."""
+
+    INSUFFICIENTLY_DECOMPOSED = "Insufficiently decomposed"
+    CHARGED = "Charged"
+    STALE = "Stale"
+    NONE = "None"
+
+
 _PRIORITY_RANK_BY_VALUE = {
     Priority.P0: 0,
     Priority.P1: 1,
@@ -142,6 +165,12 @@ class Task:
     status_update: str = ""
     parent_task_id: str | None = None
     child_task_ids: list[str] = field(default_factory=list)
+    dependency_task_ids: list[str] = field(default_factory=list)
+    dependant_task_ids: list[str] = field(default_factory=list)
+    deadline: str | None = None
+    external_coordination: ExternalCoordination = ExternalCoordination.NO
+    uncertainty: Uncertainty = Uncertainty.LOW
+    friction: Friction = Friction.NONE
     timeline_entries: list[TimelineEntry] = field(default_factory=list)
     links: list[ExternalLink] = field(default_factory=list)
     notion_page_id: str | None = None

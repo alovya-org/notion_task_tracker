@@ -12,6 +12,8 @@ from notion_task_tracker.notion_operations.notion_id import canonical_notion_pag
 from notion_task_tracker.tasks.dependency_graph import TaskDependencyGraph
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
+    ExternalCoordination,
+    Friction,
     PROPERTIES_BLOCK_PATTERN,
     TASK_DATABASE_PRIORITY_PROPERTY,
     TASK_DATABASE_STATUS_PROPERTY,
@@ -19,6 +21,7 @@ from notion_task_tracker.tasks.task import (
     Priority,
     Task,
     TaskStatus,
+    Uncertainty,
     task_id_sort_key,
 )
 from notion_task_tracker.tracked_pages import TrackedPage
@@ -31,6 +34,12 @@ TASK_DATABASE_VIEW_URL = (
 )
 TASK_DATABASE_TICKET_ID_PROPERTY = "Ticket ID"
 TASK_DATABASE_PARENT_PROPERTY = "Parent"
+TASK_DATABASE_DEPENDENCIES_PROPERTY = "Dependencies"
+TASK_DATABASE_DEPENDANTS_PROPERTY = "Dependants"
+TASK_DATABASE_DEADLINE_PROPERTY = "Deadline"
+TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
+TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
+TASK_DATABASE_FRICTION_PROPERTY = "Friction"
 _TASK_TITLE_PREFIX_PATTERN = re.compile(r"^ALOVYA-\d+:\s+")
 
 
@@ -75,6 +84,11 @@ class TaskDatabaseRow:
     notion_page_id: str
     notion_page_url: str
     parent_notion_page_ids: list[str]
+    dependency_notion_page_ids: list[str]
+    deadline: str | None
+    external_coordination: ExternalCoordination
+    uncertainty: Uncertainty
+    friction: Friction
     ticket_number: int
 
 
@@ -121,6 +135,12 @@ def default_task_database_tracker_state() -> dict[str, Any]:
         "priority_property": TASK_DATABASE_PRIORITY_PROPERTY,
         "status_property": TASK_DATABASE_STATUS_PROPERTY,
         "parent_property": TASK_DATABASE_PARENT_PROPERTY,
+        "dependencies_property": TASK_DATABASE_DEPENDENCIES_PROPERTY,
+        "dependants_property": TASK_DATABASE_DEPENDANTS_PROPERTY,
+        "deadline_property": TASK_DATABASE_DEADLINE_PROPERTY,
+        "external_coordination_property": TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
+        "uncertainty_property": TASK_DATABASE_UNCERTAINTY_PROPERTY,
+        "friction_property": TASK_DATABASE_FRICTION_PROPERTY,
     }
 
 
@@ -196,6 +216,26 @@ def _database_row_from_query_result(query_result: dict[str, Any]) -> TaskDatabas
             notion_page_id_from_url(parent_page_url)
             for parent_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_PARENT_PROPERTY))
         ],
+        dependency_notion_page_ids=[
+            notion_page_id_from_url(dependency_page_url)
+            for dependency_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDENCIES_PROPERTY))
+        ],
+        deadline=_optional_text_property(query_result, TASK_DATABASE_DEADLINE_PROPERTY),
+        external_coordination=_required_enum_property(
+            query_result,
+            TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
+            ExternalCoordination,
+        ),
+        uncertainty=_required_enum_property(
+            query_result,
+            TASK_DATABASE_UNCERTAINTY_PROPERTY,
+            Uncertainty,
+        ),
+        friction=_required_enum_property(
+            query_result,
+            TASK_DATABASE_FRICTION_PROPERTY,
+            Friction,
+        ),
         ticket_number=ticket_number,
     )
 
@@ -213,6 +253,10 @@ def _task_from_database_row(
         timeline_entries=list(previous_task.timeline_entries) if previous_task else [],
         links=list(previous_task.links) if previous_task else [],
         notion_page_id=database_row.notion_page_id,
+        deadline=database_row.deadline,
+        external_coordination=database_row.external_coordination,
+        uncertainty=database_row.uncertainty,
+        friction=database_row.friction,
     )
 
 
@@ -233,10 +277,42 @@ def _link_database_parent_rows(
         parent_task_id = task_id_by_page_id.get(parent_page_id)
         work_graph.link_parent_to_child(parent_task_id=parent_task_id, child_task_id=database_row.task_id)
 
+    for database_row in database_rows:
+        task = work_graph.tasks[database_row.task_id]
+        task.dependency_task_ids = _require_dependency_task_ids_referenced_by_database_row(
+            database_row,
+            task_id_by_page_id,
+        )
+    work_graph.derive_dependant_task_ids_from_dependencies()
+
 
 def _sort_child_task_ids(work_graph: TaskDependencyGraph) -> None:
     for task in work_graph.tasks.values():
         task.child_task_ids.sort(key=task_id_sort_key)
+
+
+def _require_dependency_task_ids_referenced_by_database_row(
+    database_row: TaskDatabaseRow,
+    task_id_by_page_id: dict[str, str],
+) -> list[str]:
+    return [
+        _require_dependency_task_id_for_page_id(database_row, dependency_page_id, task_id_by_page_id)
+        for dependency_page_id in database_row.dependency_notion_page_ids
+    ]
+
+
+def _require_dependency_task_id_for_page_id(
+    database_row: TaskDatabaseRow,
+    dependency_page_id: str,
+    task_id_by_page_id: dict[str, str],
+) -> str:
+    dependency_task_id = task_id_by_page_id.get(dependency_page_id)
+    if dependency_task_id is None:
+        raise NotionPlanningError(
+            f"Dependency page {dependency_page_id} for task {database_row.task_id} is not in the local task graph"
+        )
+
+    return dependency_task_id
 
 
 def _query_result_has_task_identity(query_result: dict[str, Any]) -> bool:
@@ -310,6 +386,14 @@ def _optional_text_property(query_result: dict[str, Any], property_name: str) ->
         return f"https://www.notion.so/{notion_page_id_from_url(str(value))}"
 
     return str(value)
+
+
+def _required_enum_property(
+    query_result: dict[str, Any],
+    property_name: str,
+    enum_type: type[ExternalCoordination] | type[Uncertainty] | type[Friction],
+) -> ExternalCoordination | Uncertainty | Friction:
+    return enum_type(_required_text_property(query_result, property_name))
 
 
 def _previous_tasks_by_task_id(previous_work_graph: TaskDependencyGraph | None) -> dict[str, Task]:

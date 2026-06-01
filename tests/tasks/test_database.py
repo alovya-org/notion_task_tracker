@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE, TrackedPage
-from notion_task_tracker.tasks import Priority, TaskDependencyGraph, Task, TaskStatus
+from notion_task_tracker.tasks import (
+    ExternalCoordination,
+    Friction,
+    Priority,
+    TaskDependencyGraph,
+    Task,
+    TaskStatus,
+    Uncertainty,
+)
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DATA_SOURCE_URL,
     TASK_DATABASE_VIEW_URL,
@@ -32,22 +42,19 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
 
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "ALOVYA-1: Root task",
-                    "Ticket ID": "68",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": "[]",
-                    "url": "https://www.notion.so/11111111111111111111111111111111",
-                },
-                {
-                    "Ticket page": "ALOVYA-2: Child task",
-                    "Ticket ID": "69",
-                    "Priority": "P2",
-                    "Status": "Blocked",
-                    "Parent": '["https://www.notion.so/11111111111111111111111111111111"]',
-                    "url": "https://www.notion.so/22222222222222222222222222222222",
-                },
+                _build_task_database_row(
+                    ticket_page="ALOVYA-1: Root task",
+                    ticket_id="68",
+                    page_id="11111111111111111111111111111111",
+                ),
+                _build_task_database_row(
+                    ticket_page="ALOVYA-2: Child task",
+                    ticket_id="69",
+                    priority="P2",
+                    status="Blocked",
+                    parent_page_ids=["11111111111111111111111111111111"],
+                    page_id="22222222222222222222222222222222",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -84,13 +91,11 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
     def test_uses_notion_ticket_id_for_task_id(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "New database-native task",
-                    "Ticket ID": "70",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "url": "https://www.notion.so/33333333333333333333333333333333",
-                },
+                _build_task_database_row(
+                    ticket_page="New database-native task",
+                    ticket_id="70",
+                    page_id="33333333333333333333333333333333",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -105,14 +110,11 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
     def test_accepts_slugged_notion_urls(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "Root task",
-                    "Ticket ID": "1",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": "[]",
-                    "url": "https://www.notion.so/Root-task-22222222222222222222222222222222",
-                },
+                _build_task_database_row(
+                    ticket_page="Root task",
+                    ticket_id="1",
+                    page_url="https://www.notion.so/Root-task-22222222222222222222222222222222",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -126,16 +128,16 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
     def test_reads_completed_struckthrough_title_as_plain_task_title(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": (
+                _build_task_database_row(
+                    ticket_page=(
                         "A\u0336L\u0336O\u0336V\u0336Y\u0336A\u0336-\u03362\u0336:\u0336 \u0336"
                         "A\u0336L\u0336O\u0336V\u0336Y\u0336A\u0336-\u03362\u0336:\u0336 \u0336Finished task"
                     ),
-                    "Ticket ID": "68",
-                    "Priority": "P3",
-                    "Status": "Complete",
-                    "url": "https://www.notion.so/11111111111111111111111111111111",
-                },
+                    ticket_id="68",
+                    priority="P3",
+                    status="Complete",
+                    page_id="11111111111111111111111111111111",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -149,29 +151,23 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
     def test_sorts_child_relations_by_task_number(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "ALOVYA-1: Root task",
-                    "Ticket ID": "68",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "url": "https://www.notion.so/11111111111111111111111111111111",
-                },
-                {
-                    "Ticket page": "ALOVYA-10: Later child",
-                    "Ticket ID": "70",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": '["https://www.notion.so/11111111111111111111111111111111"]',
-                    "url": "https://www.notion.so/33333333333333333333333333333333",
-                },
-                {
-                    "Ticket page": "ALOVYA-2: Earlier child",
-                    "Ticket ID": "69",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": '["https://www.notion.so/11111111111111111111111111111111"]',
-                    "url": "https://www.notion.so/22222222222222222222222222222222",
-                },
+                _build_task_database_row(
+                    ticket_page="ALOVYA-1: Root task",
+                    ticket_id="68",
+                    page_id="11111111111111111111111111111111",
+                ),
+                _build_task_database_row(
+                    ticket_page="ALOVYA-10: Later child",
+                    ticket_id="70",
+                    parent_page_ids=["11111111111111111111111111111111"],
+                    page_id="33333333333333333333333333333333",
+                ),
+                _build_task_database_row(
+                    ticket_page="ALOVYA-2: Earlier child",
+                    ticket_id="69",
+                    parent_page_ids=["11111111111111111111111111111111"],
+                    page_id="22222222222222222222222222222222",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -182,17 +178,68 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
 
         assert work_graph.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69", "ALOVYA-70"]
 
+    def test_reads_dependency_relations_and_task_metadata(self):
+        work_graph = task_dependency_graph_from_database_query_results(
+            query_results=[
+                _build_task_database_row(
+                    ticket_page="Dependency task",
+                    ticket_id="1",
+                    page_id="11111111111111111111111111111111",
+                ),
+                _build_task_database_row(
+                    ticket_page="Dependant task",
+                    ticket_id="2",
+                    dependency_page_ids=["11111111111111111111111111111111"],
+                    deadline="2026-06-15",
+                    external_coordination="Yes",
+                    uncertainty="High",
+                    friction="Charged",
+                    page_id="22222222222222222222222222222222",
+                ),
+            ],
+            landing_page=TrackedPage(
+                local_page_key="ongoing_landing_page",
+                title=ONGOING_LANDING_PAGE_TITLE,
+                notion_page_id="landing-page-id",
+            ),
+        )
+
+        assert work_graph.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
+        assert work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
+        assert work_graph.tasks["ALOVYA-2"].deadline == "2026-06-15"
+        assert work_graph.tasks["ALOVYA-2"].external_coordination == ExternalCoordination.YES
+        assert work_graph.tasks["ALOVYA-2"].uncertainty == Uncertainty.HIGH
+        assert work_graph.tasks["ALOVYA-2"].friction == Friction.CHARGED
+
+    def test_rejects_task_metadata_rows_without_required_enum_fields(self):
+        row = _build_task_database_row(
+            ticket_page="Incomplete task metadata",
+            ticket_id="1",
+            page_id="11111111111111111111111111111111",
+        )
+        del row["External coordination"]
+
+        with pytest.raises(ValueError, match="Task database row has no External coordination"):
+            task_dependency_graph_from_database_query_results(
+                query_results=[row],
+                landing_page=TrackedPage(
+                    local_page_key="ongoing_landing_page",
+                    title=ONGOING_LANDING_PAGE_TITLE,
+                    notion_page_id="landing-page-id",
+                ),
+            )
+
     def test_skips_rows_that_point_to_unknown_parent_rows(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "ALOVYA-2: Child task",
-                    "Ticket ID": "69",
-                    "Priority": "P2",
-                    "Status": "Blocked",
-                    "Parent": '["https://www.notion.so/11111111111111111111111111111111"]',
-                    "url": "https://www.notion.so/22222222222222222222222222222222",
-                },
+                _build_task_database_row(
+                    ticket_page="ALOVYA-2: Child task",
+                    ticket_id="69",
+                    priority="P2",
+                    status="Blocked",
+                    parent_page_ids=["11111111111111111111111111111111"],
+                    page_id="22222222222222222222222222222222",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -206,22 +253,18 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
     def test_skips_orphan_subtrees(self):
         work_graph = task_dependency_graph_from_database_query_results(
             query_results=[
-                {
-                    "Ticket page": "Parent prototype",
-                    "Ticket ID": "15",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": '["https://www.notion.so/11111111111111111111111111111111"]',
-                    "url": "https://www.notion.so/22222222222222222222222222222222",
-                },
-                {
-                    "Ticket page": "Child prototype",
-                    "Ticket ID": "16",
-                    "Priority": "P1",
-                    "Status": "Active",
-                    "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
-                    "url": "https://www.notion.so/33333333333333333333333333333333",
-                },
+                _build_task_database_row(
+                    ticket_page="Parent prototype",
+                    ticket_id="15",
+                    parent_page_ids=["11111111111111111111111111111111"],
+                    page_id="22222222222222222222222222222222",
+                ),
+                _build_task_database_row(
+                    ticket_page="Child prototype",
+                    ticket_id="16",
+                    parent_page_ids=["22222222222222222222222222222222"],
+                    page_id="33333333333333333333333333333333",
+                ),
             ],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -236,20 +279,17 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
         with pytest.raises(ValueError, match="Duplicate task id ALOVYA-68"):
             task_dependency_graph_from_database_query_results(
                 query_results=[
-                    {
-                        "Ticket page": "ALOVYA-1: First task",
-                        "Ticket ID": "68",
-                        "Priority": "P1",
-                        "Status": "Active",
-                        "url": "https://www.notion.so/11111111111111111111111111111111",
-                    },
-                    {
-                        "Ticket page": "ALOVYA-1: Duplicate task",
-                        "Ticket ID": "68",
-                        "Priority": "P2",
-                        "Status": "Active",
-                        "url": "https://www.notion.so/22222222222222222222222222222222",
-                    },
+                    _build_task_database_row(
+                        ticket_page="ALOVYA-1: First task",
+                        ticket_id="68",
+                        page_id="11111111111111111111111111111111",
+                    ),
+                    _build_task_database_row(
+                        ticket_page="ALOVYA-1: Duplicate task",
+                        ticket_id="68",
+                        priority="P2",
+                        page_id="22222222222222222222222222222222",
+                    ),
                 ],
                 landing_page=TrackedPage(
                     local_page_key="ongoing_landing_page",
@@ -290,3 +330,39 @@ class TestTaskIdFromFetchedTaskDatabasePage:
         )
 
         assert task_id == "ALOVYA-72"
+
+
+def _build_task_database_row(
+    ticket_page: str,
+    ticket_id: str,
+    page_id: str | None = None,
+    page_url: str | None = None,
+    priority: str = "P1",
+    status: str = "Active",
+    parent_page_ids: list[str] | None = None,
+    dependency_page_ids: list[str] | None = None,
+    deadline: str | None = None,
+    external_coordination: str = "No",
+    uncertainty: str = "Low",
+    friction: str = "None",
+) -> dict:
+    return {
+        "Ticket page": ticket_page,
+        "Ticket ID": ticket_id,
+        "Priority": priority,
+        "Status": status,
+        "Parent": _render_relation_urls(parent_page_ids or []),
+        "Dependencies": _render_relation_urls(dependency_page_ids or []),
+        "Deadline": deadline or "",
+        "External coordination": external_coordination,
+        "Uncertainty": uncertainty,
+        "Friction": friction,
+        "url": page_url or f"https://www.notion.so/{page_id}",
+    }
+
+
+def _render_relation_urls(page_ids: list[str]) -> str:
+    return json.dumps([
+        f"https://www.notion.so/{page_id}"
+        for page_id in page_ids
+    ])

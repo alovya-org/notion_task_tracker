@@ -19,12 +19,15 @@ from notion_task_tracker.fixed_pages import (
 )
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
+    ExternalCoordination,
+    Friction,
     Priority,
     Task,
     TaskCompletionChange,
     TaskStatus,
     TimelineEntry,
     TimelineLogChange,
+    Uncertainty,
     _PRIORITY_RANK_BY_VALUE,
     task_id_sort_key,
 )
@@ -79,6 +82,7 @@ class TaskDependencyGraph:
         for task_state in tracker_state.get("tasks", {}).values():
             work_graph.tasks[task_state["task_id"]] = _task_from_tracker_state(task_state)
         work_graph._normalise_task_timelines()
+        work_graph.derive_dependant_task_ids_from_dependencies()
         work_graph.validate()
         work_graph.recalculate_display_priorities()
         return work_graph
@@ -133,6 +137,7 @@ class TaskDependencyGraph:
         if task.task_id in self.tasks:
             raise NotionPlanningError(f"Task {task.task_id} already exists")
         self.tasks[task.task_id] = task
+        self.derive_dependant_task_ids_from_dependencies()
 
     def link_parent_to_child(self, parent_task_id: str, child_task_id: str) -> None:
         parent_task = self.tasks[parent_task_id]
@@ -161,13 +166,24 @@ class TaskDependencyGraph:
         status: TaskStatus,
         notion_page_id: str,
         parent_task_id: str | None,
+        dependency_task_ids: list[str],
+        deadline: str | None,
+        external_coordination: ExternalCoordination,
+        uncertainty: Uncertainty,
+        friction: Friction,
     ) -> None:
         task = self.tasks[task_id]
         task.title = title
         task.configured_priority = configured_priority
         task.status = status
         task.notion_page_id = notion_page_id
+        task.dependency_task_ids = list(dependency_task_ids)
+        task.deadline = deadline
+        task.external_coordination = external_coordination
+        task.uncertainty = uncertainty
+        task.friction = friction
         self.set_task_parent(task_id, parent_task_id)
+        self.derive_dependant_task_ids_from_dependencies()
 
     def append_task_timeline_log(
         self,
@@ -249,6 +265,7 @@ class TaskDependencyGraph:
         self._validate_fixed_page_keys_and_titles()
         self._validate_task_keys_match_task_values()
         self._validate_parent_child_links()
+        self._validate_dependency_dependant_links()
         self._validate_task_hierarchy_has_no_cycles()
 
     def recalculate_display_priorities(self) -> None:
@@ -256,6 +273,21 @@ class TaskDependencyGraph:
             task.displayed_priority = task.configured_priority
         for task_id in sorted(self.tasks, key=task_id_sort_key, reverse=True):
             self.tasks[task_id].displayed_priority = self._calculate_priority_visible_on_task(self.tasks[task_id])
+
+    def derive_dependant_task_ids_from_dependencies(self) -> None:
+        for task in self.tasks.values():
+            task.dependency_task_ids = _normalised_task_ids(task.dependency_task_ids)
+            task.dependant_task_ids = []
+
+        for dependant_task in self.tasks.values():
+            for dependency_task_id in dependant_task.dependency_task_ids:
+                dependency_task = self.tasks.get(dependency_task_id)
+                if dependency_task is None:
+                    continue
+                dependency_task.dependant_task_ids.append(dependant_task.task_id)
+
+        for task in self.tasks.values():
+            task.dependant_task_ids = _normalised_task_ids(task.dependant_task_ids)
 
     def _validate_fixed_page_keys_and_titles(self) -> None:
         validate_fixed_tracked_page(
@@ -289,6 +321,27 @@ class TaskDependencyGraph:
                 if child_task.parent_task_id != task_id:
                     raise NotionPlanningError(
                         f"Task {child_task_id} should have parent {task_id}"
+                    )
+
+    def _validate_dependency_dependant_links(self) -> None:
+        for task_id, task in self.tasks.items():
+            if task_id in task.dependency_task_ids:
+                raise NotionPlanningError(f"Task {task_id} cannot depend on itself")
+
+            for dependency_task_id in task.dependency_task_ids:
+                self._validate_task_exists(dependency_task_id)
+                dependency_task = self.tasks[dependency_task_id]
+                if task_id not in dependency_task.dependant_task_ids:
+                    raise NotionPlanningError(
+                        f"Task {dependency_task_id} should list {task_id} as a dependant"
+                    )
+
+            for dependant_task_id in task.dependant_task_ids:
+                self._validate_task_exists(dependant_task_id)
+                dependant_task = self.tasks[dependant_task_id]
+                if task_id not in dependant_task.dependency_task_ids:
+                    raise NotionPlanningError(
+                        f"Task {dependant_task_id} should depend on {task_id}"
                     )
 
     def _validate_task_exists(self, task_id: str) -> None:
@@ -333,6 +386,10 @@ def _highest_priority(priorities: list[Priority]) -> Priority:
     return min(priorities, key=lambda priority: _PRIORITY_RANK_BY_VALUE[priority])
 
 
+def _normalised_task_ids(task_ids: list[str]) -> list[str]:
+    return sorted(dict.fromkeys(task_ids), key=task_id_sort_key)
+
+
 def _compact_notion_page_id(notion_page_id: str) -> str:
     return notion_page_id.replace("-", "").lower()
 
@@ -351,7 +408,19 @@ def _changed_task_graph_fields(
     after_task: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     changed_fields = {}
-    for field_name in ["parent_task_id", "child_task_ids", "configured_priority", "status", "title"]:
+    for field_name in [
+        "parent_task_id",
+        "child_task_ids",
+        "dependency_task_ids",
+        "dependant_task_ids",
+        "deadline",
+        "external_coordination",
+        "uncertainty",
+        "friction",
+        "configured_priority",
+        "status",
+        "title",
+    ]:
         if before_task.get(field_name) != after_task.get(field_name):
             changed_fields[field_name] = {
                 "before": before_task.get(field_name),
@@ -370,6 +439,12 @@ def _task_to_tracker_state(task: Task) -> dict[str, Any]:
         "status_update": task.status_update,
         "parent_task_id": task.parent_task_id,
         "child_task_ids": list(task.child_task_ids),
+        "dependency_task_ids": list(task.dependency_task_ids),
+        "dependant_task_ids": list(task.dependant_task_ids),
+        "deadline": task.deadline,
+        "external_coordination": task.external_coordination.value,
+        "uncertainty": task.uncertainty.value,
+        "friction": task.friction.value,
         "timeline_entries": [
             timeline_entry.to_tracker_state()
             for timeline_entry in task.timeline_entries
@@ -384,7 +459,6 @@ def _task_to_tracker_state(task: Task) -> dict[str, Any]:
 
 def _task_from_tracker_state(tracker_state: dict[str, Any]) -> Task:
     displayed_priority = tracker_state.get("displayed_priority")
-
     return Task(
         task_id=tracker_state["task_id"],
         title=tracker_state["title"],
@@ -394,6 +468,12 @@ def _task_from_tracker_state(tracker_state: dict[str, Any]) -> Task:
         status_update=tracker_state.get("status_update", ""),
         parent_task_id=tracker_state.get("parent_task_id"),
         child_task_ids=list(tracker_state.get("child_task_ids", [])),
+        dependency_task_ids=list(tracker_state["dependency_task_ids"]),
+        dependant_task_ids=list(tracker_state["dependant_task_ids"]),
+        deadline=tracker_state["deadline"],
+        external_coordination=ExternalCoordination(tracker_state["external_coordination"]),
+        uncertainty=Uncertainty(tracker_state["uncertainty"]),
+        friction=Friction(tracker_state["friction"]),
         timeline_entries=[
             TimelineEntry.from_tracker_state(derived_timeline_log)
             for derived_timeline_log in tracker_state.get("timeline_entries", [])

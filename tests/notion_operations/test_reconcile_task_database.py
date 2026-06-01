@@ -26,6 +26,11 @@ def test_refresh_tracker_state_from_notion_task_database_uses_database_view_when
                 "Priority": "P2",
                 "Status": "Blocked",
                 "Parent": "[]",
+                "Dependencies": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
                 "url": "https://www.notion.so/22222222222222222222222222222222",
             }
         ]
@@ -57,6 +62,11 @@ def test_refresh_tracker_state_from_notion_task_database_uses_sql_when_view_is_n
                 "Priority": "P2",
                 "Status": "Blocked",
                 "Parent": "[]",
+                "Dependencies": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
                 "url": "https://www.notion.so/22222222222222222222222222222222",
             }
         ]

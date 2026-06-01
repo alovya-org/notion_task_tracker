@@ -61,6 +61,11 @@ def build_fetched_task_page(
                     "Priority": priority,
                     "Status": status,
                     "Parent": json.dumps(parent_urls),
+                    "Dependencies": "[]",
+                    "Deadline": "",
+                    "External coordination": "No",
+                    "Uncertainty": "Low",
+                    "Friction": "None",
                 }
             ),
             "</properties>",

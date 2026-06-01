@@ -42,11 +42,14 @@ from notion_task_tracker.synthesis_pages import (
     parse_synthesis_root_page_mentions,
 )
 from notion_task_tracker.tasks import (
+    ExternalCoordination,
+    Friction,
     Priority,
     Task,
     TaskStatus,
     TimelineEntry,
     TaskDependencyGraph,
+    Uncertainty,
 )
 
 
@@ -60,6 +63,8 @@ __all__ = [
     "SYNTHESIS_NOTES_PAGE_TITLE",
     "SYNTHESIS_NOTES_PAGE_LOCAL_KEY",
     "ExternalLink",
+    "ExternalCoordination",
+    "Friction",
     "TrackerCommandResult",
     "MiscellaneousNoteEntry",
     "MiscellaneousNotesMetadata",
@@ -80,6 +85,7 @@ __all__ = [
     "TaskStatus",
     "TimelineEntry",
     "TaskDependencyGraph",
+    "Uncertainty",
     "apply_command_to_tracker_state",
     "parse_synthesis_root_page_mentions",
     "refresh_task_tracker_from_notion",

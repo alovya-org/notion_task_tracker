@@ -65,11 +65,17 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
     assert notion_client.calls[0].operation_name == "create_task_database_page"
     assert notion_client.calls[0].arguments["data_source_id"] == "36b03da5-d69a-8080-91d1-000b5d7c1c8d"
     assert notion_client.calls[0].arguments["properties"] == {
+        "Deadline": None,
+        "Dependencies": [],
+        "External coordination": "No",
+        "Friction": "None",
         "Ticket page": "Child task",
         "Priority": "P2",
         "Status": "Active",
         "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
+        "Uncertainty": "Low",
     }
+    assert "Dependants" not in notion_client.calls[0].arguments["properties"]
     assert notion_client.calls[0].arguments["content"] == "\n".join(
         [
             "## Timeline log",

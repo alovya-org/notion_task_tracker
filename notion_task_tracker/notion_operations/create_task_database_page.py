@@ -16,10 +16,15 @@ from notion_task_tracker.tasks.create_task import (
     add_created_task_to_tracker_state,
 )
 from notion_task_tracker.tasks.database import (
+    TASK_DATABASE_DEADLINE_PROPERTY,
+    TASK_DATABASE_DEPENDENCIES_PROPERTY,
+    TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
+    TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
     TASK_DATABASE_PRIORITY_PROPERTY,
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
+    TASK_DATABASE_UNCERTAINTY_PROPERTY,
     task_database_data_source_id_from_tracker_state,
     task_id_from_fetched_task_database_page,
 )
@@ -199,6 +204,11 @@ def _build_new_task_database_row_properties(
         TASK_DATABASE_TITLE_PROPERTY: task_title,
         TASK_DATABASE_PRIORITY_PROPERTY: configured_priority,
         TASK_DATABASE_STATUS_PROPERTY: status,
+        TASK_DATABASE_DEPENDENCIES_PROPERTY: [],
+        TASK_DATABASE_DEADLINE_PROPERTY: None,
+        TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: "No",
+        TASK_DATABASE_UNCERTAINTY_PROPERTY: "Low",
+        TASK_DATABASE_FRICTION_PROPERTY: "None",
     }
     if parent_task_id is not None:
         properties[TASK_DATABASE_PARENT_PROPERTY] = json.dumps([
