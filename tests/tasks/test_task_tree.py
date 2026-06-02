@@ -193,7 +193,7 @@ class TestTaskTreeTaskIdsGroupedForLandingPage:
         assert grouped_task_ids[Priority.P0] == ["ALOVYA-2"]
         assert grouped_task_ids[Priority.P3] == ["ALOVYA-9"]
 
-    def test_keeps_completed_top_level_tasks_in_completed_section(self):
+    def test_keeps_completed_tasks_in_completed_section_when_their_parent_is_not_completed(self):
         task_tree = _build_recursive_task_tree()
         task_tree.add_task(
             Task(
@@ -208,7 +208,7 @@ class TestTaskTreeTaskIdsGroupedForLandingPage:
         grouped_task_ids = task_tree.task_ids_grouped_for_landing_page()
 
         assert grouped_task_ids[Priority.P0] == ["ALOVYA-2"]
-        assert task_tree.completed_task_ids_for_landing_page() == ["ALOVYA-9"]
+        assert task_tree.completed_task_ids_for_landing_page() == ["ALOVYA-4", "ALOVYA-9"]
 
     def test_orders_top_level_tasks_by_ticket_number_not_title(self):
         task_tree = _build_recursive_task_tree()
@@ -269,7 +269,7 @@ class TestTaskTreeBuildNotionWritePlan:
         assert '\t\t- [P0] <mention-page url="https://www.notion.so/55555555555555555555555555555555"/>: Blocked {color="red"}' in landing_markdown
         assert '\t- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Complete {color="green"}' in landing_markdown
 
-    def test_renders_completed_page_from_completed_top_level_tasks_only(self):
+    def test_renders_completed_page_from_completed_tasks_without_completed_parents(self):
         task_tree = _build_recursive_task_tree()
         task_tree.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
 
@@ -279,7 +279,10 @@ class TestTaskTreeBuildNotionWritePlan:
             if write_intent.operation_key == "replace:completed_landing_page"
         )
 
-        assert completed_landing_refresh_intent.arguments["markdown"] == "No completed tasks yet."
+        assert completed_landing_refresh_intent.arguments["markdown"] == "\n".join([
+            "## Completed",
+            '- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Complete {color="green"}',
+        ])
 
     def test_completed_task_page_title_strikes_through_and_properties_include_database_metadata(self):
         task_tree = _build_recursive_task_tree()

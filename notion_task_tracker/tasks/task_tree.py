@@ -253,10 +253,10 @@ class TaskTree:
         return self.ongoing_tasks_landing_page.task_ids_grouped_by_priority(self.tasks)
 
     def completed_task_ids_for_landing_page(self) -> list[str]:
-        return self.completed_tasks_landing_page.completed_top_level_task_ids(self.tasks)
+        return self.completed_tasks_landing_page.completed_landing_root_task_ids(self.tasks)
 
     def cancelled_task_ids_for_landing_page(self) -> list[str]:
-        return self.completed_tasks_landing_page.cancelled_top_level_task_ids(self.tasks)
+        return self.completed_tasks_landing_page.cancelled_landing_root_task_ids(self.tasks)
 
     def repair_operation_keys_for_changes(self, task_tree_changes: list[dict[str, Any]]) -> list[str]:
         task_ids_to_repair = set()

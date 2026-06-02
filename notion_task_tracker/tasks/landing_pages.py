@@ -17,7 +17,11 @@ class OngoingTasksLandingPage:
         return {
             priority: [
                 task_id
-                for task_id in _landing_root_task_ids_matching(tasks, _task_should_start_ongoing_landing_tree)
+                for task_id in order_landing_task_ids_by_dependency(
+                    tasks,
+                    _landing_root_task_ids_matching(tasks, _task_should_start_ongoing_landing_tree),
+                    _task_should_start_ongoing_landing_tree,
+                )
                 if tasks[task_id].displayed_priority == priority
             ]
             for priority in Priority
@@ -28,15 +32,29 @@ class OngoingTasksLandingPage:
 class CompletedTasksLandingPage:
     page: TrackedPage
 
-    def completed_top_level_task_ids(self, tasks: dict[str, Task]) -> list[str]:
-        return _top_level_task_ids_matching(tasks, lambda task: task.status == TaskStatus.COMPLETE)
+    def completed_landing_root_task_ids(self, tasks: dict[str, Task]) -> list[str]:
+        task_should_be_visible = lambda task: task.status == TaskStatus.COMPLETE
+        return order_landing_task_ids_by_dependency(
+            tasks,
+            _landing_root_task_ids_matching(tasks, task_should_be_visible),
+            task_should_be_visible,
+        )
 
-    def cancelled_top_level_task_ids(self, tasks: dict[str, Task]) -> list[str]:
-        return _top_level_task_ids_matching(tasks, lambda task: task.status == TaskStatus.CANCELLED)
+    def cancelled_landing_root_task_ids(self, tasks: dict[str, Task]) -> list[str]:
+        task_should_be_visible = lambda task: task.status == TaskStatus.CANCELLED
+        return order_landing_task_ids_by_dependency(
+            tasks,
+            _landing_root_task_ids_matching(tasks, task_should_be_visible),
+            task_should_be_visible,
+        )
 
 
 def visible_ongoing_landing_task_ids(tasks: dict[str, Task]) -> list[str]:
-    return _landing_root_task_ids_matching(tasks, _task_should_start_ongoing_landing_tree)
+    return order_landing_task_ids_by_dependency(
+        tasks,
+        _landing_root_task_ids_matching(tasks, _task_should_start_ongoing_landing_tree),
+        _task_should_start_ongoing_landing_tree,
+    )
 
 
 def task_should_appear_inside_ongoing_landing_tree(task: Task) -> bool:
@@ -47,14 +65,31 @@ def landing_root_task_ids_matching(
     tasks: dict[str, Task],
     task_should_be_visible: Callable[[Task], bool],
 ) -> list[str]:
-    return _landing_root_task_ids_matching(tasks, task_should_be_visible)
+    return order_landing_task_ids_by_dependency(
+        tasks,
+        _landing_root_task_ids_matching(tasks, task_should_be_visible),
+        task_should_be_visible,
+    )
 
 
-def top_level_task_ids_matching(
+def order_landing_task_ids_by_dependency(
     tasks: dict[str, Task],
+    task_ids: list[str],
     task_should_be_visible: Callable[[Task], bool],
 ) -> list[str]:
-    return _top_level_task_ids_matching(tasks, task_should_be_visible)
+    unsorted_task_ids = set(task_ids)
+    ordered_task_ids = []
+
+    while unsorted_task_ids:
+        next_task_id = _find_least_dependent_task_id(
+            tasks,
+            unsorted_task_ids,
+            task_should_be_visible,
+        )
+        ordered_task_ids.append(next_task_id)
+        unsorted_task_ids.remove(next_task_id)
+
+    return ordered_task_ids
 
 
 def _landing_root_task_ids_matching(
@@ -77,15 +112,38 @@ def _parent_is_not_visible_on_same_landing(
     return task.parent_task_id is None or not task_should_be_visible(tasks[task.parent_task_id])
 
 
-def _top_level_task_ids_matching(
+def _find_least_dependent_task_id(
     tasks: dict[str, Task],
+    candidate_task_ids: set[str],
     task_should_be_visible: Callable[[Task], bool],
-) -> list[str]:
-    return [
-        task.task_id
-        for task in sorted(tasks.values(), key=lambda task: task_id_sort_key(task.task_id))
-        if task.parent_task_id is None and task_should_be_visible(task)
-    ]
+) -> str:
+    return min(
+        candidate_task_ids,
+        key=lambda task_id: (
+            _count_remaining_visible_dependencies(
+                tasks,
+                task_id,
+                candidate_task_ids,
+                task_should_be_visible,
+            ),
+            task_id_sort_key(task_id),
+        ),
+    )
+
+
+def _count_remaining_visible_dependencies(
+    tasks: dict[str, Task],
+    task_id: str,
+    candidate_task_ids: set[str],
+    task_should_be_visible: Callable[[Task], bool],
+) -> int:
+    return sum(
+        1
+        for dependency_task_id in tasks[task_id].dependency_task_ids
+        if dependency_task_id in candidate_task_ids
+        and dependency_task_id in tasks
+        and task_should_be_visible(tasks[dependency_task_id])
+    )
 
 
 def _task_should_start_ongoing_landing_tree(task: Task) -> bool:

@@ -44,7 +44,7 @@ def test_ongoing_tasks_landing_page_renders_priority_sections_and_child_depth():
     ])
 
 
-def test_completed_tasks_landing_page_only_starts_from_completed_top_level_tasks():
+def test_completed_tasks_landing_page_starts_from_completed_tasks_without_visible_completed_parents():
     tasks = {
         "ALOVYA-1": Task(
             task_id="ALOVYA-1",
@@ -66,7 +66,178 @@ def test_completed_tasks_landing_page_only_starts_from_completed_top_level_tasks
 
     markdown = render_completed_landing_page_markdown(
         tasks,
-        NotionPageRegistry(pages={}),
+        _page_registry_for_task_ids(tasks),
     )
 
-    assert markdown == "No completed tasks yet."
+    assert markdown == "\n".join([
+        "## Completed",
+        '- [N/A] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Complete {color="green"}',
+    ])
+
+
+def test_ongoing_tasks_landing_page_orders_sibling_roots_by_dependency_without_nesting_them():
+    tasks = {
+        "ALOVYA-1": Task(
+            task_id="ALOVYA-1",
+            title="A",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependant_task_ids=["ALOVYA-2"],
+        ),
+        "ALOVYA-2": Task(
+            task_id="ALOVYA-2",
+            title="B",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependency_task_ids=["ALOVYA-1"],
+            dependant_task_ids=["ALOVYA-3"],
+        ),
+        "ALOVYA-3": Task(
+            task_id="ALOVYA-3",
+            title="C",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependency_task_ids=["ALOVYA-2"],
+        ),
+        "ALOVYA-4": Task(
+            task_id="ALOVYA-4",
+            title="D",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependant_task_ids=["ALOVYA-5"],
+        ),
+        "ALOVYA-5": Task(
+            task_id="ALOVYA-5",
+            title="E",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependency_task_ids=["ALOVYA-4"],
+        ),
+    }
+
+    markdown = render_ongoing_landing_page_markdown(tasks, _page_registry_for_task_ids(tasks))
+
+    assert markdown == "\n".join([
+        "## P1 (high impact)",
+        '- [P1] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Active {color="orange"}',
+        '- [P1] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Active {color="orange"}',
+        '- [P1] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Active {color="orange"}',
+        '- [P1] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Active {color="orange"}',
+        '- [P1] <mention-page url="https://www.notion.so/55555555555555555555555555555555"/>: Active {color="orange"}',
+    ])
+
+
+def test_ongoing_tasks_landing_page_orders_children_by_dependency_without_changing_child_depth():
+    tasks = {
+        "ALOVYA-1": Task(
+            task_id="ALOVYA-1",
+            title="Parent",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            child_task_ids=["ALOVYA-3", "ALOVYA-2", "ALOVYA-4"],
+        ),
+        "ALOVYA-2": Task(
+            task_id="ALOVYA-2",
+            title="Child dependency",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+            dependant_task_ids=["ALOVYA-3"],
+        ),
+        "ALOVYA-3": Task(
+            task_id="ALOVYA-3",
+            title="Child dependant",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+            dependency_task_ids=["ALOVYA-2"],
+            dependant_task_ids=["ALOVYA-4"],
+        ),
+        "ALOVYA-4": Task(
+            task_id="ALOVYA-4",
+            title="Nested dependant",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+            dependency_task_ids=["ALOVYA-3"],
+        ),
+    }
+
+    markdown = render_ongoing_landing_page_markdown(tasks, _page_registry_for_task_ids(tasks))
+
+    assert markdown == "\n".join([
+        "## P1 (high impact)",
+        '- [P1] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Active {color="orange"}',
+        '\t- [P1] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Active {color="orange"}',
+        '\t- [P1] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Active {color="orange"}',
+        '\t- [P1] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Active {color="orange"}',
+    ])
+
+
+def test_completed_tasks_landing_page_orders_sibling_roots_by_dependency_without_nesting_them():
+    tasks = {
+        "ALOVYA-1": Task(
+            task_id="ALOVYA-1",
+            title="Completed dependency",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.COMPLETE,
+            dependant_task_ids=["ALOVYA-2"],
+        ),
+        "ALOVYA-2": Task(
+            task_id="ALOVYA-2",
+            title="Completed dependant",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.COMPLETE,
+            dependency_task_ids=["ALOVYA-1"],
+        ),
+        "ALOVYA-3": Task(
+            task_id="ALOVYA-3",
+            title="Cancelled dependency",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.CANCELLED,
+            dependant_task_ids=["ALOVYA-4"],
+        ),
+        "ALOVYA-4": Task(
+            task_id="ALOVYA-4",
+            title="Cancelled dependant",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.CANCELLED,
+            dependency_task_ids=["ALOVYA-3"],
+        ),
+    }
+
+    markdown = render_completed_landing_page_markdown(tasks, _page_registry_for_task_ids(tasks))
+
+    assert markdown == "\n".join([
+        "## Completed",
+        '- [N/A] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Complete {color="green"}',
+        '- [N/A] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Complete {color="green"}',
+        "## Cancelled",
+        '- [N/A] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Cancelled {color="gray"}',
+        '- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Cancelled {color="gray"}',
+    ])
+
+
+def _page_registry_for_task_ids(tasks: dict[str, Task]) -> NotionPageRegistry:
+    return NotionPageRegistry.from_tracked_pages([
+        TrackedPage(
+            local_page_key=f"task:{task_id}",
+            title=task.title,
+            notion_page_id=str(task_number) * 32,
+        )
+        for task_id, task in tasks.items()
+        for task_number in [int(task_id.rpartition("-")[2])]
+    ])

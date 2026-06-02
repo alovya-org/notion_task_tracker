@@ -22,8 +22,8 @@ from notion_task_tracker.notion_operations.page_registry import NotionPageRegist
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.landing_pages import (
     landing_root_task_ids_matching,
+    order_landing_task_ids_by_dependency,
     task_should_appear_inside_ongoing_landing_tree,
-    top_level_task_ids_matching,
 )
 from notion_task_tracker.tasks.task import (
     COMPLETED_TASK_PRIORITY_LABEL,
@@ -392,7 +392,7 @@ def _append_completed_status_section(
     page_registry: NotionPageRegistry,
 ) -> None:
     task_should_be_visible = lambda task: task.status == status
-    task_ids = top_level_task_ids_matching(tasks, task_should_be_visible)
+    task_ids = landing_root_task_ids_matching(tasks, task_should_be_visible)
     if task_ids:
         markdown_blocks.append(heading(2, section_title))
         for task_id in task_ids:
@@ -423,18 +423,25 @@ def _render_task_tree_markdown(
             colour=_choose_landing_color_for_task(task, displayed_priority),
         )
     ]
-    for child_task_id in sorted(task.child_task_ids, key=task_id_sort_key):
-        child_task = tasks[child_task_id]
-        if task_should_be_visible(child_task):
-            lines.append(
-                _render_task_tree_markdown(
-                    tasks=tasks,
-                    task_id=child_task_id,
-                    depth=depth + 1,
-                    task_should_be_visible=task_should_be_visible,
-                    page_registry=page_registry,
-                )
+    child_task_ids = order_landing_task_ids_by_dependency(
+        tasks=tasks,
+        task_ids=[
+            child_task_id
+            for child_task_id in task.child_task_ids
+            if task_should_be_visible(tasks[child_task_id])
+        ],
+        task_should_be_visible=task_should_be_visible,
+    )
+    for child_task_id in child_task_ids:
+        lines.append(
+            _render_task_tree_markdown(
+                tasks,
+                child_task_id,
+                depth + 1,
+                task_should_be_visible,
+                page_registry,
             )
+        )
     return join_markdown_blocks(lines)
 
 

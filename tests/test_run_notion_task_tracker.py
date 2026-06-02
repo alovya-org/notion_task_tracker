@@ -127,7 +127,7 @@ def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_tas
     }
 
 
-def test_repair_and_write_refreshed_tracker_state_skips_repairs_when_nothing_changed(
+def test_repair_and_write_refreshed_tracker_state_refreshes_landing_pages_when_nothing_changed(
     tmp_path: Path,
 ):
     notion_client = _FakeNotionClient()
@@ -152,10 +152,14 @@ def test_repair_and_write_refreshed_tracker_state_skips_repairs_when_nothing_cha
         ),
     )
 
-    assert json.loads(output_path.read_text(encoding="utf-8"))["completed_operations"] == []
-    assert notion_client.write_intents == []
+    assert json.loads(output_path.read_text(encoding="utf-8"))["completed_operations"] == [
+        "replace:ongoing_landing_page",
+    ]
+    assert [write_intent.operation_key for write_intent in notion_client.write_intents] == [
+        "replace:ongoing_landing_page",
+    ]
     assert refresh_summary.to_json_summary()["task_tree_changes"] == []
-    assert refresh_summary.to_json_summary()["repair_operation_count"] == 0
+    assert refresh_summary.to_json_summary()["repair_operation_count"] == 1
 
 
 def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_writes(tmp_path: Path):

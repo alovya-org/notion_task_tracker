@@ -34,9 +34,6 @@ def plan_repairs_for_task_tree_changes(
     refreshed_result: TrackerCommandResult,
     task_tree_changes: list[dict[str, Any]],
 ) -> TrackerCommandResult:
-    if not task_tree_changes and not refreshed_result.warnings:
-        return refreshed_result
-
     repair_result = apply_command_to_tracker_state(
         command={
             "command": "refresh_task_pages",
