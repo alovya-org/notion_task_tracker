@@ -1,4 +1,4 @@
-"""Plan Notion writes for task graph changes."""
+"""Plan Notion writes for task tree changes."""
 
 from __future__ import annotations
 
@@ -51,24 +51,24 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
 )
-from notion_task_tracker.tasks.dependency_graph import TaskDependencyGraph
+from notion_task_tracker.tasks.task_tree import TaskTree
 from notion_task_tracker.tracked_pages import TrackedPage
 
 
-def build_page_registry_for_task_graph(task_graph: TaskDependencyGraph) -> NotionPageRegistry:
-    return NotionPageRegistry.from_tracked_pages(_collect_pages_that_should_exist(task_graph))
+def build_page_registry_for_task_tree(task_tree: TaskTree) -> NotionPageRegistry:
+    return NotionPageRegistry.from_tracked_pages(_collect_pages_that_should_exist(task_tree))
 
 
-def plan_notion_writes_for_task_graph(task_graph: TaskDependencyGraph) -> list[NotionWriteIntent]:
-    task_graph.validate()
-    task_graph.recalculate_display_priorities()
-    page_registry = build_page_registry_for_task_graph(task_graph)
+def plan_notion_writes_for_task_tree(task_tree: TaskTree) -> list[NotionWriteIntent]:
+    task_tree.validate()
+    task_tree.recalculate_display_priorities()
+    page_registry = build_page_registry_for_task_tree(task_tree)
     return [
-        *_plan_missing_page_creation_intents(task_graph, page_registry),
-        *_plan_fixed_page_title_refresh_intents(task_graph),
-        *_plan_existing_task_property_refresh_intents(task_graph),
-        build_ongoing_landing_page_refresh_intent(task_graph, page_registry),
-        *plan_completed_landing_page_refresh_intents(task_graph, page_registry),
+        *_plan_missing_page_creation_intents(task_tree, page_registry),
+        *_plan_fixed_page_title_refresh_intents(task_tree),
+        *_plan_existing_task_property_refresh_intents(task_tree),
+        build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
+        *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
     ]
 
 
@@ -102,14 +102,14 @@ def build_timeline_log_write_intent(timeline_log_change: TimelineLogChange) -> N
 
 
 def plan_completion_write_intents(
-    task_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     completion_change: TaskCompletionChange,
 ) -> list[NotionWriteIntent]:
-    page_registry = build_page_registry_for_task_graph(task_graph)
+    page_registry = build_page_registry_for_task_tree(task_tree)
     return [
-        build_task_database_property_refresh_intent(task_graph.tasks[completion_change.task_id]),
-        build_ongoing_landing_page_refresh_intent(task_graph, page_registry),
-        *plan_completed_landing_page_refresh_intents(task_graph, page_registry),
+        build_task_database_property_refresh_intent(task_tree.tasks[completion_change.task_id]),
+        build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
+        *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
         build_timeline_log_write_intent(completion_change.timeline_log_change),
     ]
 
@@ -205,30 +205,30 @@ def _build_task_property_update_intent(
 
 
 def build_ongoing_landing_page_refresh_intent(
-    task_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     page_registry: NotionPageRegistry,
 ) -> NotionWriteIntent:
     return NotionWriteIntent(
         operation_key="replace:ongoing_landing_page",
         operation_name="replace_page_markdown",
-        target_page_key=task_graph.ongoing_tasks_landing_page.page.local_page_key,
-        arguments={"markdown": render_ongoing_landing_page_markdown(task_graph.tasks, page_registry)},
+        target_page_key=task_tree.ongoing_tasks_landing_page.page.local_page_key,
+        arguments={"markdown": render_ongoing_landing_page_markdown(task_tree.tasks, page_registry)},
     )
 
 
 def plan_completed_landing_page_refresh_intents(
-    task_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     page_registry: NotionPageRegistry,
 ) -> list[NotionWriteIntent]:
-    if task_graph.completed_tasks_landing_page.page.notion_page_id is None:
+    if task_tree.completed_tasks_landing_page.page.notion_page_id is None:
         return []
 
     return [
         NotionWriteIntent(
             operation_key="replace:completed_landing_page",
             operation_name="replace_page_markdown",
-            target_page_key=task_graph.completed_tasks_landing_page.page.local_page_key,
-            arguments={"markdown": render_completed_landing_page_markdown(task_graph.tasks, page_registry)},
+            target_page_key=task_tree.completed_tasks_landing_page.page.local_page_key,
+            arguments={"markdown": render_completed_landing_page_markdown(task_tree.tasks, page_registry)},
         )
     ]
 
@@ -292,18 +292,18 @@ def _render_timeline_entry_block_markdown(block: dict[str, str]) -> str:
 
 
 def _plan_missing_page_creation_intents(
-    task_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     page_registry: NotionPageRegistry,
 ) -> list[NotionWriteIntent]:
     write_intents = []
     for page, markdown in [
         (
-            task_graph.ongoing_tasks_landing_page.page,
-            render_ongoing_landing_page_markdown(task_graph.tasks, page_registry),
+            task_tree.ongoing_tasks_landing_page.page,
+            render_ongoing_landing_page_markdown(task_tree.tasks, page_registry),
         ),
         (
-            task_graph.completed_tasks_landing_page.page,
-            render_completed_landing_page_markdown(task_graph.tasks, page_registry),
+            task_tree.completed_tasks_landing_page.page,
+            render_completed_landing_page_markdown(task_tree.tasks, page_registry),
         ),
     ]:
         if page.notion_page_id is None:
@@ -311,21 +311,21 @@ def _plan_missing_page_creation_intents(
     return write_intents
 
 
-def _plan_fixed_page_title_refresh_intents(task_graph: TaskDependencyGraph) -> list[NotionWriteIntent]:
+def _plan_fixed_page_title_refresh_intents(task_tree: TaskTree) -> list[NotionWriteIntent]:
     return [
         _build_page_title_refresh_intent(page)
         for page in [
-            task_graph.ongoing_tasks_landing_page.page,
-            task_graph.completed_tasks_landing_page.page,
+            task_tree.ongoing_tasks_landing_page.page,
+            task_tree.completed_tasks_landing_page.page,
         ]
         if page.notion_page_id is not None
     ]
 
 
-def _plan_existing_task_property_refresh_intents(task_graph: TaskDependencyGraph) -> list[NotionWriteIntent]:
+def _plan_existing_task_property_refresh_intents(task_tree: TaskTree) -> list[NotionWriteIntent]:
     return [
         build_task_database_property_refresh_intent(task)
-        for task in sorted(task_graph.tasks.values(), key=lambda task: task_id_sort_key(task.task_id))
+        for task in sorted(task_tree.tasks.values(), key=lambda task: task_id_sort_key(task.task_id))
         if task.notion_page_id is not None
     ]
 
@@ -353,12 +353,12 @@ def _build_page_title_refresh_intent(page: TrackedPage) -> NotionWriteIntent:
     )
 
 
-def _collect_pages_that_should_exist(task_graph: TaskDependencyGraph) -> list[TrackedPage]:
+def _collect_pages_that_should_exist(task_tree: TaskTree) -> list[TrackedPage]:
     pages = [
-        task_graph.ongoing_tasks_landing_page.page,
-        task_graph.completed_tasks_landing_page.page,
+        task_tree.ongoing_tasks_landing_page.page,
+        task_tree.completed_tasks_landing_page.page,
     ]
-    for task in task_graph.tasks.values():
+    for task in task_tree.tasks.values():
         pages.append(
             TrackedPage(
                 local_page_key=task.local_page_key,

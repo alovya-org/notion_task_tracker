@@ -9,7 +9,7 @@ from notion_task_tracker.apply_tracker_command import apply_command_to_tracker_s
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import prepare_command_result_from_current_task_page
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.tasks import TaskDependencyGraph
+from notion_task_tracker.tasks import TaskTree
 from notion_task_tracker.tasks.create_task import (
     TaskCreation,
     derive_task_creation_from_command,
@@ -38,12 +38,12 @@ async def execute_create_task_database_page_command(
     tracker_state: dict[str, Any],
     notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
-    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
-    task_creation = derive_task_creation_from_command(command, work_graph)
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_creation = derive_task_creation_from_command(command, task_tree)
     created_page_id, created_task_id, create_operation_keys = await _create_database_page_and_read_ticket_id(
         task_creation=task_creation,
         tracker_state=tracker_state,
-        work_graph=work_graph,
+        task_tree=task_tree,
         notion_client=notion_client,
     )
 
@@ -83,7 +83,7 @@ def should_create_task_database_page_for_command(command: dict[str, Any], tracke
 async def _create_database_page_and_read_ticket_id(
     task_creation: TaskCreation,
     tracker_state: dict[str, Any],
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     notion_client: NotionRestClient,
 ) -> tuple[str, str, list[str]]:
     create_operation_key = f"create_database_task:{task_creation.command_name}"
@@ -100,12 +100,12 @@ async def _create_database_page_and_read_ticket_id(
             external_coordination=task_creation.external_coordination.value,
             uncertainty=task_creation.uncertainty.value,
             friction=task_creation.friction.value,
-            work_graph=work_graph,
+            task_tree=task_tree,
         ),
         content=_render_new_task_page_initial_content(
             initial_timeline_entry=task_creation.initial_child_timeline_entry,
             parent_task_id=task_creation.parent_task_id,
-            work_graph=work_graph,
+            task_tree=task_tree,
         ),
         operation_key=create_operation_key,
     )
@@ -168,12 +168,12 @@ async def _refresh_derived_task_landing_pages(
 def _render_new_task_page_initial_content(
     initial_timeline_entry: dict[str, Any] | None,
     parent_task_id: str | None,
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
 ) -> str:
     if initial_timeline_entry is None or parent_task_id is None:
         return f"## {TASK_PAGE_TIMELINE_LOG_HEADING}"
 
-    parent_page_url = _build_task_notion_url(work_graph, parent_task_id)
+    parent_page_url = _build_task_notion_url(task_tree, parent_task_id)
     return "\n".join(
         [
             f"## {TASK_PAGE_TIMELINE_LOG_HEADING}",
@@ -211,7 +211,7 @@ def _build_new_task_database_row_properties(
     external_coordination: str,
     uncertainty: str,
     friction: str,
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
 ) -> dict[str, Any]:
     properties = {
         TASK_DATABASE_TITLE_PROPERTY: task_title,
@@ -224,23 +224,23 @@ def _build_new_task_database_row_properties(
     }
     if dependency_task_ids:
         properties[TASK_DATABASE_DEPENDENCIES_PROPERTY] = json.dumps([
-            _build_task_notion_url(work_graph, dependency_task_id)
+            _build_task_notion_url(task_tree, dependency_task_id)
             for dependency_task_id in dependency_task_ids
         ])
     elif dependant_task_ids:
         properties[TASK_DATABASE_DEPENDANTS_PROPERTY] = json.dumps([
-            _build_task_notion_url(work_graph, dependant_task_id)
+            _build_task_notion_url(task_tree, dependant_task_id)
             for dependant_task_id in dependant_task_ids
         ])
     if parent_task_id is not None:
         properties[TASK_DATABASE_PARENT_PROPERTY] = json.dumps([
-            _build_task_notion_url(work_graph, parent_task_id)
+            _build_task_notion_url(task_tree, parent_task_id)
         ])
     return properties
 
 
-def _build_task_notion_url(work_graph: TaskDependencyGraph, task_id: str) -> str:
-    notion_page_id = work_graph.tasks[task_id].notion_page_id
+def _build_task_notion_url(task_tree: TaskTree, task_id: str) -> str:
+    notion_page_id = task_tree.tasks[task_id].notion_page_id
     if notion_page_id is None:
         raise ValueError(f"Task {task_id} has no Notion page id")
 

@@ -24,18 +24,18 @@ from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write 
     plan_context_repair_result,
 )
 from notion_task_tracker.notion_operations.reconcile_task_database import (
-    plan_repairs_for_task_graph_changes,
+    plan_repairs_for_task_tree_changes,
     refresh_tracker_state_for_task_ids,
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.tasks import ExternalCoordination, Friction, TaskDependencyGraph, Uncertainty
+from notion_task_tracker.tasks import ExternalCoordination, Friction, TaskTree, Uncertainty
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 
 
 APP_HOME_PATH = Path.home() / ".notion-task-tracker"
-TRACKER_STATE_FILE_NAME = "notion_tasks_graph.json"
+TRACKER_STATE_FILE_NAME = "notion_tasks_tree.json"
 DEFAULT_TRACKER_STATE_PATH = APP_HOME_PATH / TRACKER_STATE_FILE_NAME
 DEFAULT_OUTPUT_PATH = Path("/tmp/notion_task_refreshed_result.json")
 
@@ -447,13 +447,13 @@ async def repair_and_write_refreshed_tracker_state(
     refreshed_result,
     notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
-    task_changes = TaskDependencyGraph.changes_between_tracker_states(
+    task_changes = TaskTree.changes_between_tracker_states(
         before_tracker_state,
         refreshed_result.tracker_state,
     )
-    repair_result = plan_repairs_for_task_graph_changes(
+    repair_result = plan_repairs_for_task_tree_changes(
         refreshed_result=refreshed_result,
-        task_graph_changes=task_changes,
+        task_tree_changes=task_changes,
     )
     repaired_tracker_state, completed_operation_keys = await execute_command_result_writes(repair_result, notion_client)
     _write_json(source_tracker_state_path, repaired_tracker_state)
@@ -464,7 +464,7 @@ async def repair_and_write_refreshed_tracker_state(
         completed_operation_keys=completed_operation_keys,
         output_path=destination_output_path,
         tracker_state_path=source_tracker_state_path,
-        task_graph_changes=task_changes,
+        task_tree_changes=task_changes,
         task_count=len(repaired_tracker_state["tasks"]),
         warnings=refreshed_result.warnings or [],
         repair_operation_count=len(repair_result.write_intents),
@@ -482,7 +482,7 @@ class TrackerActionExecutionSummary:
     backup_path: Path | None = None
     completed_operation_keys: list[str] | None = None
     tasks: list[dict[str, Any]] | None = None
-    task_graph_changes: list[dict[str, Any]] | None = None
+    task_tree_changes: list[dict[str, Any]] | None = None
     task_count: int | None = None
     repair_operation_count: int | None = None
 
@@ -499,8 +499,8 @@ class TrackerActionExecutionSummary:
             summary["completed_operations"] = list(self.completed_operation_keys)
         if self.tasks is not None:
             summary["tasks"] = self.tasks
-        if self.task_graph_changes is not None:
-            summary["task_graph_changes"] = self.task_graph_changes
+        if self.task_tree_changes is not None:
+            summary["task_tree_changes"] = self.task_tree_changes
         if self.task_count is not None:
             summary["task_count"] = self.task_count
         if self.repair_operation_count is not None:
@@ -525,7 +525,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
 
 
 def _timestamped_backup_path() -> Path:
-    return Path("/tmp") / f"notion_tasks_graph_before_refresh_{int(time.time())}.json"
+    return Path("/tmp") / f"notion_tasks_tree_before_refresh_{int(time.time())}.json"
 
 
 def _read_json(source_path: Path) -> dict[str, Any]:

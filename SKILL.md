@@ -1,13 +1,13 @@
 ---
 name: notion_task_tracker
-description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA task progress, complete or cancel ALOVYA tasks, capture miscellaneous notes, or create synthesis notes from the personal Notion task graph. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], notion_task misc [title] NOTES, notion_task synth [title] SOURCES NOTES, asks to continue an existing ALOVYA task, or asks to write task/misc/synthesis context to Notion.
+description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA task progress, complete or cancel ALOVYA tasks, capture miscellaneous notes, or create synthesis notes from the personal Notion task tree. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], notion_task misc [title] NOTES, notion_task synth [title] SOURCES NOTES, asks to continue an existing ALOVYA task, or asks to write task/misc/synthesis context to Notion.
 ---
 
 # Notion Task
 
 ## First Steps
 
-Use the installed `ntt` CLI for task tracker reads and writes. Let the CLI use its default tracker state at `~/.notion-task-tracker/notion_tasks_graph.json`; pass explicit `--tracker-state-path` only when the user asks for a non-default location.
+Use the installed `ntt` CLI for task tracker reads and writes. Let the CLI use its default tracker state at `~/.notion-task-tracker/notion_tasks_tree.json`; pass explicit `--tracker-state-path` only when the user asks for a non-default location.
 
 ## Shared Workflow
 
@@ -76,7 +76,7 @@ Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permi
 `notion_task update` reconciles local task metadata from the saved `Alovya's task database` view and repairs derived views when needed.
 
 1. Run `python -m notion_task_tracker --reconcile-from-notion` outside the sandbox.
-2. Read printed `task_graph_changes` and `warnings`.
+2. Read printed `task_tree_changes` and `warnings`.
 3. Treat CLI errors as failed writes.
 4. If the saved view query fails, stop and report that task database reconciliation failed.
 
@@ -231,14 +231,14 @@ The agent supplies only semantic input:
 - miscellaneous note summary and lines;
 - synthesis title, sources, summary, and content.
 
-The task database owns ticket-number assignment and parent-child relations. The tracker owns graph projection, priority rollup, page structure, rendering, page mentions, colours, REST request ordering, page-id blockers, and tracker-state shape.
+The task database owns ticket-number assignment and parent-child relations. The tracker owns tree projection, priority rollup, page structure, rendering, page mentions, colours, REST request ordering, page-id blockers, and tracker-state shape.
 
 ## Work Workflow
 
 When working an existing task:
 
 1. Use the task page for intent, status, blockers, links, and recent timeline.
-2. If the graph lacks the task page id, run `notion_task update` from the task database source of truth.
+2. If the tree lacks the task page id, run `notion_task update` from the task database source of truth.
 3. If the task points to repo work, obey repo `AGENTS.md` and relevant decision records before editing code.
 4. Put details on the most specific task page. Parent pages get compressed direct-child updates only when useful.
 

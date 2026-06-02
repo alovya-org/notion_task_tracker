@@ -1,4 +1,4 @@
-"""Task landing-page groupings derived from the dependency graph."""
+"""Task landing-page groupings derived from the task tree."""
 
 from __future__ import annotations
 

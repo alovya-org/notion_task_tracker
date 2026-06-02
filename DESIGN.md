@@ -2,11 +2,11 @@
 
 This package preserves three Notion page families:
 
-1. A recursive ALOVYA task graph with ongoing and completed landing pages.
+1. A recursive ALOVYA task tree with ongoing and completed landing pages.
 2. A dated miscellaneous-notes inbox.
 3. A flat synthesis-notes index with reusable synthesis subpages.
 
-The tracker is deterministic. Agents provide semantic input; Python owns graph projection, priority rollup, rendering, REST requests, and write ordering.
+The tracker is deterministic. Agents provide semantic input; Python owns tree projection, priority rollup, rendering, REST requests, and write ordering.
 
 ## Task Pages
 
@@ -39,9 +39,9 @@ Task-page body details:
 
 Task ids are always derived from Notion's `Ticket ID`.
 
-## Task Graph
+## Task Tree
 
-Tasks form a parent-child graph. The database `Parent` relation is authoritative during reconciliation.
+Tasks form a parent-child tree. The database `Parent` relation is authoritative during reconciliation.
 
 Priority rolls upward only through `Active` and `Blocked` descendants:
 
@@ -103,20 +103,20 @@ ALOVYA-2 directly owns ALOVYA-3 and ALOVYA-4 through database relations. ALOVYA-
 
 ## Task Reconciliation
 
-Task reconciliation runs before every task, miscellaneous, or synthesis command. It updates the local tracker state from database rows, then regenerates derived views only when it detects task graph changes.
+Task reconciliation runs before every task, miscellaneous, or synthesis command. It updates the local tracker state from database rows, then regenerates derived views only when it detects task tree changes.
 
 1. Query the saved `Alovya's task database` view.
 2. Convert rows into task metadata.
 3. Rebuild parent-child links from database `Parent` relations.
 4. Preserve local timeline metadata where the row maps to a known page.
-5. Validate the graph and recalculate displayed priorities.
-6. Repair derived landing pages and task titles when the graph projection changes.
+5. Validate the tree and recalculate displayed priorities.
+6. Repair derived landing pages and task titles when the tree projection changes.
 
 If no change is detected, no repair write is sent. If repairs are needed, the CLI writes them before applying the user's requested command.
 
 ## Miscellaneous Notes
 
-The miscellaneous root page is a dated inbox. It is independent of the task graph.
+The miscellaneous root page is a dated inbox. It is independent of the task tree.
 
 ```text
 Alovya's miscellanous notes
@@ -183,7 +183,7 @@ Agents may decide:
 The tracker owns:
 
 1. Ticket-id extraction from Notion database rows.
-2. Parent-child graph mutation.
+2. Parent-child tree mutation.
 3. Priority rollup.
 4. Fixed page structure.
 5. Page mentions and colours.

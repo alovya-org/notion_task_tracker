@@ -1,6 +1,6 @@
-"""Task tracking workflows, graph state, and task data."""
+"""Task tracking workflows, tree state, and task data."""
 
-from notion_task_tracker.tasks.dependency_graph import TaskDependencyGraph
+from notion_task_tracker.tasks.task_tree import TaskTree
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
     ExternalCoordination,
@@ -22,7 +22,7 @@ __all__ = [
     "Priority",
     "Task",
     "TaskCompletionChange",
-    "TaskDependencyGraph",
+    "TaskTree",
     "TaskStatus",
     "TimelineEntry",
     "TimelineLogChange",

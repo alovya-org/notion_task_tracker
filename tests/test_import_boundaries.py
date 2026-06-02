@@ -94,7 +94,7 @@ def test_workflow_client_surface_is_rest_client_oriented():
 def test_tracker_metadata_modules_do_not_import_notion_operations():
     metadata_files = [
         "tasks/task.py",
-        "tasks/dependency_graph.py",
+        "tasks/task_tree.py",
         "tasks/database.py",
         "tasks/landing_pages.py",
         "tasks/timeline_log.py",

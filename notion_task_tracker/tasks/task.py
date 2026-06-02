@@ -35,7 +35,7 @@ class TaskStatus(str, Enum):
 
 
 class Priority(str, Enum):
-    """Priority assigned directly to a task before graph rollup."""
+    """Priority assigned directly to a task before tree rollup."""
 
     P0 = "P0"
     P1 = "P1"

@@ -6,7 +6,7 @@ from typing import Any
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
-from notion_task_tracker.tasks import TaskDependencyGraph
+from notion_task_tracker.tasks import TaskTree
 from notion_task_tracker.tasks.refresh_task_tracker_state import (
     find_task_ids_to_refresh_before_command,
     refresh_tracker_state_from_database_rows,
@@ -30,19 +30,19 @@ async def refresh_tracker_state_from_notion_task_database(
     return refresh_tracker_state_from_database_rows(tracker_state, database_rows)
 
 
-def plan_repairs_for_task_graph_changes(
+def plan_repairs_for_task_tree_changes(
     refreshed_result: TrackerCommandResult,
-    task_graph_changes: list[dict[str, Any]],
+    task_tree_changes: list[dict[str, Any]],
 ) -> TrackerCommandResult:
-    if not task_graph_changes and not refreshed_result.warnings:
+    if not task_tree_changes and not refreshed_result.warnings:
         return refreshed_result
 
     repair_result = apply_command_to_tracker_state(
         command={
             "command": "refresh_task_pages",
-            "operation_keys": TaskDependencyGraph.from_tracker_state(
+            "operation_keys": TaskTree.from_tracker_state(
                 refreshed_result.tracker_state
-            ).repair_operation_keys_for_changes(task_graph_changes),
+            ).repair_operation_keys_for_changes(task_tree_changes),
         },
         tracker_state=refreshed_result.tracker_state,
     )
@@ -96,7 +96,7 @@ async def _fetch_database_rows_for_command_tasks(
     tracker_state: dict[str, Any],
     notion_client: NotionRestClient,
 ) -> dict[str, TaskDatabaseRow]:
-    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
+    task_tree = TaskTree.from_tracker_state(tracker_state)
     database_rows_by_task_id = {}
     refreshed_task_ids = set()
     pending_task_ids = list(dict.fromkeys(find_task_ids_to_refresh_before_command(command, tracker_state)))
@@ -106,11 +106,11 @@ async def _fetch_database_rows_for_command_tasks(
         if task_id in refreshed_task_ids:
             continue
 
-        database_row = await _fetch_known_task_database_row(task_id, work_graph, notion_client)
+        database_row = await _fetch_known_task_database_row(task_id, task_tree, notion_client)
         database_rows_by_task_id[task_id] = database_row
         refreshed_task_ids.add(task_id)
 
-        parent_task_id = _derive_parent_task_id_from_database_row(database_row, work_graph)
+        parent_task_id = _derive_parent_task_id_from_database_row(database_row, task_tree)
         if parent_task_id is not None and parent_task_id not in refreshed_task_ids:
             pending_task_ids.append(parent_task_id)
 
@@ -122,7 +122,7 @@ async def _fetch_database_rows_for_task_ids(
     tracker_state: dict[str, Any],
     notion_client: NotionRestClient,
 ) -> dict[str, TaskDatabaseRow]:
-    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
+    task_tree = TaskTree.from_tracker_state(tracker_state)
     database_rows_by_task_id = {}
     refreshed_task_ids = set()
     pending_task_ids = list(dict.fromkeys(task_ids))
@@ -132,11 +132,11 @@ async def _fetch_database_rows_for_task_ids(
         if task_id in refreshed_task_ids:
             continue
 
-        database_row = await _fetch_known_task_database_row(task_id, work_graph, notion_client)
+        database_row = await _fetch_known_task_database_row(task_id, task_tree, notion_client)
         database_rows_by_task_id[task_id] = database_row
         refreshed_task_ids.add(task_id)
 
-        parent_task_id = _derive_parent_task_id_from_database_row(database_row, work_graph)
+        parent_task_id = _derive_parent_task_id_from_database_row(database_row, task_tree)
         if parent_task_id is not None and parent_task_id not in refreshed_task_ids:
             pending_task_ids.append(parent_task_id)
 
@@ -145,13 +145,13 @@ async def _fetch_database_rows_for_task_ids(
 
 async def _fetch_known_task_database_row(
     task_id: str,
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     notion_client: NotionRestClient,
 ) -> TaskDatabaseRow:
-    if task_id not in work_graph.tasks:
+    if task_id not in task_tree.tasks:
         raise ValueError(f"Task {task_id} is not in local tracker state; run notion_task update")
 
-    notion_page_id = work_graph.tasks[task_id].notion_page_id
+    notion_page_id = task_tree.tasks[task_id].notion_page_id
     if notion_page_id is None:
         raise ValueError(f"Task {task_id} has no Notion page id; run notion_task update")
 
@@ -162,7 +162,7 @@ async def _fetch_known_task_database_row(
     )
 
 
-def _derive_parent_task_id_from_database_row(database_row: TaskDatabaseRow, work_graph: TaskDependencyGraph) -> str | None:
+def _derive_parent_task_id_from_database_row(database_row: TaskDatabaseRow, task_tree: TaskTree) -> str | None:
     if len(database_row.parent_notion_page_ids) > 1:
         raise ValueError(f"Task {database_row.task_id} has more than one parent")
 
@@ -170,7 +170,7 @@ def _derive_parent_task_id_from_database_row(database_row: TaskDatabaseRow, work
         return None
 
     parent_page_id = database_row.parent_notion_page_ids[0]
-    parent_task_id = work_graph.task_id_for_notion_page_id(parent_page_id)
+    parent_task_id = task_tree.task_id_for_notion_page_id(parent_page_id)
     if parent_task_id is None:
         raise ValueError(
             f"Parent page {parent_page_id} for task {database_row.task_id} is not in local tracker state; "

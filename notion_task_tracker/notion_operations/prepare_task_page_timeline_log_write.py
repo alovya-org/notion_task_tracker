@@ -13,17 +13,17 @@ from notion_task_tracker.tasks.derive_task_timeline_log import (
     find_task_id_whose_timeline_is_written_by_command,
     derive_task_timeline_log_from_fetched_page_content,
 )
-from notion_task_tracker.tasks import TaskDependencyGraph
-from notion_task_tracker.notion_operations.reconcile_task_database import plan_repairs_for_task_graph_changes
+from notion_task_tracker.tasks import TaskTree
+from notion_task_tracker.notion_operations.reconcile_task_database import plan_repairs_for_task_tree_changes
 
 
 def plan_context_repair_result(
     before_tracker_state: dict[str, Any],
     command_ready_result: TrackerCommandResult,
 ) -> TrackerCommandResult:
-    return plan_repairs_for_task_graph_changes(
+    return plan_repairs_for_task_tree_changes(
         refreshed_result=command_ready_result,
-        task_graph_changes=TaskDependencyGraph.changes_between_tracker_states(
+        task_tree_changes=TaskTree.changes_between_tracker_states(
             before_tracker_state,
             command_ready_result.tracker_state,
         ),

@@ -5,13 +5,13 @@ from notion_task_tracker.tasks import (
     Task,
     TaskStatus,
     TimelineEntry,
-    TaskDependencyGraph,
+    TaskTree,
 )
 
 
-def _build_recursive_work_graph() -> TaskDependencyGraph:
-    work_graph = TaskDependencyGraph()
-    work_graph.add_task(
+def _build_recursive_task_tree() -> TaskTree:
+    task_tree = TaskTree()
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-2",
             title="Activation quantisation stack",
@@ -21,7 +21,7 @@ def _build_recursive_work_graph() -> TaskDependencyGraph:
             notion_page_id="22222222222222222222222222222222",
         )
     )
-    work_graph.add_task(
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-3",
             title="Find activation mismatch",
@@ -37,7 +37,7 @@ def _build_recursive_work_graph() -> TaskDependencyGraph:
             notion_page_id="33333333333333333333333333333333",
         )
     )
-    work_graph.add_task(
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-4",
             title="Complete calibration branch",
@@ -46,7 +46,7 @@ def _build_recursive_work_graph() -> TaskDependencyGraph:
             notion_page_id="44444444444444444444444444444444",
         )
     )
-    work_graph.add_task(
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-5",
             title="Debug ONNX/QNN activation mismatch",
@@ -56,10 +56,10 @@ def _build_recursive_work_graph() -> TaskDependencyGraph:
         )
     )
 
-    work_graph.link_parent_to_child(parent_task_id="ALOVYA-2", child_task_id="ALOVYA-3")
-    work_graph.link_parent_to_child(parent_task_id="ALOVYA-2", child_task_id="ALOVYA-4")
-    work_graph.link_parent_to_child(parent_task_id="ALOVYA-3", child_task_id="ALOVYA-5")
-    return work_graph
+    task_tree.link_parent_to_child(parent_task_id="ALOVYA-2", child_task_id="ALOVYA-3")
+    task_tree.link_parent_to_child(parent_task_id="ALOVYA-2", child_task_id="ALOVYA-4")
+    task_tree.link_parent_to_child(parent_task_id="ALOVYA-3", child_task_id="ALOVYA-5")
+    return task_tree
 
 
 def _visible_strikethrough_text(text):

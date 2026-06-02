@@ -1,7 +1,7 @@
 import json
 
 from notion_task_tracker.apply_tracker_command import apply_command_to_tracker_state
-from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskDependencyGraph
+from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskTree
 
 
 class TestApplyCommandToTrackerState:
@@ -416,8 +416,8 @@ def _combined_tracker_state():
 
 def _combined_tracker_state_with_two_tasks():
     tracker_state = _combined_tracker_state()
-    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
-    work_graph.add_task(
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-2",
             title="Second task",
@@ -426,13 +426,13 @@ def _combined_tracker_state_with_two_tasks():
             notion_page_id="33333333333333333333333333333333",
         )
     )
-    return work_graph.replace_task_graph_in_tracker_state(tracker_state)
+    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
 
 
 def _task_tracker_state():
-    work_graph = TaskDependencyGraph()
-    work_graph.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
-    work_graph.add_task(
+    task_tree = TaskTree()
+    task_tree.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-1",
             title="Root task",
@@ -441,4 +441,4 @@ def _task_tracker_state():
             notion_page_id="22222222222222222222222222222222",
         )
     )
-    return work_graph.to_tracker_state()
+    return task_tree.to_tracker_state()

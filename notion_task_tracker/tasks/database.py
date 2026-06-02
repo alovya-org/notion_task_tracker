@@ -1,4 +1,4 @@
-"""Build task graph metadata from Notion task database rows."""
+"""Build task tree metadata from Notion task database rows."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 
 from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.notion_operations.notion_id import canonical_notion_page_id, notion_page_id_from_url
-from notion_task_tracker.tasks.dependency_graph import TaskDependencyGraph
+from notion_task_tracker.tasks.task_tree import TaskTree
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
     ExternalCoordination,
@@ -43,20 +43,20 @@ TASK_DATABASE_FRICTION_PROPERTY = "Friction"
 _TASK_TITLE_PREFIX_PATTERN = re.compile(r"^ALOVYA-\d+:\s+")
 
 
-def task_dependency_graph_from_database_query_results(
+def build_task_tree_from_database_query_results(
     query_results: list[dict[str, Any]],
     landing_page: TrackedPage,
     completed_landing_page: TrackedPage | None = None,
-    previous_work_graph: TaskDependencyGraph | None = None,
-) -> TaskDependencyGraph:
-    previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_work_graph)
-    previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_work_graph)
+    previous_task_tree: TaskTree | None = None,
+) -> TaskTree:
+    previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_task_tree)
+    previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_task_tree)
     database_rows = _database_rows_from_query_results(query_results)
-    database_rows = _database_rows_that_belong_to_task_graph(database_rows)
-    work_graph = TaskDependencyGraph(
+    database_rows = _database_rows_that_belong_to_task_tree(database_rows)
+    task_tree = TaskTree(
         ongoing_tasks_landing_page=OngoingTasksLandingPage(page=landing_page),
         completed_tasks_landing_page=CompletedTasksLandingPage(
-            page=completed_landing_page or _previous_completed_landing_page(previous_work_graph)
+            page=completed_landing_page or _previous_completed_landing_page(previous_task_tree)
         ),
     )
 
@@ -64,13 +64,13 @@ def task_dependency_graph_from_database_query_results(
         previous_task = previous_tasks_by_task_id.get(database_row.task_id)
         if previous_task is None:
             previous_task = previous_tasks_by_page_id.get(database_row.notion_page_id)
-        work_graph.add_task(_task_from_database_row(database_row, previous_task))
+        task_tree.add_task(_task_from_database_row(database_row, previous_task))
 
-    _link_database_parent_rows(work_graph, database_rows)
-    _sort_child_task_ids(work_graph)
-    work_graph.validate()
-    work_graph.recalculate_display_priorities()
-    return work_graph
+    _link_database_parent_rows(task_tree, database_rows)
+    _sort_child_task_ids(task_tree)
+    task_tree.validate()
+    task_tree.recalculate_display_priorities()
+    return task_tree
 
 
 @dataclass(frozen=True)
@@ -157,7 +157,7 @@ def _database_rows_from_query_results(query_results: list[dict[str, Any]]) -> li
     return list(database_rows_by_task_id.values())
 
 
-def _database_rows_that_belong_to_task_graph(database_rows: list[TaskDatabaseRow]) -> list[TaskDatabaseRow]:
+def _database_rows_that_belong_to_task_tree(database_rows: list[TaskDatabaseRow]) -> list[TaskDatabaseRow]:
     retained_database_rows = list(database_rows)
 
     while True:
@@ -266,7 +266,7 @@ def _task_from_database_row(
 
 
 def _link_database_parent_rows(
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     database_rows: list[TaskDatabaseRow],
 ) -> None:
     task_id_by_page_id = {
@@ -280,30 +280,30 @@ def _link_database_parent_rows(
 
         parent_page_id = database_row.parent_notion_page_ids[0]
         parent_task_id = task_id_by_page_id.get(parent_page_id)
-        work_graph.link_parent_to_child(parent_task_id=parent_task_id, child_task_id=database_row.task_id)
+        task_tree.link_parent_to_child(parent_task_id=parent_task_id, child_task_id=database_row.task_id)
 
     for database_row in database_rows:
-        task = work_graph.tasks[database_row.task_id]
+        task = task_tree.tasks[database_row.task_id]
         task.dependency_task_ids = _require_dependency_task_ids_referenced_by_database_row(
             database_row,
             task_id_by_page_id,
         )
-    work_graph.derive_dependant_task_ids_from_dependencies()
-    _validate_dependants_match_database_rows(work_graph, database_rows, task_id_by_page_id)
+    task_tree.derive_dependant_task_ids_from_dependencies()
+    _validate_dependants_match_database_rows(task_tree, database_rows, task_id_by_page_id)
 
 
-def _sort_child_task_ids(work_graph: TaskDependencyGraph) -> None:
-    for task in work_graph.tasks.values():
+def _sort_child_task_ids(task_tree: TaskTree) -> None:
+    for task in task_tree.tasks.values():
         task.child_task_ids.sort(key=task_id_sort_key)
 
 
 def _validate_dependants_match_database_rows(
-    work_graph: TaskDependencyGraph,
+    task_tree: TaskTree,
     database_rows: list[TaskDatabaseRow],
     task_id_by_page_id: dict[str, str],
 ) -> None:
     for database_row in database_rows:
-        task = work_graph.tasks[database_row.task_id]
+        task = task_tree.tasks[database_row.task_id]
         dependant_task_ids = _require_dependant_task_ids_referenced_by_database_row(
             database_row,
             task_id_by_page_id,
@@ -332,7 +332,7 @@ def _require_dependant_task_id_for_page_id(
     dependant_task_id = task_id_by_page_id.get(dependant_page_id)
     if dependant_task_id is None:
         raise NotionPlanningError(
-            f"Dependant page {dependant_page_id} for task {database_row.task_id} is not in the local task graph"
+            f"Dependant page {dependant_page_id} for task {database_row.task_id} is not in the local task tree"
         )
 
     return dependant_task_id
@@ -356,7 +356,7 @@ def _require_dependency_task_id_for_page_id(
     dependency_task_id = task_id_by_page_id.get(dependency_page_id)
     if dependency_task_id is None:
         raise NotionPlanningError(
-            f"Dependency page {dependency_page_id} for task {database_row.task_id} is not in the local task graph"
+            f"Dependency page {dependency_page_id} for task {database_row.task_id} is not in the local task tree"
         )
 
     return dependency_task_id
@@ -443,26 +443,26 @@ def _required_enum_property(
     return enum_type(_required_text_property(query_result, property_name))
 
 
-def _previous_tasks_by_task_id(previous_work_graph: TaskDependencyGraph | None) -> dict[str, Task]:
-    if previous_work_graph is None:
+def _previous_tasks_by_task_id(previous_task_tree: TaskTree | None) -> dict[str, Task]:
+    if previous_task_tree is None:
         return {}
 
-    return dict(previous_work_graph.tasks)
+    return dict(previous_task_tree.tasks)
 
 
-def _previous_completed_landing_page(previous_work_graph: TaskDependencyGraph | None) -> TrackedPage:
-    if previous_work_graph is None:
-        return TaskDependencyGraph().completed_tasks_landing_page.page
+def _previous_completed_landing_page(previous_task_tree: TaskTree | None) -> TrackedPage:
+    if previous_task_tree is None:
+        return TaskTree().completed_tasks_landing_page.page
 
-    return previous_work_graph.completed_tasks_landing_page.page
+    return previous_task_tree.completed_tasks_landing_page.page
 
 
-def _previous_tasks_by_page_id(previous_work_graph: TaskDependencyGraph | None) -> dict[str, Task]:
-    if previous_work_graph is None:
+def _previous_tasks_by_page_id(previous_task_tree: TaskTree | None) -> dict[str, Task]:
+    if previous_task_tree is None:
         return {}
 
     return {
         canonical_notion_page_id(task.notion_page_id): task
-        for task in previous_work_graph.tasks.values()
+        for task in previous_task_tree.tasks.values()
         if task.notion_page_id is not None
     }

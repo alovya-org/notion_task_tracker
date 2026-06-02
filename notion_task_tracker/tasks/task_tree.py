@@ -1,4 +1,4 @@
-"""Task dependency graph metadata."""
+"""Task tree metadata."""
 
 from __future__ import annotations
 
@@ -40,8 +40,8 @@ from notion_task_tracker.tracked_pages import (
 
 
 @dataclass
-class TaskDependencyGraph:
-    """Task graph and task landing-page registry."""
+class TaskTree:
+    """Task tree and task landing-page registry."""
 
     ongoing_tasks_landing_page: OngoingTasksLandingPage = field(
         default_factory=lambda: OngoingTasksLandingPage(
@@ -62,8 +62,8 @@ class TaskDependencyGraph:
     tasks: dict[str, Task] = field(default_factory=dict)
 
     @classmethod
-    def from_tracker_state(cls, tracker_state: dict[str, Any]) -> TaskDependencyGraph:
-        work_graph = cls(
+    def from_tracker_state(cls, tracker_state: dict[str, Any]) -> TaskTree:
+        task_tree = cls(
             ongoing_tasks_landing_page=OngoingTasksLandingPage(
                 page=fixed_tracked_page_from_tracker_state(
                     tracker_state=tracker_state["ongoing_landing_page"],
@@ -80,12 +80,12 @@ class TaskDependencyGraph:
             ),
         )
         for task_state in tracker_state.get("tasks", {}).values():
-            work_graph.tasks[task_state["task_id"]] = _task_from_tracker_state(task_state)
-        work_graph._normalise_task_timelines()
-        work_graph.derive_dependant_task_ids_from_dependencies()
-        work_graph.validate()
-        work_graph.recalculate_display_priorities()
-        return work_graph
+            task_tree.tasks[task_state["task_id"]] = _task_from_tracker_state(task_state)
+        task_tree._normalise_task_timelines()
+        task_tree.derive_dependant_task_ids_from_dependencies()
+        task_tree.validate()
+        task_tree.recalculate_display_priorities()
+        return task_tree
 
     def to_tracker_state(self) -> dict[str, Any]:
         return {
@@ -119,18 +119,18 @@ class TaskDependencyGraph:
                 changes.append({"task_id": task_id, "change": "removed"})
                 continue
 
-            changed_fields = _changed_task_graph_fields(before_task, after_task)
+            changed_fields = _changed_task_tree_fields(before_task, after_task)
             if changed_fields:
                 changes.append({"task_id": task_id, "fields": changed_fields})
 
         return changes
 
-    def replace_task_graph_in_tracker_state(self, tracker_state: dict[str, Any]) -> dict[str, Any]:
+    def replace_task_tree_in_tracker_state(self, tracker_state: dict[str, Any]) -> dict[str, Any]:
         updated_tracker_state = json.loads(json.dumps(tracker_state))
-        task_graph_state = self.to_tracker_state()
-        updated_tracker_state["ongoing_landing_page"] = task_graph_state["ongoing_landing_page"]
-        updated_tracker_state["completed_landing_page"] = task_graph_state["completed_landing_page"]
-        updated_tracker_state["tasks"] = task_graph_state["tasks"]
+        task_tree_state = self.to_tracker_state()
+        updated_tracker_state["ongoing_landing_page"] = task_tree_state["ongoing_landing_page"]
+        updated_tracker_state["completed_landing_page"] = task_tree_state["completed_landing_page"]
+        updated_tracker_state["tasks"] = task_tree_state["tasks"]
         return updated_tracker_state
 
     def add_task(self, task: Task) -> None:
@@ -258,17 +258,17 @@ class TaskDependencyGraph:
     def cancelled_task_ids_for_landing_page(self) -> list[str]:
         return self.completed_tasks_landing_page.cancelled_top_level_task_ids(self.tasks)
 
-    def repair_operation_keys_for_changes(self, task_graph_changes: list[dict[str, Any]]) -> list[str]:
+    def repair_operation_keys_for_changes(self, task_tree_changes: list[dict[str, Any]]) -> list[str]:
         task_ids_to_repair = set()
 
-        for task_graph_change in task_graph_changes:
-            task_id = task_graph_change["task_id"]
+        for task_tree_change in task_tree_changes:
+            task_id = task_tree_change["task_id"]
             task_ids_to_repair.add(task_id)
             task_ids_to_repair.update(self._ancestor_task_ids(task_id))
 
-            changed_fields = set(task_graph_change.get("fields", {}))
+            changed_fields = set(task_tree_change.get("fields", {}))
             if "parent_task_id" in changed_fields:
-                task_ids_to_repair.update(_parent_task_ids_from_change(task_graph_change))
+                task_ids_to_repair.update(_parent_task_ids_from_change(task_tree_change))
 
         return [
             "replace:ongoing_landing_page",
@@ -439,8 +439,8 @@ def _compact_notion_page_id(notion_page_id: str) -> str:
     return notion_page_id.replace("-", "").lower()
 
 
-def _parent_task_ids_from_change(task_graph_change: dict[str, Any]) -> list[str]:
-    parent_change = task_graph_change.get("fields", {}).get("parent_task_id", {})
+def _parent_task_ids_from_change(task_tree_change: dict[str, Any]) -> list[str]:
+    parent_change = task_tree_change.get("fields", {}).get("parent_task_id", {})
     return [
         task_id
         for task_id in [parent_change.get("before"), parent_change.get("after")]
@@ -448,7 +448,7 @@ def _parent_task_ids_from_change(task_graph_change: dict[str, Any]) -> list[str]
     ]
 
 
-def _changed_task_graph_fields(
+def _changed_task_tree_fields(
     before_task: dict[str, Any],
     after_task: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:

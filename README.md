@@ -1,6 +1,6 @@
 # Notion Task Tracker
 
-This package turns explicit CLI actions into Notion writes. The agent supplies intent; the tracker owns graph projection, page shape, rendering, write ordering, and Notion SDK calls. Task metadata now comes from `Alovya's task database`; task page bodies contain timeline logs only, and the ongoing and completed task landing pages are derived views.
+This package turns explicit CLI actions into Notion writes. The agent supplies intent; the tracker owns tree projection, page shape, rendering, write ordering, and Notion SDK calls. Task metadata now comes from `Alovya's task database`; task page bodies contain timeline logs only, and the ongoing and completed task landing pages are derived views.
 
 Fixed page names live in `fixed_pages.py`:
 
@@ -20,7 +20,7 @@ Notion page ids live in tracker state because Notion assigns them. The task data
 5. Read the output JSON for completed operation keys, read summaries, and warnings.
 6. Treat a CLI failure as a failed write. Do not manually send Notion writes unless debugging with the user.
 
-The default tracker state path is `~/.notion-task-tracker/notion_tasks_graph.json`. Override it only with `--tracker-state-path`. Authentication uses `NOTION_API_KEY`.
+The default tracker state path is `~/.notion-task-tracker/notion_tasks_tree.json`. Override it only with `--tracker-state-path`. Authentication uses `NOTION_API_KEY`.
 
 Run an explicit action from an environment where `notion-task-tracker` is installed:
 
@@ -141,7 +141,7 @@ Use this when the user edited task rows in the Notion UI:
 ntt --reconcile-from-notion
 ```
 
-This command creates a timestamped backup under `/tmp`, queries the saved `Alovya's task database` view, rebuilds the local graph projection from row properties, and repairs derived landing pages or task titles when needed.
+This command creates a timestamped backup under `/tmp`, queries the saved `Alovya's task database` view, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed.
 
 Ordinary commands do not query the full database view. They fetch the task pages they depend on, so command execution is not blocked by slow saved-view export. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
@@ -154,7 +154,7 @@ Normal commands are fast because they only refresh the task pages they touch. Th
 3. `create_sibling_task` fetches the existing sibling and parent chain, creates the new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
 4. `create_top_level_task` creates a new top-level database row without fetching the full database view.
 5. Miscellaneous and synthesis commands do not use the task database view.
-6. `--reconcile-from-notion` is the only normal path that pulls the saved task database view and rebuilds the whole local task graph projection.
+6. `--reconcile-from-notion` is the only normal path that pulls the saved task database view and rebuilds the whole local task tree projection.
 
 Run full reconciliation when a task was created only in Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
 
@@ -366,14 +366,14 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `notion_task_tracker/build_tracker_command.py`: build deterministic tracker commands from explicit CLI flags.
 - `notion_task_tracker/run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full database reconciliation.
 - `notion_task_tracker/apply_tracker_command.py`: apply one already-built tracker command to local state and derive Notion write intents.
-- `notion_task_tracker/tasks/dependency_graph.py`: task dependency graph validation, priority rollup, and task-write orchestration.
+- `notion_task_tracker/tasks/task_tree.py`: task tree validation, priority rollup, and task-write orchestration.
 - `notion_task_tracker/tasks/database.py`: task database projection and database-row parsing.
 - `notion_task_tracker/tasks/task.py`: task, priority, status, timeline-entry data, task property refresh intents, and timeline-log update intents.
 - `notion_task_tracker/tasks/landing_pages.py`: ongoing and completed task landing-page rendering and refresh intents.
 - `notion_task_tracker/tasks/timeline_log.py`: task page body parsing for timeline logs.
-- `notion_task_tracker/tasks/create_task.py`: local task graph changes for creating parent, child, and sibling tasks.
+- `notion_task_tracker/tasks/create_task.py`: local task tree changes for creating parent, child, and sibling tasks.
 - `notion_task_tracker/tasks/derive_task_timeline_log.py`: timeline-log facts derived from fetched task page content.
-- `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task graph refresh from Notion database rows.
+- `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task tree refresh from Notion database rows.
 - `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, the REST client, and write execution.
 - `notion_task_tracker/fixed_pages.py`: names and local keys for fixed tracker pages.
 - `notion_task_tracker/miscellaneous_pages.py`: dated miscellaneous notes.

@@ -48,7 +48,7 @@ from notion_task_tracker.tasks import (
     Task,
     TaskStatus,
     TimelineEntry,
-    TaskDependencyGraph,
+    TaskTree,
     Uncertainty,
 )
 
@@ -84,7 +84,7 @@ __all__ = [
     "Task",
     "TaskStatus",
     "TimelineEntry",
-    "TaskDependencyGraph",
+    "TaskTree",
     "Uncertainty",
     "apply_command_to_tracker_state",
     "parse_synthesis_root_page_mentions",

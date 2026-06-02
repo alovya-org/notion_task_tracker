@@ -9,7 +9,7 @@ from notion_task_tracker.tasks import (
     ExternalCoordination,
     Friction,
     Priority,
-    TaskDependencyGraph,
+    TaskTree,
     Task,
     TaskStatus,
     Uncertainty,
@@ -21,15 +21,15 @@ from notion_task_tracker.tasks.database import (
     task_database_data_source_url_from_tracker_state,
     task_database_query_for_tracker_state,
     task_database_view_url_from_tracker_state,
-    task_dependency_graph_from_database_query_results,
+    build_task_tree_from_database_query_results,
     task_id_from_fetched_task_database_page,
 )
 
 
-class TestTaskDependencyGraphFromDatabaseQueryResults:
-    def test_builds_graph_from_ticket_ids_and_parent_relations(self):
-        previous_work_graph = TaskDependencyGraph()
-        previous_work_graph.add_task(
+class TestTaskTreeFromDatabaseQueryResults:
+    def test_builds_tree_from_ticket_ids_and_parent_relations(self):
+        previous_task_tree = TaskTree()
+        previous_task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="Old root title",
@@ -40,7 +40,7 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             )
         )
 
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-1: Root task",
@@ -61,35 +61,35 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
                 title=ONGOING_LANDING_PAGE_TITLE,
                 notion_page_id="landing-page-id",
             ),
-            previous_work_graph=previous_work_graph,
+            previous_task_tree=previous_task_tree,
         )
 
-        assert work_graph.tasks["ALOVYA-68"].title == "Root task"
-        assert work_graph.tasks["ALOVYA-68"].status_update == "Keep local status detail."
-        assert work_graph.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69"]
-        assert work_graph.tasks["ALOVYA-69"].parent_task_id == "ALOVYA-68"
-        assert work_graph.tasks["ALOVYA-69"].configured_priority == Priority.P2
-        assert work_graph.tasks["ALOVYA-69"].status == TaskStatus.BLOCKED
+        assert task_tree.tasks["ALOVYA-68"].title == "Root task"
+        assert task_tree.tasks["ALOVYA-68"].status_update == "Keep local status detail."
+        assert task_tree.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69"]
+        assert task_tree.tasks["ALOVYA-69"].parent_task_id == "ALOVYA-68"
+        assert task_tree.tasks["ALOVYA-69"].configured_priority == Priority.P2
+        assert task_tree.tasks["ALOVYA-69"].status == TaskStatus.BLOCKED
 
-    def test_preserves_completed_landing_page_from_previous_graph(self):
-        previous_work_graph = TaskDependencyGraph()
-        previous_work_graph.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
+    def test_preserves_completed_landing_page_from_previous_tree(self):
+        previous_task_tree = TaskTree()
+        previous_task_tree.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
 
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
                 title=ONGOING_LANDING_PAGE_TITLE,
                 notion_page_id="landing-page-id",
             ),
-            previous_work_graph=previous_work_graph,
+            previous_task_tree=previous_task_tree,
         )
 
-        assert work_graph.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
-        assert work_graph.completed_tasks_landing_page.page.notion_page_id == "completed-landing-page-id"
+        assert task_tree.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
+        assert task_tree.completed_tasks_landing_page.page.notion_page_id == "completed-landing-page-id"
 
     def test_uses_notion_ticket_id_for_task_id(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="New database-native task",
@@ -104,11 +104,11 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             ),
         )
 
-        assert list(work_graph.tasks) == ["ALOVYA-70"]
-        assert work_graph.tasks["ALOVYA-70"].title == "New database-native task"
+        assert list(task_tree.tasks) == ["ALOVYA-70"]
+        assert task_tree.tasks["ALOVYA-70"].title == "New database-native task"
 
     def test_accepts_slugged_notion_urls(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Root task",
@@ -123,10 +123,10 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             ),
         )
 
-        assert work_graph.tasks["ALOVYA-1"].notion_page_id == "22222222222222222222222222222222"
+        assert task_tree.tasks["ALOVYA-1"].notion_page_id == "22222222222222222222222222222222"
 
     def test_reads_completed_struckthrough_title_as_plain_task_title(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page=(
@@ -146,10 +146,10 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             ),
         )
 
-        assert work_graph.tasks["ALOVYA-68"].title == "Finished task"
+        assert task_tree.tasks["ALOVYA-68"].title == "Finished task"
 
     def test_sorts_child_relations_by_task_number(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-1: Root task",
@@ -176,10 +176,10 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             ),
         )
 
-        assert work_graph.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69", "ALOVYA-70"]
+        assert task_tree.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69", "ALOVYA-70"]
 
     def test_reads_dependency_relations_and_task_metadata(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Dependency task",
@@ -205,16 +205,16 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             ),
         )
 
-        assert work_graph.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
-        assert work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
-        assert work_graph.tasks["ALOVYA-2"].deadline == "2026-06-15"
-        assert work_graph.tasks["ALOVYA-2"].external_coordination == ExternalCoordination.YES
-        assert work_graph.tasks["ALOVYA-2"].uncertainty == Uncertainty.HIGH
-        assert work_graph.tasks["ALOVYA-2"].friction == Friction.CHARGED
+        assert task_tree.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
+        assert task_tree.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
+        assert task_tree.tasks["ALOVYA-2"].deadline == "2026-06-15"
+        assert task_tree.tasks["ALOVYA-2"].external_coordination == ExternalCoordination.YES
+        assert task_tree.tasks["ALOVYA-2"].uncertainty == Uncertainty.HIGH
+        assert task_tree.tasks["ALOVYA-2"].friction == Friction.CHARGED
 
     def test_rejects_dependency_and_dependant_relation_mismatch(self):
         with pytest.raises(ValueError, match="Dependants for task ALOVYA-1 do not match"):
-            task_dependency_graph_from_database_query_results(
+            build_task_tree_from_database_query_results(
                 query_results=[
                     _build_task_database_row(
                         ticket_page="Dependency task",
@@ -244,7 +244,7 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
         del row["External coordination"]
 
         with pytest.raises(ValueError, match="Task database row has no External coordination"):
-            task_dependency_graph_from_database_query_results(
+            build_task_tree_from_database_query_results(
                 query_results=[row],
                 landing_page=TrackedPage(
                     local_page_key="ongoing_landing_page",
@@ -254,7 +254,7 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             )
 
     def test_skips_rows_that_point_to_unknown_parent_rows(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-2: Child task",
@@ -272,10 +272,10 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             )
         )
 
-        assert work_graph.tasks == {}
+        assert task_tree.tasks == {}
 
     def test_skips_orphan_subtrees(self):
-        work_graph = task_dependency_graph_from_database_query_results(
+        task_tree = build_task_tree_from_database_query_results(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Parent prototype",
@@ -297,11 +297,11 @@ class TestTaskDependencyGraphFromDatabaseQueryResults:
             )
         )
 
-        assert work_graph.tasks == {}
+        assert task_tree.tasks == {}
 
     def test_rejects_duplicate_task_ids(self):
         with pytest.raises(ValueError, match="Duplicate task id ALOVYA-68"):
-            task_dependency_graph_from_database_query_results(
+            build_task_tree_from_database_query_results(
                 query_results=[
                     _build_task_database_row(
                         ticket_page="ALOVYA-1: First task",

@@ -5,55 +5,55 @@ import pytest
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     plan_completion_write_intents,
-    plan_notion_writes_for_task_graph,
+    plan_notion_writes_for_task_tree,
     build_timeline_log_write_intent,
 )
 from notion_task_tracker.tasks import (
     Priority,
-    TaskDependencyGraph,
+    TaskTree,
     Task,
     TaskStatus,
     TimelineEntry,
 )
 from tests.tasks.helpers import (
-    _build_recursive_work_graph,
+    _build_recursive_task_tree,
     _visible_strikethrough_text,
 )
 
 
-class TestTaskDependencyGraphRecalculateDisplayPriorities:
+class TestTaskTreeRecalculateDisplayPriorities:
     def test_active_deep_child_priority_rolls_up_to_ancestors(self):
-        work_graph = _build_recursive_work_graph()
+        task_tree = _build_recursive_task_tree()
 
-        work_graph.recalculate_display_priorities()
+        task_tree.recalculate_display_priorities()
 
-        assert work_graph.tasks["ALOVYA-5"].displayed_priority == Priority.P0
-        assert work_graph.tasks["ALOVYA-3"].displayed_priority == Priority.P0
-        assert work_graph.tasks["ALOVYA-2"].displayed_priority == Priority.P0
-        assert work_graph.tasks["ALOVYA-4"].displayed_priority == Priority.P3
+        assert task_tree.tasks["ALOVYA-5"].displayed_priority == Priority.P0
+        assert task_tree.tasks["ALOVYA-3"].displayed_priority == Priority.P0
+        assert task_tree.tasks["ALOVYA-2"].displayed_priority == Priority.P0
+        assert task_tree.tasks["ALOVYA-4"].displayed_priority == Priority.P3
 
     def test_completed_deep_child_priority_stops_rolling_up(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.tasks["ALOVYA-5"].status = TaskStatus.COMPLETE
+        task_tree = _build_recursive_task_tree()
+        task_tree.tasks["ALOVYA-5"].status = TaskStatus.COMPLETE
 
-        work_graph.recalculate_display_priorities()
+        task_tree.recalculate_display_priorities()
 
-        assert work_graph.tasks["ALOVYA-5"].displayed_priority == Priority.P0
-        assert work_graph.tasks["ALOVYA-3"].displayed_priority == Priority.P1
-        assert work_graph.tasks["ALOVYA-2"].displayed_priority == Priority.P1
+        assert task_tree.tasks["ALOVYA-5"].displayed_priority == Priority.P0
+        assert task_tree.tasks["ALOVYA-3"].displayed_priority == Priority.P1
+        assert task_tree.tasks["ALOVYA-2"].displayed_priority == Priority.P1
 
 
-class TestTaskDependencyGraphValidate:
+class TestTaskTreeValidate:
     def test_rejects_parent_child_link_mismatch(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.tasks["ALOVYA-5"].parent_task_id = "ALOVYA-2"
+        task_tree = _build_recursive_task_tree()
+        task_tree.tasks["ALOVYA-5"].parent_task_id = "ALOVYA-2"
 
         with pytest.raises(ValueError, match="should have parent ALOVYA-3"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_rejects_task_hierarchy_cycle(self):
-        work_graph = TaskDependencyGraph()
-        work_graph.add_task(
+        task_tree = TaskTree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="Root",
@@ -63,7 +63,7 @@ class TestTaskDependencyGraphValidate:
                 child_task_ids=["ALOVYA-2"],
             )
         )
-        work_graph.add_task(
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-2",
                 title="Child",
@@ -75,25 +75,25 @@ class TestTaskDependencyGraphValidate:
         )
 
         with pytest.raises(ValueError, match="Task hierarchy has a cycle"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_rejects_dependency_without_matching_dependant(self):
-        work_graph = _build_dependency_work_graph()
-        work_graph.tasks["ALOVYA-1"].dependant_task_ids = []
+        task_tree = _build_dependency_task_tree()
+        task_tree.tasks["ALOVYA-1"].dependant_task_ids = []
 
         with pytest.raises(ValueError, match="Task ALOVYA-1 should list ALOVYA-2 as a dependant"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_rejects_dependant_without_matching_dependency(self):
-        work_graph = _build_dependency_work_graph()
-        work_graph.tasks["ALOVYA-2"].dependency_task_ids = []
+        task_tree = _build_dependency_task_tree()
+        task_tree.tasks["ALOVYA-2"].dependency_task_ids = []
 
         with pytest.raises(ValueError, match="Task ALOVYA-2 should depend on ALOVYA-1"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_rejects_dependency_that_does_not_exist(self):
-        work_graph = TaskDependencyGraph()
-        work_graph.add_task(
+        task_tree = TaskTree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="Needs missing dependency",
@@ -104,11 +104,11 @@ class TestTaskDependencyGraphValidate:
         )
 
         with pytest.raises(ValueError, match="Task ALOVYA-404 does not exist"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_rejects_task_that_depends_on_itself(self):
-        work_graph = TaskDependencyGraph()
-        work_graph.add_task(
+        task_tree = TaskTree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="Self dependency",
@@ -119,11 +119,11 @@ class TestTaskDependencyGraphValidate:
         )
 
         with pytest.raises(ValueError, match="Task ALOVYA-1 cannot depend on itself"):
-            work_graph.validate()
+            task_tree.validate()
 
     def test_normalises_duplicate_dependencies_and_dependants(self):
-        work_graph = TaskDependencyGraph()
-        work_graph.add_task(
+        task_tree = TaskTree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="First dependency",
@@ -131,7 +131,7 @@ class TestTaskDependencyGraphValidate:
                 status=TaskStatus.ACTIVE,
             )
         )
-        work_graph.add_task(
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-2",
                 title="Second dependency",
@@ -139,7 +139,7 @@ class TestTaskDependencyGraphValidate:
                 status=TaskStatus.ACTIVE,
             )
         )
-        work_graph.add_task(
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-3",
                 title="Depends on both",
@@ -149,16 +149,16 @@ class TestTaskDependencyGraphValidate:
             )
         )
 
-        work_graph.derive_dependant_task_ids_from_dependencies()
+        task_tree.derive_dependant_task_ids_from_dependencies()
 
-        assert work_graph.tasks["ALOVYA-3"].dependency_task_ids == ["ALOVYA-1", "ALOVYA-2"]
-        assert work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-3"]
-        assert work_graph.tasks["ALOVYA-2"].dependant_task_ids == ["ALOVYA-3"]
+        assert task_tree.tasks["ALOVYA-3"].dependency_task_ids == ["ALOVYA-1", "ALOVYA-2"]
+        assert task_tree.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-3"]
+        assert task_tree.tasks["ALOVYA-2"].dependant_task_ids == ["ALOVYA-3"]
 
 
-class TestTaskDependencyGraphFromSnapshot:
+class TestTaskTreeFromSnapshot:
     def test_loads_null_completed_landing_page_as_missing_page_id(self):
-        work_graph = TaskDependencyGraph.from_tracker_state(
+        task_tree = TaskTree.from_tracker_state(
             {
                 "ongoing_landing_page": {
                     "local_page_key": "ongoing_landing_page",
@@ -171,14 +171,14 @@ class TestTaskDependencyGraphFromSnapshot:
             }
         )
 
-        assert work_graph.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
-        assert work_graph.completed_tasks_landing_page.page.notion_page_id is None
+        assert task_tree.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
+        assert task_tree.completed_tasks_landing_page.page.notion_page_id is None
 
 
-class TestTaskDependencyGraphTaskIdsGroupedForLandingPage:
+class TestTaskTreeTaskIdsGroupedForLandingPage:
     def test_groups_live_top_level_tasks_by_displayed_priority(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.add_task(
+        task_tree = _build_recursive_task_tree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-9",
                 title="Parked cleanup",
@@ -188,14 +188,14 @@ class TestTaskDependencyGraphTaskIdsGroupedForLandingPage:
             )
         )
 
-        grouped_task_ids = work_graph.task_ids_grouped_for_landing_page()
+        grouped_task_ids = task_tree.task_ids_grouped_for_landing_page()
 
         assert grouped_task_ids[Priority.P0] == ["ALOVYA-2"]
         assert grouped_task_ids[Priority.P3] == ["ALOVYA-9"]
 
     def test_keeps_completed_top_level_tasks_in_completed_section(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.add_task(
+        task_tree = _build_recursive_task_tree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-9",
                 title="Completed optimisation",
@@ -205,14 +205,14 @@ class TestTaskDependencyGraphTaskIdsGroupedForLandingPage:
             )
         )
 
-        grouped_task_ids = work_graph.task_ids_grouped_for_landing_page()
+        grouped_task_ids = task_tree.task_ids_grouped_for_landing_page()
 
         assert grouped_task_ids[Priority.P0] == ["ALOVYA-2"]
-        assert work_graph.completed_task_ids_for_landing_page() == ["ALOVYA-9"]
+        assert task_tree.completed_task_ids_for_landing_page() == ["ALOVYA-9"]
 
     def test_orders_top_level_tasks_by_ticket_number_not_title(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.add_task(
+        task_tree = _build_recursive_task_tree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-10",
                 title="A title that would sort before the existing task",
@@ -222,16 +222,16 @@ class TestTaskDependencyGraphTaskIdsGroupedForLandingPage:
             )
         )
 
-        grouped_task_ids = work_graph.task_ids_grouped_for_landing_page()
+        grouped_task_ids = task_tree.task_ids_grouped_for_landing_page()
 
         assert grouped_task_ids[Priority.P0] == ["ALOVYA-2", "ALOVYA-10"]
 
 
-class TestTaskDependencyGraphBuildNotionWritePlan:
+class TestTaskTreeBuildNotionWritePlan:
     def test_refreshes_fixed_pages_and_database_task_properties_without_creating_task_pages(self):
-        work_graph = _build_recursive_work_graph()
+        task_tree = _build_recursive_task_tree()
 
-        write_intents = plan_notion_writes_for_task_graph(work_graph)
+        write_intents = plan_notion_writes_for_task_tree(task_tree)
 
         assert not any(
             write_intent.operation_key.startswith("create:task:")
@@ -252,12 +252,12 @@ class TestTaskDependencyGraphBuildNotionWritePlan:
             "update_properties:task:ALOVYA-4",
         }
 
-    def test_renders_landing_page_trees_from_database_graph(self):
-        work_graph = _build_recursive_work_graph()
+    def test_renders_landing_page_trees_from_database_tree(self):
+        task_tree = _build_recursive_task_tree()
 
         landing_refresh_intent = next(
             write_intent
-            for write_intent in plan_notion_writes_for_task_graph(work_graph)
+            for write_intent in plan_notion_writes_for_task_tree(task_tree)
             if write_intent.operation_key == "replace:ongoing_landing_page"
         )
 
@@ -270,23 +270,23 @@ class TestTaskDependencyGraphBuildNotionWritePlan:
         assert '\t- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Complete {color="green"}' in landing_markdown
 
     def test_renders_completed_page_from_completed_top_level_tasks_only(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
+        task_tree = _build_recursive_task_tree()
+        task_tree.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
 
         completed_landing_refresh_intent = next(
             write_intent
-            for write_intent in plan_notion_writes_for_task_graph(work_graph)
+            for write_intent in plan_notion_writes_for_task_tree(task_tree)
             if write_intent.operation_key == "replace:completed_landing_page"
         )
 
         assert completed_landing_refresh_intent.arguments["markdown"] == "No completed tasks yet."
 
     def test_completed_task_page_title_strikes_through_and_properties_include_database_metadata(self):
-        work_graph = _build_recursive_work_graph()
+        task_tree = _build_recursive_task_tree()
 
         title_refresh_intent = next(
             write_intent
-            for write_intent in plan_notion_writes_for_task_graph(work_graph)
+            for write_intent in plan_notion_writes_for_task_tree(task_tree)
             if write_intent.operation_key == "update_properties:task:ALOVYA-4"
         )
 
@@ -301,10 +301,10 @@ class TestTaskDependencyGraphBuildNotionWritePlan:
         }
 
 
-class TestTaskDependencyGraphRepairOperationKeysForChanges:
+class TestTaskTreeRepairOperationKeysForChanges:
     def test_includes_changed_tasks_ancestors_and_landing_pages(self):
-        work_graph = TaskDependencyGraph()
-        work_graph.add_task(
+        task_tree = TaskTree()
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-1",
                 title="Root",
@@ -312,7 +312,7 @@ class TestTaskDependencyGraphRepairOperationKeysForChanges:
                 status=TaskStatus.ACTIVE,
             )
         )
-        work_graph.add_task(
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-2",
                 title="Child",
@@ -320,7 +320,7 @@ class TestTaskDependencyGraphRepairOperationKeysForChanges:
                 status=TaskStatus.ACTIVE,
             )
         )
-        work_graph.add_task(
+        task_tree.add_task(
             Task(
                 task_id="ALOVYA-3",
                 title="Grandchild",
@@ -328,10 +328,10 @@ class TestTaskDependencyGraphRepairOperationKeysForChanges:
                 status=TaskStatus.ACTIVE,
             )
         )
-        work_graph.link_parent_to_child("ALOVYA-1", "ALOVYA-2")
-        work_graph.link_parent_to_child("ALOVYA-2", "ALOVYA-3")
+        task_tree.link_parent_to_child("ALOVYA-1", "ALOVYA-2")
+        task_tree.link_parent_to_child("ALOVYA-2", "ALOVYA-3")
 
-        operation_keys = work_graph.repair_operation_keys_for_changes(
+        operation_keys = task_tree.repair_operation_keys_for_changes(
             [
                 {
                     "task_id": "ALOVYA-3",
@@ -354,22 +354,22 @@ class TestTaskDependencyGraphRepairOperationKeysForChanges:
         ]
 
 
-class TestTaskDependencyGraphAppendTaskTimelineLog:
+class TestTaskTreeAppendTaskTimelineLog:
     def test_returns_single_timeline_update_intent(self):
-        work_graph = _build_recursive_work_graph()
+        task_tree = _build_recursive_task_tree()
         timeline_entry = TimelineEntry(
             entry_date="2026-05-25",
             heading='<mention-date start="2026-05-25"/>',
             lines=["Tested the mismatch fix and found one remaining failing node."],
         )
 
-        timeline_log_change = work_graph.append_task_timeline_log(
+        timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_entry=timeline_entry,
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
-        assert work_graph.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
         assert write_intent.operation_name == "update_timeline_log"
         assert write_intent.target_page_key == "task:ALOVYA-5"
         assert write_intent.arguments["task_id"] == "ALOVYA-5"
@@ -379,8 +379,8 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
         assert "old_timeline_section_markdown" not in write_intent.arguments
 
     def test_appends_lines_to_existing_timeline_entry_for_same_date(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.tasks["ALOVYA-5"].timeline_entries.append(
+        task_tree = _build_recursive_task_tree()
+        task_tree.tasks["ALOVYA-5"].timeline_entries.append(
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
@@ -388,7 +388,7 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
             )
         )
 
-        timeline_log_change = work_graph.append_task_timeline_log(
+        timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_entry=TimelineEntry(
                 entry_date="2026-05-25",
@@ -398,7 +398,7 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
-        assert work_graph.tasks["ALOVYA-5"].timeline_entries == [
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries == [
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
@@ -417,15 +417,15 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
         ])
 
     def test_appends_subheaded_lines_as_toggle_content(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.tasks["ALOVYA-5"].timeline_entries.append(
+        task_tree = _build_recursive_task_tree()
+        task_tree.tasks["ALOVYA-5"].timeline_entries.append(
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
             )
         )
 
-        timeline_log_change = work_graph.append_task_timeline_log(
+        timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_entry=TimelineEntry(
                 entry_date="2026-05-25",
@@ -444,8 +444,8 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
         ])
 
     def test_collapses_existing_duplicate_date_headings_before_appending_lines(self):
-        work_graph = _build_recursive_work_graph()
-        work_graph.tasks["ALOVYA-5"].timeline_entries.extend(
+        task_tree = _build_recursive_task_tree()
+        task_tree.tasks["ALOVYA-5"].timeline_entries.extend(
             [
                 TimelineEntry(
                     entry_date="2026-05-25",
@@ -460,7 +460,7 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
             ]
         )
 
-        work_graph.append_task_timeline_log(
+        task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_entry=TimelineEntry(
                 entry_date="2026-05-25",
@@ -469,7 +469,7 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
             ),
         )
 
-        assert work_graph.tasks["ALOVYA-5"].timeline_entries == [
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries == [
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
@@ -482,23 +482,23 @@ class TestTaskDependencyGraphAppendTaskTimelineLog:
         ]
 
 
-class TestTaskDependencyGraphCompleteTask:
+class TestTaskTreeCompleteTask:
     def test_marks_task_complete_and_updates_database_properties_plus_derived_views(self):
-        work_graph = _build_recursive_work_graph()
+        task_tree = _build_recursive_task_tree()
         timeline_entry = TimelineEntry(
             entry_date="2026-05-25",
             heading='<mention-date start="2026-05-25"/>',
             lines=["Completed the mismatch investigation."],
         )
 
-        completion_change = work_graph.complete_task(
+        completion_change = task_tree.complete_task(
             task_id="ALOVYA-5",
             timeline_entry=timeline_entry,
         )
-        write_intents = plan_completion_write_intents(work_graph, completion_change)
+        write_intents = plan_completion_write_intents(task_tree, completion_change)
 
-        assert work_graph.tasks["ALOVYA-5"].status == TaskStatus.COMPLETE
-        assert work_graph.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
+        assert task_tree.tasks["ALOVYA-5"].status == TaskStatus.COMPLETE
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
         assert [write_intent.operation_key for write_intent in write_intents] == [
             "update_properties:task:ALOVYA-5",
             "replace:ongoing_landing_page",
@@ -506,27 +506,27 @@ class TestTaskDependencyGraphCompleteTask:
         ]
 
 
-class TestTaskDependencyGraphFromTrackerState:
+class TestTaskTreeFromTrackerState:
     def test_normalizes_fixed_page_titles(self):
-        tracker_state = TaskDependencyGraph().to_tracker_state()
+        tracker_state = TaskTree().to_tracker_state()
         tracker_state["ongoing_landing_page"]["title"] = "User-edited landing title"
         tracker_state["ongoing_landing_page"]["notion_page_id"] = "landing-page-id"
 
-        loaded_work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
+        loaded_task_tree = TaskTree.from_tracker_state(tracker_state)
 
-        assert loaded_work_graph.ongoing_tasks_landing_page.page.title == ONGOING_LANDING_PAGE_TITLE
-        assert loaded_work_graph.ongoing_tasks_landing_page.page.notion_page_id == "landing-page-id"
+        assert loaded_task_tree.ongoing_tasks_landing_page.page.title == ONGOING_LANDING_PAGE_TITLE
+        assert loaded_task_tree.ongoing_tasks_landing_page.page.notion_page_id == "landing-page-id"
 
     def test_round_trips_dependency_source_and_dependant_inverse(self):
-        work_graph = _build_dependency_work_graph()
+        task_tree = _build_dependency_task_tree()
 
-        loaded_work_graph = TaskDependencyGraph.from_tracker_state(work_graph.to_tracker_state())
+        loaded_task_tree = TaskTree.from_tracker_state(task_tree.to_tracker_state())
 
-        assert loaded_work_graph.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
-        assert loaded_work_graph.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
+        assert loaded_task_tree.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
+        assert loaded_task_tree.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
 
     def test_requires_new_task_database_fields_in_tracker_state(self):
-        tracker_state = TaskDependencyGraph().to_tracker_state()
+        tracker_state = TaskTree().to_tracker_state()
         tracker_state["tasks"]["ALOVYA-1"] = {
             "task_id": "ALOVYA-1",
             "title": "Incomplete persisted task",
@@ -542,12 +542,12 @@ class TestTaskDependencyGraphFromTrackerState:
         }
 
         with pytest.raises(KeyError, match="dependency_task_ids"):
-            TaskDependencyGraph.from_tracker_state(tracker_state)
+            TaskTree.from_tracker_state(tracker_state)
 
 
-def _build_dependency_work_graph() -> TaskDependencyGraph:
-    work_graph = TaskDependencyGraph()
-    work_graph.add_task(
+def _build_dependency_task_tree() -> TaskTree:
+    task_tree = TaskTree()
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-1",
             title="Dependency",
@@ -555,7 +555,7 @@ def _build_dependency_work_graph() -> TaskDependencyGraph:
             status=TaskStatus.ACTIVE,
         )
     )
-    work_graph.add_task(
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-2",
             title="Dependant",
@@ -564,5 +564,5 @@ def _build_dependency_work_graph() -> TaskDependencyGraph:
             dependency_task_ids=["ALOVYA-1"],
         )
     )
-    work_graph.derive_dependant_task_ids_from_dependencies()
-    return work_graph
+    task_tree.derive_dependant_task_ids_from_dependencies()
+    return task_tree

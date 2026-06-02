@@ -1,11 +1,11 @@
-"""Derive task graph changes for newly created task database pages."""
+"""Derive task tree changes for newly created task database pages."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from notion_task_tracker.tasks import TaskDependencyGraph, Task, TimelineEntry
+from notion_task_tracker.tasks import TaskTree, Task, TimelineEntry
 from notion_task_tracker.tasks.task import ExternalCoordination, Friction, Priority, TaskStatus, Uncertainty
 from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
 
@@ -27,7 +27,7 @@ class TaskCreation:
     parent_timeline_entry: dict[str, Any] | None
 
 
-def derive_task_creation_from_command(command: dict[str, Any], work_graph: TaskDependencyGraph) -> TaskCreation:
+def derive_task_creation_from_command(command: dict[str, Any], task_tree: TaskTree) -> TaskCreation:
     command_name = command["command"]
     if command_name == "create_top_level_task":
         return _derive_parent_task_creation_from_command(command)
@@ -36,7 +36,7 @@ def derive_task_creation_from_command(command: dict[str, Any], work_graph: TaskD
         return _derive_child_task_creation_from_command(command)
 
     if command_name == "create_sibling_task":
-        return _derive_sibling_task_creation_from_command(command, work_graph)
+        return _derive_sibling_task_creation_from_command(command, task_tree)
 
     raise ValueError(f"Unsupported database task creation command {command_name!r}")
 
@@ -47,8 +47,8 @@ def add_created_task_to_tracker_state(
     created_task_id: str,
     created_page_id: str,
 ) -> dict[str, Any]:
-    work_graph = TaskDependencyGraph.from_tracker_state(tracker_state)
-    work_graph.add_task(
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_tree.add_task(
         Task(
             task_id=created_task_id,
             title=task_creation.task_title,
@@ -65,15 +65,15 @@ def add_created_task_to_tracker_state(
         )
     )
     if task_creation.parent_task_id is not None:
-        work_graph.link_parent_to_child(parent_task_id=task_creation.parent_task_id, child_task_id=created_task_id)
+        task_tree.link_parent_to_child(parent_task_id=task_creation.parent_task_id, child_task_id=created_task_id)
     for dependant_task_id in task_creation.dependant_task_ids:
-        dependant_task = work_graph.tasks[dependant_task_id]
+        dependant_task = task_tree.tasks[dependant_task_id]
         if created_task_id not in dependant_task.dependency_task_ids:
             dependant_task.dependency_task_ids.append(created_task_id)
-    work_graph.derive_dependant_task_ids_from_dependencies()
-    work_graph.validate()
-    work_graph.recalculate_display_priorities()
-    return work_graph.replace_task_graph_in_tracker_state(tracker_state)
+    task_tree.derive_dependant_task_ids_from_dependencies()
+    task_tree.validate()
+    task_tree.recalculate_display_priorities()
+    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
 
 
 def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCreation:
@@ -115,9 +115,9 @@ def _derive_child_task_creation_from_command(command: dict[str, Any]) -> TaskCre
     )
 
 
-def _derive_sibling_task_creation_from_command(command: dict[str, Any], work_graph: TaskDependencyGraph) -> TaskCreation:
+def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tree: TaskTree) -> TaskCreation:
     sibling_task_command = command["sibling_task"]
-    parent_task_id = work_graph.tasks[command["sibling_task_id"]].parent_task_id
+    parent_task_id = task_tree.tasks[command["sibling_task_id"]].parent_task_id
     timeline_entry = command.get("timeline_entry")
     return TaskCreation(
         command_name=command["command"],

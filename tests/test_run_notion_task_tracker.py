@@ -55,7 +55,7 @@ def test_main_rejects_unknown_flag():
 
 def test_default_tracker_paths_are_constant_app_paths():
     assert resolve_tracker_state_path() == DEFAULT_TRACKER_STATE_PATH
-    assert resolve_tracker_state_path() == Path.home() / ".notion-task-tracker" / "notion_tasks_graph.json"
+    assert resolve_tracker_state_path() == Path.home() / ".notion-task-tracker" / "notion_tasks_tree.json"
 
 
 def test_explicit_tracker_paths_override_defaults(tmp_path: Path):
@@ -111,7 +111,7 @@ def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_tas
         "tracker_state_path": str(tracker_state_path),
         "task_count": 1,
         "repair_operation_count": 2,
-        "task_graph_changes": [
+        "task_tree_changes": [
             {
                 "task_id": "ALOVYA-1",
                 "fields": {
@@ -154,7 +154,7 @@ def test_repair_and_write_refreshed_tracker_state_skips_repairs_when_nothing_cha
 
     assert json.loads(output_path.read_text(encoding="utf-8"))["completed_operations"] == []
     assert notion_client.write_intents == []
-    assert refresh_summary.to_json_summary()["task_graph_changes"] == []
+    assert refresh_summary.to_json_summary()["task_tree_changes"] == []
     assert refresh_summary.to_json_summary()["repair_operation_count"] == 0
 
 

@@ -1,12 +1,12 @@
 import json
 
-from notion_task_tracker.tasks import Priority, Task, TaskDependencyGraph, TaskStatus
+from notion_task_tracker.tasks import Priority, Task, TaskTree, TaskStatus
 
 
 def build_tracker_state_with_root_task() -> dict:
-    work_graph = TaskDependencyGraph()
-    work_graph.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
-    work_graph.add_task(
+    task_tree = TaskTree()
+    task_tree.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-1",
             title="Root task",
@@ -15,13 +15,13 @@ def build_tracker_state_with_root_task() -> dict:
             notion_page_id="22222222222222222222222222222222",
         )
     )
-    return work_graph.to_tracker_state()
+    return task_tree.to_tracker_state()
 
 
 def build_tracker_state_with_root_and_child_task() -> dict:
-    work_graph = TaskDependencyGraph()
-    work_graph.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
-    work_graph.add_task(
+    task_tree = TaskTree()
+    task_tree.ongoing_tasks_landing_page.page.notion_page_id = "11111111111111111111111111111111"
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-1",
             title="Root task",
@@ -30,7 +30,7 @@ def build_tracker_state_with_root_and_child_task() -> dict:
             notion_page_id="22222222222222222222222222222222",
         )
     )
-    work_graph.add_task(
+    task_tree.add_task(
         Task(
             task_id="ALOVYA-2",
             title="Child task",
@@ -39,8 +39,8 @@ def build_tracker_state_with_root_and_child_task() -> dict:
             notion_page_id="33333333333333333333333333333333",
         )
     )
-    work_graph.link_parent_to_child(parent_task_id="ALOVYA-1", child_task_id="ALOVYA-2")
-    return work_graph.to_tracker_state()
+    task_tree.link_parent_to_child(parent_task_id="ALOVYA-1", child_task_id="ALOVYA-2")
+    return task_tree.to_tracker_state()
 
 
 def build_fetched_task_page(
