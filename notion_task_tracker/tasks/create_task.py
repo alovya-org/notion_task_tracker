@@ -111,7 +111,7 @@ def _derive_child_task_creation_from_command(command: dict[str, Any]) -> TaskCre
         uncertainty=Uncertainty(child_task_command["uncertainty"]),
         friction=Friction(child_task_command["friction"]),
         initial_child_timeline_entry=parent_timeline_entry,
-        parent_timeline_entry=parent_timeline_entry,
+        parent_timeline_entry=_timeline_entry_date_shell(parent_timeline_entry),
     )
 
 
@@ -131,9 +131,19 @@ def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tre
         external_coordination=ExternalCoordination(sibling_task_command["external_coordination"]),
         uncertainty=Uncertainty(sibling_task_command["uncertainty"]),
         friction=Friction(sibling_task_command["friction"]),
-        initial_child_timeline_entry=timeline_entry if parent_task_id is not None else None,
-        parent_timeline_entry=timeline_entry,
+        initial_child_timeline_entry=timeline_entry,
+        parent_timeline_entry=_timeline_entry_date_shell(timeline_entry) if parent_task_id is not None else None,
     )
+
+
+def _timeline_entry_date_shell(timeline_entry: dict[str, Any] | None) -> dict[str, Any] | None:
+    if timeline_entry is None:
+        return None
+
+    return {
+        "entry_date": timeline_entry["entry_date"],
+        "heading": timeline_entry["heading"],
+    }
 
 
 def _derive_timeline_entries_for_created_task(

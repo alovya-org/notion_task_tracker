@@ -6,6 +6,8 @@ import json
 from typing import Any
 
 from notion_task_tracker.apply_tracker_command import apply_command_to_tracker_state
+from notion_task_tracker.notion_operations.markdown import bullet, heading, join_markdown_blocks
+from notion_task_tracker.notion_operations.plan_task_page_write_intents import render_timeline_entry_content_markdown
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import prepare_command_result_from_current_task_page
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
@@ -29,8 +31,7 @@ from notion_task_tracker.tasks.database import (
     task_database_data_source_id_from_tracker_state,
     task_id_from_fetched_task_database_page,
 )
-from notion_task_tracker.tasks.task import TASK_PAGE_TIMELINE_LOG_HEADING
-from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
+from notion_task_tracker.tasks.task import TASK_PAGE_TIMELINE_LOG_HEADING, TimelineEntry
 
 
 async def execute_create_task_database_page_command(
@@ -170,17 +171,33 @@ def _render_new_task_page_initial_content(
     parent_task_id: str | None,
     task_tree: TaskTree,
 ) -> str:
-    if initial_timeline_entry is None or parent_task_id is None:
+    if initial_timeline_entry is None:
         return f"## {TASK_PAGE_TIMELINE_LOG_HEADING}"
 
-    parent_page_url = _build_task_notion_url(task_tree, parent_task_id)
-    return "\n".join(
+    timeline_entry = TimelineEntry.from_command(initial_timeline_entry)
+    return join_markdown_blocks(
         [
-            f"## {TASK_PAGE_TIMELINE_LOG_HEADING}",
-            f"### {build_timeline_entry_for_date(initial_timeline_entry['entry_date'])['heading']}",
-            f'- Spawned from parent task: <mention-page url="{parent_page_url}"/>.',
+            heading(2, TASK_PAGE_TIMELINE_LOG_HEADING),
+            heading(3, timeline_entry.heading),
+            _render_new_task_initial_timeline_content(timeline_entry, parent_task_id, task_tree),
         ]
     )
+
+
+def _render_new_task_initial_timeline_content(
+    timeline_entry: TimelineEntry,
+    parent_task_id: str | None,
+    task_tree: TaskTree,
+) -> str:
+    timeline_content = render_timeline_entry_content_markdown(timeline_entry)
+    if parent_task_id is None:
+        return timeline_content
+
+    parent_page_url = _build_task_notion_url(task_tree, parent_task_id)
+    return join_markdown_blocks([
+        bullet(f'Spawned from parent task: <mention-page url="{parent_page_url}"/>.'),
+        timeline_content,
+    ])
 
 
 def _build_created_task_timeline_command(
@@ -193,11 +210,11 @@ def _build_created_task_timeline_command(
     if task_creation.command_name not in {"create_child_task", "create_sibling_task"}:
         return task_creation.parent_timeline_entry
 
-    updated_timeline_command = json.loads(json.dumps(task_creation.parent_timeline_entry))
-    updated_timeline_command["lines"] = [
-        f'Spawned child task: <mention-page url="{created_task_url}"/>.'
-    ]
-    return updated_timeline_command
+    return {
+        "entry_date": task_creation.parent_timeline_entry["entry_date"],
+        "heading": task_creation.parent_timeline_entry["heading"],
+        "lines": [f'Spawned child task: <mention-page url="{created_task_url}"/>.'],
+    }
 
 
 def _build_new_task_database_row_properties(

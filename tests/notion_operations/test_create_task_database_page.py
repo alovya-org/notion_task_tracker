@@ -3,6 +3,7 @@ import asyncio
 from notion_task_tracker.notion_operations.create_task_database_page import execute_create_task_database_page_command
 from tests.notion_operations.helpers import FakeNotionClient
 from tests.tasks.build_task_command_fixtures import (
+    build_tracker_state_with_root_and_child_task,
     build_tracker_state_with_root_task,
 )
 from notion_task_tracker.tasks.database import default_task_database_tracker_state
@@ -87,6 +88,7 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
             '- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
+            "- Spawned child task.",
         ]
     )
     assert notion_client.calls[1].arguments["properties"] == {
@@ -101,3 +103,85 @@ def test_execute_create_task_database_page_command_creates_database_row_then_ref
         ]
     )
     assert notion_client.calls[-1].operation_name == "replace_page_markdown"
+
+
+def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_task():
+    tracker_state = build_tracker_state_with_root_and_child_task()
+    tracker_state["task_database"] = default_task_database_tracker_state()
+    notion_client = FakeNotionClient(
+        created_page_ids=["44444444444444444444444444444444"],
+        fetched_page_content_by_id={
+            "44444444444444444444444444444444": "\n".join(
+                [
+                    "<page>",
+                    "<properties>",
+                    '{"Ticket ID":"73","Ticket page":"Sibling task"}',
+                    "</properties>",
+                    "</page>",
+                ]
+            )
+        },
+    )
+
+    updated_tracker_state, completed_operation_keys = asyncio.run(
+        execute_create_task_database_page_command(
+            command={
+                "command": "create_sibling_task",
+                "sibling_task_id": "ALOVYA-2",
+                "sibling_task": {
+                    "title": "Sibling task",
+                    "configured_priority": "P1",
+                    "status": "Active",
+                    "dependency_task_ids": [],
+                    "dependant_task_ids": [],
+                    "deadline": None,
+                    "external_coordination": "No",
+                    "uncertainty": "Low",
+                    "friction": "None",
+                },
+                "timeline_entry": {
+                    "entry_date": "2026-05-25",
+                    "heading": '<mention-date start="2026-05-25"/>',
+                    "blocks": [
+                        {
+                            "type": "paragraph",
+                            "text": "Detailed implementation notes belong on the new sibling.",
+                        },
+                        {
+                            "type": "code",
+                            "language": "text",
+                            "text": "pytest result: passed",
+                        },
+                    ],
+                },
+            },
+            tracker_state=tracker_state,
+            notion_client=notion_client,
+        )
+    )
+
+    assert updated_tracker_state["tasks"]["ALOVYA-73"]["parent_task_id"] == "ALOVYA-1"
+    assert completed_operation_keys == [
+        "create_database_task:create_sibling_task",
+        "update_properties:task:ALOVYA-73",
+        "update_timeline_log:task:ALOVYA-1:2026-05-25",
+        "replace:ongoing_landing_page",
+    ]
+    assert notion_client.calls[0].arguments["content"] == "\n".join(
+        [
+            "## Timeline log",
+            '### <mention-date start="2026-05-25"/>',
+            '- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
+            "Detailed implementation notes belong on the new sibling.",
+            "```text",
+            "pytest result: passed",
+            "```",
+        ]
+    )
+    assert notion_client.calls[2].arguments["markdown"] == "\n".join(
+        [
+            "## Timeline log",
+            '### <mention-date start="2026-05-25"/>',
+            '- Spawned child task: <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>.',
+        ]
+    )
