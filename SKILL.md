@@ -63,10 +63,12 @@ Use concise prose only after the raw mechanics, commands, paths, and errors have
 
 Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The tracker calls the Notion REST API with `NOTION_API_KEY`.
 
+Never use `ntt` or `python -m notion_task_tracker` from a non-venv Python. It is not installed there and will never work. First find the virtual environment that has `notion_task_tracker` installed, then use its explicit command path, such as `<venv>/bin/ntt`, or its matching Python, such as `<venv>/bin/python -m notion_task_tracker`. Check `VIRTUAL_ENV`, `PATH`, and likely local venv directories before falling back to any system Python.
+
 Use the installed `ntt` CLI and request command escalation for live Notion commands:
 
 ```bash
-ntt ...
+<venv>/bin/ntt ...
 ```
 
 Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
@@ -75,7 +77,7 @@ Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permi
 
 `notion_task update` reconciles local task metadata from the saved `Alovya's task database` view and repairs derived views when needed.
 
-1. Run `python -m notion_task_tracker --reconcile-from-notion` outside the sandbox.
+1. Run `<venv>/bin/python -m notion_task_tracker --reconcile-from-notion` outside the sandbox.
 2. Read printed `task_tree_changes` and `warnings`.
 3. Treat CLI errors as failed writes.
 4. If the saved view query fails, stop and report that task database reconciliation failed.
@@ -109,7 +111,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 `notion_task read <number> [<number> ...]` reads and summarises existing tasks.
 
 1. Resolve each `<number>` to `ALOVYA-<number>`.
-2. Run `python -m notion_task_tracker --read --ticket-number <number>` with one `--ticket-number` per requested task.
+2. Run `<venv>/bin/python -m notion_task_tracker --read --ticket-number <number>` with one `--ticket-number` per requested task.
 3. Treat this as read-only with respect to Notion.
 4. Use the printed task summaries, recent timeline headings, parent/child ids, and live task page context to answer the user.
 
@@ -117,7 +119,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 
 1. Resolve `<number>` to `ALOVYA-<number>`.
 2. Fail if the task does not exist.
-3. Run `python -m notion_task_tracker --work --ticket-number <number>`.
+3. Run `<venv>/bin/python -m notion_task_tracker --work --ticket-number <number>`.
 4. Suggest `notion_task parent [pX] [title]` or `notion_task child <parent-number> [pX] [title]` when creation is needed.
 5. Fetch the task page and directly relevant parent or child pages only when useful for the work.
 
@@ -128,7 +130,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 3. Capture the useful current conversation context plus `[notes]` at the detail level needed to resume the work. Do not collapse commands, errors, outputs, or design mechanics into vague summaries.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `python -m notion_task_tracker --log --ticket-number <number> --content-path <content-path>`.
+6. Run `<venv>/bin/python -m notion_task_tracker --log --ticket-number <number> --content-path <content-path>`.
 7. The tracker preserves handwritten Notion timeline content: before writing, it fetches the task page and records existing date headings under `Timeline log`. If the page has no usable `Timeline log` section with at least one date, the tracker initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended under `Timeline log`; existing date headings receive new lines under the existing heading.
 8. For normal paragraphs and code blocks, use `timeline_entry.blocks` instead of `timeline_entry.lines`. The tracker renders `lines` as bullet list items. Use paragraph blocks for prose and code blocks for commands, stack traces, structured output, tensor/input lists, shapes, mappings, and multi-line snippets. Put inline technical text in backticks inside paragraph text, for example `scp -O`, `/var/cache/qnn_sdk`, `allow_missing_cameras=False`, `QnnExec`, and `ValueError`. Prefer code blocks over inline text when the content is a full command, command output, traceback, or multi-line snippet. Use entries such as `{"type": "paragraph", "text": "The target failed to create `/var/cache/qnn_sdk/test_write`."}` and `{"type": "code", "language": "bash", "text": "ssh root@target '/mnt/bin/touch /var/cache/qnn_sdk/test_write'"}`. Do not put fenced Markdown inside `lines`.
 9. Do not force numbering into timeline lines. The tracker renders `lines` as bullets. Use plain bullet-style sentences unless the user explicitly asks for ordered steps, and avoid Markdown ordered-list prefixes like `1.` or `2.` because Notion may reinterpret the formatting.
@@ -142,7 +144,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 3. Capture the relevant completed work plus `[notes]` with concrete commands, files, outputs, and decisions when they matter.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `python -m notion_task_tracker --complete --ticket-number <number> --content-path <content-path>`.
+6. Run `<venv>/bin/python -m notion_task_tracker --complete --ticket-number <number> --content-path <content-path>`.
 7. The tracker owns completion behaviour: it sets status `Complete`, renders priority as `N/A` in derived views, applies completed-title styling, updates the ongoing and completed landing pages, and appends or merges the timeline entry by date.
 
 `notion_task cancel <number> [notes]` marks an existing task cancelled.
@@ -152,7 +154,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 3. Capture the cancellation reason plus `[notes]` with concrete blockers, commands, errors, and paths when they matter.
 4. Use today's date for `entry_date`.
 5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `python -m notion_task_tracker --cancel --ticket-number <number> --content-path <content-path>`.
+6. Run `<venv>/bin/python -m notion_task_tracker --cancel --ticket-number <number> --content-path <content-path>`.
 7. The tracker owns cancellation behaviour: it sets status `Cancelled`, renders priority as `N/A` in derived views, updates the ongoing and completed landing pages, and appends or merges the timeline entry by date.
 
 `notion_task parent [pX] [title]` creates a top-level task.
@@ -164,7 +166,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 5. Capture relevant current conversation context into detailed initial timeline content. Use `timeline_entry.blocks` for paragraph prose and code blocks. Put inline technical text in backticks inside paragraph text. Use code blocks for full commands, command output, stack traces, paths grouped with outputs, structured observations, and multi-line snippets. Use `timeline_entry.lines` only when the user explicitly wants bullet-style notes.
 6. Use today's date for `entry_date`.
 7. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-8. Run `python -m notion_task_tracker --parent --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
+8. Run `<venv>/bin/python -m notion_task_tracker --parent --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
 
 `notion_task child <parent-number> [pX] [title]` creates a child task under an existing parent.
 
@@ -173,7 +175,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 3. Default priority is `P1`.
 4. Default status is `Active`.
 5. Use `[title]` when provided; ask for a title if the user did not provide one.
-6. Run `python -m notion_task_tracker --child --parent-ticket-number <parent-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
+6. Run `<venv>/bin/python -m notion_task_tracker --child --parent-ticket-number <parent-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
 7. The tracker initialises the child page Timeline log with today's date and a parent-page mention, then writes a parent Timeline log entry that links to the created child page.
 
 `notion_task sibling <existing-number> [pX] [title]` creates a sibling task next to an existing task.
@@ -183,7 +185,7 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 3. Default priority is `P1`.
 4. Default status is `Active`.
 5. Use `[title]` when provided; ask for a title if the user did not provide one.
-6. Run `python -m notion_task_tracker --sibling --sibling-ticket-number <existing-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
+6. Run `<venv>/bin/python -m notion_task_tracker --sibling --sibling-ticket-number <existing-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
 7. If the existing task has a parent, the new task gets the same parent. If the existing task is top-level, the new task is also top-level.
 8. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page. This parent entry is only a backlink. Any detailed log requested with the sibling creation belongs in the new sibling task's initial timeline entry.
 
@@ -195,7 +197,7 @@ Do not use `new` for top-level tasks; use `parent`.
 1. Capture relevant current conversation context at useful technical detail.
 2. Combine that summary with `<user-notes>`.
 3. Use today's date.
-4. Run `python -m notion_task_tracker --misc --content-path <content-path>`.
+4. Run `<venv>/bin/python -m notion_task_tracker --misc --content-path <content-path>`.
 
 `notion_task synth [title] <source-1> <source-2> ... <user-notes>` creates a synthesis subpage.
 
@@ -203,7 +205,7 @@ Do not use `new` for top-level tasks; use `parent`.
 2. Fetch sources only enough to support synthesis.
 3. Infer a concise title and stable `synthesis_key`.
 4. Put source references in `sources`, short synthesis in `summary`, and reusable content in `lines`.
-5. Run `python -m notion_task_tracker --synth --synthesis-key <key> --title <title> --content-path <content-path>`.
+5. Run `<venv>/bin/python -m notion_task_tracker --synth --synthesis-key <key> --title <title> --content-path <content-path>`.
 
 ## Reconciliation Notes
 
