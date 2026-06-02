@@ -183,6 +183,56 @@ def test_ongoing_tasks_landing_page_orders_children_by_dependency_without_changi
     ])
 
 
+def test_ongoing_tasks_landing_page_orders_sibling_before_task_that_depends_on_its_descendant():
+    tasks = {
+        "ALOVYA-1": Task(
+            task_id="ALOVYA-1",
+            title="Parent",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            child_task_ids=["ALOVYA-4", "ALOVYA-2"],
+        ),
+        "ALOVYA-2": Task(
+            task_id="ALOVYA-2",
+            title="Sibling containing dependency",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+            child_task_ids=["ALOVYA-3"],
+        ),
+        "ALOVYA-3": Task(
+            task_id="ALOVYA-3",
+            title="Nephew dependency",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-2",
+            dependant_task_ids=["ALOVYA-4"],
+        ),
+        "ALOVYA-4": Task(
+            task_id="ALOVYA-4",
+            title="Task that depends on nephew",
+            configured_priority=Priority.P1,
+            displayed_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+            dependency_task_ids=["ALOVYA-3"],
+        ),
+    }
+
+    markdown = render_ongoing_landing_page_markdown(tasks, _page_registry_for_task_ids(tasks))
+
+    assert markdown == "\n".join([
+        "## P1 (high impact)",
+        '- [P1] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Active {color="orange"}',
+        '\t- [P1] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Active {color="orange"}',
+        '\t\t- [P1] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Active {color="orange"}',
+        '\t- [P1] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Active {color="orange"}',
+    ])
+
+
 def test_completed_tasks_landing_page_orders_sibling_roots_by_dependency_without_nesting_them():
     tasks = {
         "ALOVYA-1": Task(

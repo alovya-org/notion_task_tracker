@@ -139,11 +139,50 @@ def _count_remaining_visible_dependencies(
 ) -> int:
     return sum(
         1
-        for dependency_task_id in tasks[task_id].dependency_task_ids
-        if dependency_task_id in candidate_task_ids
-        and dependency_task_id in tasks
-        and task_should_be_visible(tasks[dependency_task_id])
+        for candidate_task_id in candidate_task_ids
+        if candidate_task_id != task_id
+        and _task_depends_on_candidate_or_visible_descendant(
+            tasks,
+            task_id,
+            candidate_task_id,
+            task_should_be_visible,
+        )
     )
+
+
+def _task_depends_on_candidate_or_visible_descendant(
+    tasks: dict[str, Task],
+    task_id: str,
+    candidate_task_id: str,
+    task_should_be_visible: Callable[[Task], bool],
+) -> bool:
+    visible_candidate_subtree_task_ids = _visible_subtree_task_ids(
+        tasks,
+        candidate_task_id,
+        task_should_be_visible,
+    )
+    return any(
+        dependency_task_id in visible_candidate_subtree_task_ids
+        for dependency_task_id in tasks[task_id].dependency_task_ids
+    )
+
+
+def _visible_subtree_task_ids(
+    tasks: dict[str, Task],
+    task_id: str,
+    task_should_be_visible: Callable[[Task], bool],
+) -> set[str]:
+    visible_task_ids = {task_id}
+    for child_task_id in tasks[task_id].child_task_ids:
+        if task_should_be_visible(tasks[child_task_id]):
+            visible_task_ids.update(
+                _visible_subtree_task_ids(
+                    tasks,
+                    child_task_id,
+                    task_should_be_visible,
+                )
+            )
+    return visible_task_ids
 
 
 def _task_should_start_ongoing_landing_tree(task: Task) -> bool:
