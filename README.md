@@ -1,6 +1,6 @@
 # Notion Task Tracker
 
-This package turns explicit CLI actions into Notion writes. The agent supplies intent; the tracker owns tree projection, page shape, rendering, write ordering, and Notion SDK calls. Task metadata now comes from `Alovya's task database`; task page bodies contain timeline logs only, and the ongoing and completed task landing pages are derived views.
+This package turns explicit CLI actions into Notion writes. The tracker owns tree projection, page shape, rendering, write ordering, and Notion SDK calls. Task metadata now comes from `Alovya's task database`; task page bodies contain timeline logs only, and the ongoing and completed task landing pages are derived views.
 
 Fixed page names live in `fixed_pages.py`:
 
@@ -10,17 +10,6 @@ Fixed page names live in `fixed_pages.py`:
 4. `Alovya's synthesis notes`
 
 Notion page ids live in tracker state because Notion assigns them. The task database source and saved-view URLs live in `tasks/database.py`.
-
-## Agent Workflow
-
-1. Choose one explicit CLI action such as `--log`, `--child`, or `--read`.
-2. Put multi-paragraph or nested content in a JSON file passed through `--content-path`.
-3. Let the CLI resolve tracker state, the Notion API token, and output paths from its defaults.
-4. The CLI fetches only task pages needed by that action, updates their local metadata projection, applies the command, writes to Notion when the action is mutating, and saves tracker state after successful writes.
-5. Read the output JSON for completed operation keys, read summaries, and warnings.
-6. Treat a CLI failure as a failed write. Do not manually send Notion writes unless debugging with the user.
-
-The default tracker state path is `~/.notion-task-tracker/notion_tasks_tree.json`. Override it only with `--tracker-state-path`. Authentication uses `NOTION_API_KEY`.
 
 Run an explicit action from an environment where `notion-task-tracker` is installed:
 
@@ -73,7 +62,7 @@ The live path uses the Notion REST client for task creation, logging, completion
 
 ## Explicit CLI Actions
 
-Use these actions for normal agent operation. The action flag freezes the accepted schema; `--content-path` carries the rich content.
+Use these actions for normal CLI operation. The action flag freezes the accepted schema; `--content-path` carries the rich content.
 
 ```bash
 python -m notion_task_tracker --read --ticket-number 67 --ticket-number 80

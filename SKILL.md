@@ -5,250 +5,48 @@ description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA t
 
 # Notion Task
 
-## First Steps
+Use the installed `ntt` CLI for all tracker reads and writes. The README owns exact flags, JSON shapes, command schemas, and implementation details; this skill only captures agent judgment.
 
-Use the installed `ntt` CLI for task tracker reads and writes. Let the CLI use its default tracker state at `~/.notion-task-tracker/notion_tasks_tree.json`; pass explicit `--tracker-state-path` only when the user asks for a non-default location.
+## Operating Principles
 
-## Shared Workflow
+- Treat every user request as one explicit tracker action: read, work, log, complete, cancel, parent, child split, sibling split, misc, synth, or update.
+- Let the CLI own Notion writes, task metadata refresh, tracker-state persistence, landing-page repair, page mentions, and page-id capture.
+- Do not manually send Notion writes unless the user is explicitly debugging the tracker itself.
+- Use the default tracker state unless the user asks for a non-default path.
+- Run live Notion commands outside the network-restricted sandbox with `NOTION_API_KEY` available.
+- If auth, permission, page-id, or Notion content-replacement errors occur, stop and report the blocker. Do not guess around them.
 
-Before any command that creates or updates task, miscellaneous, or synthesis metadata:
+## Context Quality
 
-1. Express the user action as one explicit tracker CLI action.
-2. Put multi-paragraph or nested content in a JSON file passed as `--content-path`.
-3. Run the tracker CLI as documented in README, with network access outside the sandbox.
-4. Let the CLI fetch only the task pages needed by the action, refresh their local metadata projection, apply the action, write to Notion for mutating actions, and save tracker state.
-5. Treat CLI errors as failed writes. Do not manually send Notion writes unless debugging with the user.
-6. If page creation still needs a captured page id, stop and report the blocker instead of guessing.
+Logs should preserve the facts needed to resume work without rereading the chat.
 
-If `NOTION_API_KEY` is missing, stop and report that execution needs the `ntn_` Notion integration token.
+- Prefer rich blocks for normal logs: paragraphs for conclusions and decisions, code blocks for commands, outputs, diffs, stack traces, paths, JSON/YAML, and structured observations.
+- Include exact commands, files, errors, outputs, and test results when they matter.
+- Keep observation, inference, decision, and follow-up distinct.
+- Avoid bland summaries such as "Discussed X" when the useful content is what happened, what changed, and why.
+- Put detailed work on the most specific task page. Parent timeline entries created by child or sibling splits are bookkeeping links, not substitutes for the real log.
 
-Footgun: never set `allow_deleting_content` automatically. If Notion rejects replacement due to physical child content, stop and explain the blocker.
+## Task Creation Judgment
 
-## Logging Quality Bar
+- Use `parent` for new top-level work, never an implicit or generic "new" task.
+- Use `child` when one source task should become a parent/container for exactly two new child tasks.
+- Use `sibling` when one source task should gain exactly one peer.
+- For split actions, dependency and dependant relations come from the source task. Use explicit relation-edit actions later only when the user asks for manual metadata changes.
+- If a create action includes useful initial context, write that context as the new task's initial timeline entry rather than creating a bare task and logging afterward.
 
-Do not compress useful technical context into vague summaries. Notion logs should preserve the operational facts that would let a future agent or human resume the work without rereading the chat.
+## Reading And Working
 
-When the user says to log work on, in, or for a specific task, write the detailed log to that task. Parent timeline updates created automatically by child or sibling creation are bookkeeping links, not a substitute for the requested task log. If a create command both creates a task and includes detailed context, the detailed context belongs in the newly created task's initial timeline entry unless the user explicitly names another destination.
+- For `read`, answer from the CLI summary plus fetched task context; treat it as read-only.
+- For `work`, use the task page for intent, status, blockers, links, and recent timeline before editing any repo.
+- If the task points to repo work, obey the repo's local instructions and decision records before changing code.
+- If local state is missing a task or related page, reconcile from Notion before continuing.
 
-For design decisions, implementation notes, debugging, command output, errors, or agent/tool behaviour:
+## Miscellaneous And Synthesis
 
-1. Prefer `timeline_entry.blocks` over `timeline_entry.lines`.
-2. Use paragraph blocks for the conclusion, decision, and why it matters.
-3. Use code blocks for exact commands, transcript shapes, stack traces, error messages, JSON/YAML payloads, diffs, file layouts, and multi-line outputs.
-4. Include the concrete command or file path when one was discussed.
-5. Include the actual observed error or output when it matters.
-6. Preserve the distinction between what was observed, what was inferred, and what follow-up was proposed.
-7. Do not write bland entries such as "Discussed X" or "Captured Y" when the useful content is the concrete mechanics of X or Y.
+- Use miscellaneous notes for context that is useful but not yet attached to a specific task.
+- Use synthesis pages for reusable conclusions across tasks, notes, docs, links, or conversations.
+- Fetch sources only deeply enough to support the synthesis; preserve source labels and links clearly.
 
-Good log entries look like:
+## Reporting Back
 
-```json
-{
-  "type": "paragraph",
-  "text": "`codex exec` streams a human transcript to stdout; Ralph captures stdout and stderr together into `worker-output.txt`."
-}
-```
-
-```json
-{
-  "type": "code",
-  "language": "text",
-  "text": "exec\n/usr/bin/bash -lc '...'\n succeeded in 123ms:\n<command output>\n\ncodex\nFinal answer text"
-}
-```
-
-Use concise prose only after the raw mechanics, commands, paths, and errors have been preserved.
-
-## Runtime And Auth
-
-Live Notion tracker commands must be run outside the network-restricted Codex sandbox. The tracker calls the Notion REST API with `NOTION_API_KEY`.
-
-Never use `ntt` or `python -m notion_task_tracker` from a non-venv Python. It is not installed there and will never work. First find the virtual environment that has `notion_task_tracker` installed, then use its explicit command path, such as `<venv>/bin/ntt`, or its matching Python, such as `<venv>/bin/python -m notion_task_tracker`. Check `VIRTUAL_ENV`, `PATH`, and likely local venv directories before falling back to any system Python.
-
-Use the installed `ntt` CLI and request command escalation for live Notion commands:
-
-```bash
-<venv>/bin/ntt ...
-```
-
-Diagnose `401 Unauthorized` as a missing or invalid `NOTION_API_KEY`. Page-permission failures usually return `403`.
-
-## Command Forms
-
-`notion_task update` reconciles local task metadata from the saved `Alovya's task database` view and repairs derived views when needed.
-
-1. Run `<venv>/bin/python -m notion_task_tracker --reconcile-from-notion` outside the sandbox.
-2. Read printed `task_tree_changes` and `warnings`.
-3. Treat CLI errors as failed writes.
-4. If the saved view query fails, stop and report that task database reconciliation failed.
-
-Normal task commands do not query the full saved database view. They use targeted task-page fetches; run `notion_task update` only for explicit reconciliation or when targeted preflight says the local tracker state is missing a related page.
-
-## Task Field Arguments
-
-Creation command `--parent` accepts the task database field flags below:
-
-- `--dependency-ticket-number <number>` may be repeated. It writes the new task's `Dependencies` relation.
-- `--dependant-ticket-number <number>` may be repeated. It writes the new task's `Dependants` relation, for the case where known existing tasks should depend on the newly created task.
-- Do not pass dependency and dependant ticket numbers in the same creation command. Choose one direction at request time based on what the user said.
-- `--deadline <value>` writes `Deadline`.
-- `--external-coordination No|Yes` writes `External coordination`.
-- `--uncertainty Low|High` writes `Uncertainty`.
-- `--friction "Insufficiently decomposed"|Charged|Stale|None` writes `Friction`.
-
-Existing tasks can be updated with explicit field actions:
-
-- `--set-dependencies --ticket-number <task> --dependency-ticket-number <number> [...]`
-- `--set-dependants --ticket-number <task> --dependant-ticket-number <number> [...]`
-- `--set-deadline --ticket-number <task> --deadline <value>`
-- `--clear-deadline --ticket-number <task>`
-- `--set-external-coordination --ticket-number <task> --external-coordination No|Yes`
-- `--set-uncertainty --ticket-number <task> --uncertainty Low|High`
-- `--set-friction --ticket-number <task> --friction "Insufficiently decomposed"|Charged|Stale|None`
-
-Use these field-specific actions directly. Do not invent or use a generic metadata update command.
-
-`notion_task read <number> [<number> ...]` reads and summarises existing tasks.
-
-1. Resolve each `<number>` to `ALOVYA-<number>`.
-2. Run `<venv>/bin/python -m notion_task_tracker --read --ticket-number <number>` with one `--ticket-number` per requested task.
-3. Treat this as read-only with respect to Notion.
-4. Use the printed task summaries, recent timeline headings, parent/child ids, and live task page context to answer the user.
-
-`notion_task work <number>` works an existing task.
-
-1. Resolve `<number>` to `ALOVYA-<number>`.
-2. Fail if the task does not exist.
-3. Run `<venv>/bin/python -m notion_task_tracker --work --ticket-number <number>`.
-4. Suggest `notion_task parent [pX] [title]` or `notion_task child <parent-number> [pX] [title]` when creation is needed.
-5. Fetch the task page and directly relevant parent or child pages only when useful for the work.
-
-`notion_task log <number> [notes]` writes recent progress to an existing task timeline.
-
-1. Resolve `<number>` to `ALOVYA-<number>`.
-2. Fail if the task does not exist.
-3. Capture the useful current conversation context plus `[notes]` at the detail level needed to resume the work. Do not collapse commands, errors, outputs, or design mechanics into vague summaries.
-4. Use today's date for `entry_date`.
-5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `<venv>/bin/python -m notion_task_tracker --log --ticket-number <number> --content-path <content-path>`.
-7. The tracker preserves handwritten Notion timeline content: before writing, it fetches the task page and records existing date headings under `Timeline log`. If the page has no usable `Timeline log` section with at least one date, the tracker initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended under `Timeline log`; existing date headings receive new lines under the existing heading.
-8. For normal paragraphs and code blocks, use `timeline_entry.blocks` instead of `timeline_entry.lines`. The tracker renders `lines` as bullet list items. Use paragraph blocks for prose and code blocks for commands, stack traces, structured output, tensor/input lists, shapes, mappings, and multi-line snippets. Put inline technical text in backticks inside paragraph text, for example `scp -O`, `/var/cache/qnn_sdk`, `allow_missing_cameras=False`, `QnnExec`, and `ValueError`. Prefer code blocks over inline text when the content is a full command, command output, traceback, or multi-line snippet. Use entries such as `{"type": "paragraph", "text": "The target failed to create `/var/cache/qnn_sdk/test_write`."}` and `{"type": "code", "language": "bash", "text": "ssh root@target '/mnt/bin/touch /var/cache/qnn_sdk/test_write'"}`. Do not put fenced Markdown inside `lines`.
-9. Do not force numbering into timeline lines. The tracker renders `lines` as bullets. Use plain bullet-style sentences unless the user explicitly asks for ordered steps, and avoid Markdown ordered-list prefixes like `1.` or `2.` because Notion may reinterpret the formatting.
-
-`notion_task log <number> sub:<subheading> [notes]` writes the new lines under a Notion toggle inside today's date entry. Put `<subheading>` in `timeline_entry.subheading`; do not fold it into the first log line.
-
-`notion_task complete <number> [notes]` marks an existing task complete.
-
-1. Resolve `<number>` to `ALOVYA-<number>`.
-2. Fail if the task does not exist.
-3. Capture the relevant completed work plus `[notes]` with concrete commands, files, outputs, and decisions when they matter.
-4. Use today's date for `entry_date`.
-5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `<venv>/bin/python -m notion_task_tracker --complete --ticket-number <number> --content-path <content-path>`.
-7. The tracker owns completion behaviour: it sets status `Complete`, renders priority as `N/A` in derived views, applies completed-title styling, updates the ongoing and completed landing pages, and appends or merges the timeline entry by date.
-
-`notion_task cancel <number> [notes]` marks an existing task cancelled.
-
-1. Resolve `<number>` to `ALOVYA-<number>`.
-2. Fail if the task does not exist.
-3. Capture the cancellation reason plus `[notes]` with concrete blockers, commands, errors, and paths when they matter.
-4. Use today's date for `entry_date`.
-5. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-6. Run `<venv>/bin/python -m notion_task_tracker --cancel --ticket-number <number> --content-path <content-path>`.
-7. The tracker owns cancellation behaviour: it sets status `Cancelled`, renders priority as `N/A` in derived views, updates the ongoing and completed landing pages, and appends or merges the timeline entry by date.
-
-Split commands `--child` and `--sibling` reject `--dependency-ticket-number` and `--dependant-ticket-number`. They copy the source task's upstream `Dependencies` and downstream `Dependants` onto the created split tasks. Manual relation edits remain available through `--set-dependencies` and `--set-dependants`.
-
-`notion_task parent [pX] [title]` creates a top-level task.
-
-1. Default priority is `P1`.
-2. Default status is `Active`.
-3. Use `[title]` when provided; ask for a title if the user did not provide one.
-4. If the user asks to log, capture, file, or record a new problem, bug, investigation, incident, or context while creating the task, include that context in the same `create_top_level_task` command as `timeline_entry`. Do not create a bare task and then append the first log afterwards when the initial context is already available.
-5. Capture relevant current conversation context into detailed initial timeline content. Use `timeline_entry.blocks` for paragraph prose and code blocks. Put inline technical text in backticks inside paragraph text. Use code blocks for full commands, command output, stack traces, paths grouped with outputs, structured observations, and multi-line snippets. Use `timeline_entry.lines` only when the user explicitly wants bullet-style notes.
-6. Use today's date for `entry_date`.
-7. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
-8. Run `<venv>/bin/python -m notion_task_tracker --parent --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
-
-`notion_task child <parent-number> [pX] [title one] [title two]` splits an existing task into two child tasks.
-
-1. Resolve `<parent-number>` to `ALOVYA-<parent-number>`.
-2. The source task must exist.
-3. Default priority is `P1`.
-4. Default status is `Active`.
-5. Use the two titles when provided; ask for two titles if the user did not provide exactly two.
-6. Run `<venv>/bin/python -m notion_task_tracker --child --parent-ticket-number <parent-number> --title <title-one> --title <title-two> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` values and the tracker records the assigned task ids.
-7. Both new children copy the source task's `Dependencies` and `Dependants`.
-8. The source task becomes the parent/container. After creating the children, the tracker clears the source task's own `Dependencies` and `Dependants`.
-9. The tracker initialises each child page Timeline log with today's date and a parent-page mention, then writes source Timeline log entries that link to the created child pages.
-
-`notion_task sibling <existing-number> [pX] [title]` creates a sibling task next to an existing task.
-
-1. Resolve `<existing-number>` to `ALOVYA-<existing-number>`.
-2. The existing task must exist.
-3. Default priority is `P1`.
-4. Default status is `Active`.
-5. Use `[title]` when provided; ask for a title if the user did not provide one.
-6. Run `<venv>/bin/python -m notion_task_tracker --sibling --sibling-ticket-number <existing-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
-7. The new sibling copies the source task's `Dependencies` and `Dependants`; the source task keeps its existing relations.
-8. If the existing task has a parent, the new task gets the same parent. If the existing task is top-level, the new task is also top-level.
-9. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page. This parent entry is only a backlink. Any detailed log requested with the sibling creation belongs in the new sibling task's initial timeline entry.
-
-Never silently create a task from `notion_task <number>`.
-Do not use `new` for top-level tasks; use `parent`.
-
-`notion_task misc [title] <user-notes>` appends to today's miscellaneous notes.
-
-1. Capture relevant current conversation context at useful technical detail.
-2. Combine that summary with `<user-notes>`.
-3. Use today's date.
-4. Run `<venv>/bin/python -m notion_task_tracker --misc --content-path <content-path>`.
-
-`notion_task synth [title] <source-1> <source-2> ... <user-notes>` creates a synthesis subpage.
-
-1. Treat sources as Notion pages, task pages, miscellaneous pages, Google Docs, Slack threads, GitHub links, or URLs.
-2. Fetch sources only enough to support synthesis.
-3. Infer a concise title and stable `synthesis_key`.
-4. Put source references in `sources`, short synthesis in `summary`, and reusable content in `lines`.
-5. Run `<venv>/bin/python -m notion_task_tracker --synth --synthesis-key <key> --title <title> --content-path <content-path>`.
-
-## Reconciliation Notes
-
-When the user edited task database rows in Notion:
-
-1. Run the user's command normally if it touches a known task; targeted preflight will refresh that task and its parent chain.
-2. Treat broad database edits, missing local tasks, or missing related parent pages as `notion_task update`.
-3. Continue with the user's requested command only after generated repair calls succeed.
-
-When the user edited the synthesis root:
-
-1. Fetch `Alovya's synthesis notes`.
-2. Run `reconcile_synthesis_root_page_mentions`.
-3. Fetch titles only for bare page mentions not already known in the tracker state.
-4. Do not run `refresh_synthesis_pages` unless the user explicitly wants the root rewritten.
-
-## Agent Boundary
-
-The agent supplies only semantic input:
-
-- requested command form;
-- task title;
-- priority when user supplied it, otherwise default `P1` for new tasks;
-- timeline wording;
-- miscellaneous note summary and lines;
-- synthesis title, sources, summary, and content.
-
-The task database owns ticket-number assignment and parent-child relations. The tracker owns tree projection, priority rollup, page structure, rendering, page mentions, colours, REST request ordering, page-id blockers, and tracker-state shape.
-
-## Work Workflow
-
-When working an existing task:
-
-1. Use the task page for intent, status, blockers, links, and recent timeline.
-2. If the tree lacks the task page id, run `notion_task update` from the task database source of truth.
-3. If the task points to repo work, obey repo `AGENTS.md` and relevant decision records before editing code.
-4. Put details on the most specific task page. Parent pages get compressed direct-child updates only when useful.
-
-## Final Response
-
-Report the task id worked or created, Notion pages created or updated, tracker-state path written, and any blockers.
+After a tracker write, report the task or note updated, important Notion operations completed, tracker-state path if relevant, warnings, and blockers. Keep command syntax and schema details out of the skill response unless the user asks; point to README for exact forms.
