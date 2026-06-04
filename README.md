@@ -59,7 +59,7 @@ Install the task-tracker skill into Codex and Claude user-scope skill directorie
 ntt --install-skill
 ```
 
-This copies root `SKILL.md` to `$CODEX_HOME/skills/notion_task_tracker/SKILL.md` when `CODEX_HOME` is set, otherwise `~/.codex/skills/notion_task_tracker/SKILL.md`. It also copies the same file to `~/.claude/skills/notion_task_tracker/SKILL.md`. Existing identical files are left alone; differing files are not overwritten.
+This requires `CODEX_HOME` and `CLAUDE_CONFIG_DIR`, then copies root `SKILL.md` to `$CODEX_HOME/skills/notion_task_tracker/SKILL.md` and `$CLAUDE_CONFIG_DIR/skills/notion_task_tracker/SKILL.md`. Existing identical files are left alone; differing files are not overwritten.
 
 Mutating action output contains:
 

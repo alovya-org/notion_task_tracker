@@ -40,14 +40,14 @@ class SkillInstallResult:
 
 def install_skill(
     codex_home_path: str | Path | None = None,
-    home_path: str | Path | None = None,
+    claude_config_dir_path: str | Path | None = None,
     output_stream: TextIO = sys.stdout,
     force: bool = False,
 ) -> list[SkillInstallResult]:
     source_skill_path = find_source_skill_path()
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
-        home_path=home_path,
+        claude_config_dir_path=claude_config_dir_path,
     )
     results = [
         install_skill_for_target(source_skill_path, target, force=force)
@@ -76,10 +76,10 @@ def find_source_skill_path() -> Path:
 
 def skill_install_targets(
     codex_home_path: str | Path | None = None,
-    home_path: str | Path | None = None,
+    claude_config_dir_path: str | Path | None = None,
 ) -> list[SkillInstallTarget]:
-    resolved_home_path = Path(home_path).expanduser() if home_path else Path.home()
     resolved_codex_home_path = _codex_home_path(codex_home_path)
+    resolved_claude_config_dir_path = _claude_config_dir_path(claude_config_dir_path)
 
     return [
         SkillInstallTarget(
@@ -88,7 +88,7 @@ def skill_install_targets(
         ),
         SkillInstallTarget(
             tool_name="claude",
-            skill_path=resolved_home_path / ".claude" / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
+            skill_path=resolved_claude_config_dir_path / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
         ),
     ]
 
@@ -136,4 +136,15 @@ def _codex_home_path(codex_home_path: str | Path | None) -> Path:
     if configured_codex_home_path:
         return Path(configured_codex_home_path).expanduser()
 
-    return Path.home() / ".codex"
+    raise RuntimeError("CODEX_HOME must be set or codex_home_path must be provided.")
+
+
+def _claude_config_dir_path(claude_config_dir_path: str | Path | None) -> Path:
+    if claude_config_dir_path:
+        return Path(claude_config_dir_path).expanduser()
+
+    configured_claude_config_dir_path = os.environ.get("CLAUDE_CONFIG_DIR")
+    if configured_claude_config_dir_path:
+        return Path(configured_claude_config_dir_path).expanduser()
+
+    raise RuntimeError("CLAUDE_CONFIG_DIR must be set or claude_config_dir_path must be provided.")

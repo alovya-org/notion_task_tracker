@@ -14,11 +14,11 @@ from notion_task_tracker.install_skill import (
 
 def test_skill_install_targets_use_codex_home_and_claude_user_scope(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
-    home_path = tmp_path / "home"
+    claude_config_dir_path = tmp_path / "claude"
 
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
-        home_path=home_path,
+        claude_config_dir_path=claude_config_dir_path,
     )
 
     assert targets == [
@@ -28,24 +28,24 @@ def test_skill_install_targets_use_codex_home_and_claude_user_scope(tmp_path: Pa
         ),
         SkillInstallTarget(
             tool_name="claude",
-            skill_path=home_path / ".claude" / "skills" / "notion_task_tracker" / "SKILL.md",
+            skill_path=claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md",
         ),
     ]
 
 
 def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
-    home_path = tmp_path / "home"
+    claude_config_dir_path = tmp_path / "claude"
     output_stream = io.StringIO()
 
     results = install_skill(
         codex_home_path=codex_home_path,
-        home_path=home_path,
+        claude_config_dir_path=claude_config_dir_path,
         output_stream=output_stream,
     )
 
     codex_skill_path = codex_home_path / "skills" / "notion_task_tracker" / "SKILL.md"
-    claude_skill_path = home_path / ".claude" / "skills" / "notion_task_tracker" / "SKILL.md"
+    claude_skill_path = claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md"
     assert [result.status for result in results] == ["installed", "installed"]
     assert codex_skill_path.read_text(encoding="utf-8").startswith("---")
     assert claude_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
@@ -61,6 +61,20 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
             "status": "installed",
         },
     ]
+
+
+def test_skill_install_targets_require_codex_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+
+    with pytest.raises(RuntimeError, match="CODEX_HOME must be set"):
+        skill_install_targets(claude_config_dir_path="/workspace/.claude")
+
+
+def test_skill_install_targets_require_claude_config_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+
+    with pytest.raises(RuntimeError, match="CLAUDE_CONFIG_DIR must be set"):
+        skill_install_targets(codex_home_path="/workspace/.codex")
 
 
 def test_install_skill_is_noop_when_existing_file_is_identical(tmp_path: Path):
