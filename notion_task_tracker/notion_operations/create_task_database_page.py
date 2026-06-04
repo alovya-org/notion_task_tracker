@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from notion_task_tracker.apply_tracker_command import apply_command_to_tracker_state
+from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
 from notion_task_tracker.notion_operations.markdown import bullet, heading, join_markdown_blocks
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import render_timeline_entry_content_markdown
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
@@ -14,8 +14,9 @@ from notion_task_tracker.notion_operations.write_executor import execute_command
 from notion_task_tracker.tasks import TaskTree
 from notion_task_tracker.tasks.create_task import (
     TaskCreation,
-    derive_task_creation_from_command,
+    derive_split_task_page_creations,
     add_created_task_to_tracker_state,
+    clear_split_source_task_relations,
 )
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
@@ -40,38 +41,51 @@ async def execute_create_task_database_page_command(
     notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     task_tree = TaskTree.from_tracker_state(tracker_state)
-    task_creation = derive_task_creation_from_command(command, task_tree)
-    created_page_id, created_task_id, create_operation_keys = await _create_database_page_and_read_ticket_id(
-        task_creation=task_creation,
-        tracker_state=tracker_state,
-        task_tree=task_tree,
-        notion_client=notion_client,
-    )
+    task_creations = derive_split_task_page_creations(command, task_tree)
+    updated_tracker_state = tracker_state
+    executed_operation_keys = []
+    for task_creation in task_creations:
+        create_task_tree = TaskTree.from_tracker_state(updated_tracker_state)
+        created_page_id, created_task_id, create_operation_keys = await _create_database_page_and_read_ticket_id(
+            task_creation=task_creation,
+            tracker_state=updated_tracker_state,
+            task_tree=create_task_tree,
+            notion_client=notion_client,
+        )
+        updated_tracker_state = add_created_task_to_tracker_state(
+            tracker_state=updated_tracker_state,
+            task_creation=task_creation,
+            created_task_id=created_task_id,
+            created_page_id=created_page_id,
+        )
+        updated_tracker_state, timeline_operation_keys = await _write_task_creation_timeline_entry(
+            task_creation=task_creation,
+            tracker_state=updated_tracker_state,
+            created_task_id=created_task_id,
+            notion_client=notion_client,
+        )
+        executed_operation_keys.extend(create_operation_keys + timeline_operation_keys)
 
-    updated_tracker_state = add_created_task_to_tracker_state(
-        tracker_state=tracker_state,
-        task_creation=task_creation,
-        created_task_id=created_task_id,
-        created_page_id=created_page_id,
-    )
-    timeline_tracker_state, timeline_operation_keys = await _write_task_creation_timeline_entry(
-        task_creation=task_creation,
-        tracker_state=updated_tracker_state,
-        created_task_id=created_task_id,
-        notion_client=notion_client,
-    )
-    landing_tracker_state, landing_operation_keys = await _refresh_derived_task_landing_pages(
-        timeline_tracker_state,
+    if command["command"] == "split_task_into_children":
+        updated_tracker_state, clear_relation_operation_keys = await _clear_child_split_source_relations(
+            updated_tracker_state,
+            command["source_task_id"],
+            notion_client,
+        )
+        executed_operation_keys.extend(clear_relation_operation_keys)
+
+    tracker_state_after_refreshing_task_landing_pages, landing_operation_keys = await _refresh_derived_task_landing_pages(
+        updated_tracker_state,
         notion_client,
     )
-    return landing_tracker_state, create_operation_keys + timeline_operation_keys + landing_operation_keys
+    return tracker_state_after_refreshing_task_landing_pages, executed_operation_keys + landing_operation_keys
 
 
 def should_create_task_database_page_for_command(command: dict[str, Any], tracker_state: dict[str, Any]) -> bool:
     if command.get("command") not in {
         "create_top_level_task",
-        "create_child_task",
-        "create_sibling_task",
+        "split_task_into_children",
+        "split_task_with_sibling",
     }:
         return False
 
@@ -166,6 +180,37 @@ async def _refresh_derived_task_landing_pages(
     return await execute_command_result_writes(landing_refresh_result, notion_client)
 
 
+async def _clear_child_split_source_relations(
+    tracker_state: dict[str, Any],
+    source_task_id: str,
+    notion_client: NotionRestClient,
+) -> tuple[dict[str, Any], list[str]]:
+    relation_tracker_state = clear_split_source_task_relations(tracker_state, source_task_id)
+    dependency_result = apply_command_to_tracker_state(
+        command={
+            "command": "set_task_dependencies",
+            "task_id": source_task_id,
+            "dependency_task_ids": [],
+        },
+        tracker_state=tracker_state,
+    )
+    dependant_result = apply_command_to_tracker_state(
+        command={
+            "command": "set_task_dependants",
+            "task_id": source_task_id,
+            "dependant_task_ids": [],
+        },
+        tracker_state=dependency_result.tracker_state,
+    )
+    dependant_result = TrackerCommandResult(
+        tracker_state=relation_tracker_state,
+        write_intents=[*dependency_result.write_intents, *dependant_result.write_intents],
+        page_registry=dependant_result.page_registry,
+        warnings=[*dependency_result.warnings, *dependant_result.warnings],
+    )
+    return await execute_command_result_writes(dependant_result, notion_client)
+
+
 def _render_new_task_page_initial_content(
     initial_timeline_entry: dict[str, Any] | None,
     parent_task_id: str | None,
@@ -207,7 +252,7 @@ def _build_created_task_timeline_command(
     if task_creation.parent_timeline_entry is None:
         return None
 
-    if task_creation.command_name not in {"create_child_task", "create_sibling_task"}:
+    if task_creation.command_name not in {"split_task_into_children", "split_task_with_sibling"}:
         return task_creation.parent_timeline_entry
 
     return {
@@ -244,7 +289,7 @@ def _build_new_task_database_row_properties(
             _build_task_notion_url(task_tree, dependency_task_id)
             for dependency_task_id in dependency_task_ids
         ])
-    elif dependant_task_ids:
+    if dependant_task_ids:
         properties[TASK_DATABASE_DEPENDANTS_PROPERTY] = json.dumps([
             _build_task_notion_url(task_tree, dependant_task_id)
             for dependant_task_id in dependant_task_ids

@@ -27,16 +27,16 @@ class TaskCreation:
     parent_timeline_entry: dict[str, Any] | None
 
 
-def derive_task_creation_from_command(command: dict[str, Any], task_tree: TaskTree) -> TaskCreation:
+def derive_split_task_page_creations(command: dict[str, Any], task_tree: TaskTree) -> list[TaskCreation]:
     command_name = command["command"]
     if command_name == "create_top_level_task":
-        return _derive_parent_task_creation_from_command(command)
+        return [_derive_parent_task_creation_from_command(command)]
 
-    if command_name == "create_child_task":
-        return _derive_child_task_creation_from_command(command)
+    if command_name == "split_task_into_children":
+        return _derive_child_task_creations_from_command(command, task_tree)
 
-    if command_name == "create_sibling_task":
-        return _derive_sibling_task_creation_from_command(command, task_tree)
+    if command_name == "split_task_with_sibling":
+        return [_derive_sibling_task_creation_from_command(command, task_tree)]
 
     raise ValueError(f"Unsupported database task creation command {command_name!r}")
 
@@ -76,6 +76,13 @@ def add_created_task_to_tracker_state(
     return task_tree.replace_task_tree_in_tracker_state(tracker_state)
 
 
+def clear_split_source_task_relations(tracker_state: dict[str, Any], source_task_id: str) -> dict[str, Any]:
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_tree.set_task_dependencies(source_task_id, [])
+    task_tree.set_task_dependants(source_task_id, [])
+    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
+
+
 def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCreation:
     task_command = command["task"]
     return TaskCreation(
@@ -95,17 +102,36 @@ def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCr
     )
 
 
-def _derive_child_task_creation_from_command(command: dict[str, Any]) -> TaskCreation:
-    child_task_command = command["child_task"]
+def _derive_child_task_creations_from_command(command: dict[str, Any], task_tree: TaskTree) -> list[TaskCreation]:
+    split_relations = copy_source_task_relations_to_split_tasks(task_tree, command["source_task_id"])
     parent_timeline_entry = command.get("parent_timeline_entry")
+    return [
+        _derive_split_child_task_creation(
+            command=command,
+            child_task_command=child_task_command,
+            dependency_task_ids=split_relations["dependency_task_ids"],
+            dependant_task_ids=split_relations["dependant_task_ids"],
+            parent_timeline_entry=parent_timeline_entry,
+        )
+        for child_task_command in command["child_tasks"]
+    ]
+
+
+def _derive_split_child_task_creation(
+    command: dict[str, Any],
+    child_task_command: dict[str, Any],
+    dependency_task_ids: list[str],
+    dependant_task_ids: list[str],
+    parent_timeline_entry: dict[str, Any] | None,
+) -> TaskCreation:
     return TaskCreation(
         command_name=command["command"],
         task_title=child_task_command["title"],
         configured_priority=Priority(child_task_command["configured_priority"]),
         status=TaskStatus(child_task_command["status"]),
-        parent_task_id=command["parent_task_id"],
-        dependency_task_ids=list(child_task_command.get("dependency_task_ids", [])),
-        dependant_task_ids=list(child_task_command.get("dependant_task_ids", [])),
+        parent_task_id=command["source_task_id"],
+        dependency_task_ids=list(dependency_task_ids),
+        dependant_task_ids=list(dependant_task_ids),
         deadline=child_task_command.get("deadline"),
         external_coordination=ExternalCoordination(child_task_command["external_coordination"]),
         uncertainty=Uncertainty(child_task_command["uncertainty"]),
@@ -117,7 +143,9 @@ def _derive_child_task_creation_from_command(command: dict[str, Any]) -> TaskCre
 
 def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tree: TaskTree) -> TaskCreation:
     sibling_task_command = command["sibling_task"]
-    parent_task_id = task_tree.tasks[command["sibling_task_id"]].parent_task_id
+    source_task = task_tree.tasks[command["source_task_id"]]
+    split_relations = copy_source_task_relations_to_split_tasks(task_tree, command["source_task_id"])
+    parent_task_id = source_task.parent_task_id
     timeline_entry = command.get("timeline_entry")
     return TaskCreation(
         command_name=command["command"],
@@ -125,8 +153,8 @@ def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tre
         configured_priority=Priority(sibling_task_command["configured_priority"]),
         status=TaskStatus(sibling_task_command["status"]),
         parent_task_id=parent_task_id,
-        dependency_task_ids=list(sibling_task_command.get("dependency_task_ids", [])),
-        dependant_task_ids=list(sibling_task_command.get("dependant_task_ids", [])),
+        dependency_task_ids=split_relations["dependency_task_ids"],
+        dependant_task_ids=split_relations["dependant_task_ids"],
         deadline=sibling_task_command.get("deadline"),
         external_coordination=ExternalCoordination(sibling_task_command["external_coordination"]),
         uncertainty=Uncertainty(sibling_task_command["uncertainty"]),
@@ -134,6 +162,14 @@ def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tre
         initial_child_timeline_entry=timeline_entry,
         parent_timeline_entry=_timeline_entry_date_shell(timeline_entry) if parent_task_id is not None else None,
     )
+
+
+def copy_source_task_relations_to_split_tasks(task_tree: TaskTree, source_task_id: str) -> dict[str, list[str]]:
+    source_task = task_tree.tasks[source_task_id]
+    return {
+        "dependency_task_ids": list(source_task.dependency_task_ids),
+        "dependant_task_ids": list(source_task.dependant_task_ids),
+    }
 
 
 def _timeline_entry_date_shell(timeline_entry: dict[str, Any] | None) -> dict[str, Any] | None:

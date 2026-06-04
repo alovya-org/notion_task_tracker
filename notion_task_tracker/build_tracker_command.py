@@ -211,7 +211,7 @@ def _build_set_friction_command(arguments: Namespace) -> dict[str, Any]:
 def _build_parent_command(arguments: Namespace) -> dict[str, Any]:
     command = {
         "command": "create_top_level_task",
-        "task": _new_task_command(arguments),
+        "task": _new_task_command(arguments, parse_one_title_arg(arguments, "parent")),
     }
     if arguments.content_path is not None:
         command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
@@ -219,10 +219,15 @@ def _build_parent_command(arguments: Namespace) -> dict[str, Any]:
 
 
 def _build_child_command(arguments: Namespace) -> dict[str, Any]:
+    _reject_explicit_split_relations(arguments, "child")
+    titles = parse_title_args(arguments, "child", expected_count=2)
     command = {
-        "command": "create_child_task",
-        "parent_task_id": ticket_id_from_number(arguments.parent_ticket_number),
-        "child_task": _new_task_command(arguments),
+        "command": "split_task_into_children",
+        "source_task_id": ticket_id_from_number(arguments.parent_ticket_number),
+        "child_tasks": [
+            _new_task_command(arguments, title)
+            for title in titles
+        ],
     }
     if arguments.content_path is not None:
         command["parent_timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
@@ -230,10 +235,11 @@ def _build_child_command(arguments: Namespace) -> dict[str, Any]:
 
 
 def _build_sibling_command(arguments: Namespace) -> dict[str, Any]:
+    _reject_explicit_split_relations(arguments, "sibling")
     command = {
-        "command": "create_sibling_task",
-        "sibling_task_id": ticket_id_from_number(arguments.sibling_ticket_number),
-        "sibling_task": _new_task_command(arguments),
+        "command": "split_task_with_sibling",
+        "source_task_id": ticket_id_from_number(arguments.sibling_ticket_number),
+        "sibling_task": _new_task_command(arguments, parse_one_title_arg(arguments, "sibling")),
     }
     if arguments.content_path is not None:
         command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
@@ -254,7 +260,7 @@ def _build_synthesis_command(arguments: Namespace) -> dict[str, Any]:
     return {
         "command": "create_synthesis_page",
         "synthesis_key": arguments.synthesis_key,
-        "title": arguments.title,
+        "title": parse_one_title_arg(arguments, "synth"),
         "summary": content.get("summary", ""),
         "sources": list(content.get("sources", [])),
         "lines": _lines_from_content(content),
@@ -268,16 +274,33 @@ def _single_task_id_from_ticket_numbers(ticket_numbers: list[int]) -> str:
     return ticket_id_from_number(ticket_numbers[0])
 
 
-def _new_task_command(arguments: Namespace) -> dict[str, Any]:
-    if not arguments.title:
-        raise ValueError("Task creation requires --title")
-
+def _new_task_command(arguments: Namespace, title: str) -> dict[str, Any]:
     return {
-        "title": arguments.title,
+        "title": title,
         "configured_priority": arguments.priority,
         "status": "Active",
         **_new_task_database_fields_from_arguments(arguments),
     }
+
+
+def parse_one_title_arg(arguments: Namespace, action_name: str) -> str:
+    return parse_title_args(arguments, action_name, expected_count=1)[0]
+
+
+def parse_title_args(arguments: Namespace, action_name: str, expected_count: int) -> list[str]:
+    raw_titles = arguments.title or []
+    titles = [raw_titles] if isinstance(raw_titles, str) else list(raw_titles)
+    if len(titles) != expected_count:
+        raise ValueError(f"--{action_name} requires exactly {expected_count} --title value")
+
+    return titles
+
+
+def _reject_explicit_split_relations(arguments: Namespace, action_name: str) -> None:
+    if arguments.dependency_ticket_number:
+        raise ValueError(f"--{action_name} derives dependencies from the source task; do not pass --dependency-ticket-number")
+    if arguments.dependant_ticket_number:
+        raise ValueError(f"--{action_name} derives dependants from the source task; do not pass --dependant-ticket-number")
 
 
 def _new_task_database_fields_from_arguments(arguments: Namespace) -> dict[str, Any]:

@@ -113,8 +113,8 @@ def test_refresh_tracker_state_for_task_command_fetches_only_relevant_pages():
     command_result = asyncio.run(
         refresh_tracker_state_for_task_command(
             command={
-                "command": "create_sibling_task",
-                "sibling_task_id": "ALOVYA-2",
+                "command": "split_task_with_sibling",
+                "source_task_id": "ALOVYA-2",
                 "sibling_task": {
                     "title": "Sibling task",
                     "configured_priority": "P2",

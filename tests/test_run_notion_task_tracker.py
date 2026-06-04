@@ -32,6 +32,12 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
+def test_parse_args_collects_repeated_titles():
+    args = parse_args(["--child", "--parent-ticket-number", "67", "--title", "One", "--title", "Two"])
+
+    assert args.title == ["One", "Two"]
+
+
 def test_main_rejects_removed_transport_flag():
     with pytest.raises(SystemExit) as error:
         main(["--notion-" + "transport", "removed"])

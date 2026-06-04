@@ -71,7 +71,7 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
     }
 
 
-def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
+def test_child_action_builds_split_command_from_two_titles(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
         json.dumps({
@@ -89,7 +89,7 @@ def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
         _arguments(
             child=True,
             parent_ticket_number=67,
-            title="Add explicit CLI actions",
+            title=["Add explicit CLI actions", "Document explicit CLI actions"],
             priority="P2",
             content_path=str(content_path),
             entry_date="2026-05-30",
@@ -97,19 +97,32 @@ def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
     )
 
     assert command == {
-        "command": "create_child_task",
-        "parent_task_id": "ALOVYA-67",
-        "child_task": {
-            "title": "Add explicit CLI actions",
-            "configured_priority": "P2",
-            "status": "Active",
-            "dependency_task_ids": [],
-            "dependant_task_ids": [],
-            "deadline": None,
-            "external_coordination": "No",
-            "uncertainty": "Low",
-            "friction": "None",
-        },
+        "command": "split_task_into_children",
+        "source_task_id": "ALOVYA-67",
+        "child_tasks": [
+            {
+                "title": "Add explicit CLI actions",
+                "configured_priority": "P2",
+                "status": "Active",
+                "dependency_task_ids": [],
+                "dependant_task_ids": [],
+                "deadline": None,
+                "external_coordination": "No",
+                "uncertainty": "Low",
+                "friction": "None",
+            },
+            {
+                "title": "Document explicit CLI actions",
+                "configured_priority": "P2",
+                "status": "Active",
+                "dependency_task_ids": [],
+                "dependant_task_ids": [],
+                "deadline": None,
+                "external_coordination": "No",
+                "uncertainty": "Low",
+                "friction": "None",
+            },
+        ],
         "parent_timeline_entry": {
             "entry_date": "2026-05-30",
             "heading": '<mention-date start="2026-05-30"/>',
@@ -121,6 +134,50 @@ def test_child_action_builds_task_creation_command_from_scalar_flags(tmp_path):
             ],
         },
     }
+
+
+def test_child_action_rejects_wrong_title_counts():
+    for titles in [["Only one"], ["One", "Two", "Three"]]:
+        with pytest.raises(ValueError, match="--child requires exactly 2 --title value"):
+            build_tracker_command_from_cli_action(
+                _arguments(child=True, parent_ticket_number=67, title=titles)
+            )
+
+
+def test_sibling_action_requires_one_title():
+    command = build_tracker_command_from_cli_action(
+        _arguments(sibling=True, sibling_ticket_number=67, title=["Sibling task"])
+    )
+
+    assert command["command"] == "split_task_with_sibling"
+    assert command["source_task_id"] == "ALOVYA-67"
+    assert command["sibling_task"]["title"] == "Sibling task"
+
+    with pytest.raises(ValueError, match="--sibling requires exactly 1 --title value"):
+        build_tracker_command_from_cli_action(
+            _arguments(sibling=True, sibling_ticket_number=67, title=["One", "Two"])
+        )
+
+
+def test_parent_action_requires_one_title():
+    command = build_tracker_command_from_cli_action(_arguments(parent=True, title=["Parent task"]))
+
+    assert command["task"]["title"] == "Parent task"
+
+    with pytest.raises(ValueError, match="--parent requires exactly 1 --title value"):
+        build_tracker_command_from_cli_action(_arguments(parent=True, title=["One", "Two"]))
+
+
+def test_split_actions_reject_explicit_relation_flags():
+    with pytest.raises(ValueError, match="--child derives dependencies"):
+        build_tracker_command_from_cli_action(
+            _arguments(child=True, parent_ticket_number=67, title=["One", "Two"], dependency_ticket_number=[1])
+        )
+
+    with pytest.raises(ValueError, match="--sibling derives dependants"):
+        build_tracker_command_from_cli_action(
+            _arguments(sibling=True, sibling_ticket_number=67, title=["One"], dependant_ticket_number=[1])
+        )
 
 
 def test_parent_action_builds_task_creation_command_with_dependencies():
@@ -254,7 +311,7 @@ def test_synthesis_action_keeps_rich_sources_inside_content_payload(tmp_path):
         _arguments(
             synth=True,
             synthesis_key="explicit_tracker_cli",
-            title="Explicit tracker CLI",
+            title=["Explicit tracker CLI"],
             content_path=str(content_path),
         )
     )

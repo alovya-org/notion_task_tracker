@@ -82,7 +82,7 @@ python -m notion_task_tracker --log --ticket-number 67 --content-path /tmp/log.j
 python -m notion_task_tracker --complete --ticket-number 67 --content-path /tmp/complete.json
 python -m notion_task_tracker --cancel --ticket-number 67 --content-path /tmp/cancel.json
 python -m notion_task_tracker --parent --title "Measure activation mismatch" --priority P1 --content-path /tmp/initial.json
-python -m notion_task_tracker --child --parent-ticket-number 67 --title "Add explicit CLI actions" --priority P1 --content-path /tmp/initial.json
+python -m notion_task_tracker --child --parent-ticket-number 67 --title "Add explicit CLI actions" --title "Document explicit CLI actions" --priority P1 --content-path /tmp/initial.json
 python -m notion_task_tracker --sibling --sibling-ticket-number 67 --title "Document explicit CLI actions" --priority P2 --content-path /tmp/initial.json
 python -m notion_task_tracker --misc --content-path /tmp/misc.json
 python -m notion_task_tracker --synth --synthesis-key explicit_tracker_cli --title "Explicit tracker CLI" --content-path /tmp/synth.json
@@ -150,8 +150,8 @@ Ordinary commands do not query the full database view. They fetch the task pages
 Normal commands are fast because they only refresh the task pages they touch. They do not discover every remote database edit.
 
 1. `append_task_timeline_log`, `complete_task`, and `cancel_task` fetch the target task page, refresh that task's database properties in local state, fetch timeline headings, then write.
-2. `create_child_task` fetches the parent task and parent chain, creates the child database row, updates the parent timeline, and refreshes derived landing pages.
-3. `create_sibling_task` fetches the existing sibling and parent chain, creates the new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
+2. `split_task_into_children` fetches the source task and parent chain, creates two child database rows, clears the source task's dependency/dependant relations, updates the source timeline, and refreshes derived landing pages.
+3. `split_task_with_sibling` fetches the source sibling and parent chain, creates one new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
 4. `create_top_level_task` creates a new top-level database row without fetching the full database view.
 5. Miscellaneous and synthesis commands do not use the task database view.
 6. `--reconcile-from-notion` is the only normal path that pulls the saved task database view and rebuilds the whole local task tree projection.
@@ -239,17 +239,24 @@ Create a top-level task. In database-backed mode, the tracker creates a database
 }
 ```
 
-Create a child task. The command does not include `task_id`; Notion assigns it. The new child page is created with a dated Timeline log entry that links back to the parent task. The parent task receives a dated Timeline log entry that links to the created child page:
+Split a task into two child tasks. The command does not include child `task_id` values; Notion assigns them. Each new child page copies the source task's `Dependencies` and `Dependants`, is created with a dated Timeline log entry that links back to the source task, and the source task receives dated Timeline log entries that link to the created children. After the children are created, the source task becomes a parent/container and its own dependency and dependant relations are cleared:
 
 ```json
 {
-  "command": "create_child_task",
-  "parent_task_id": "ALOVYA-5",
-  "child_task": {
-    "title": "Measure activation mismatch after QNN export",
-    "configured_priority": "P1",
-    "status": "Active"
-  },
+  "command": "split_task_into_children",
+  "source_task_id": "ALOVYA-5",
+  "child_tasks": [
+    {
+      "title": "Measure activation mismatch after QNN export",
+      "configured_priority": "P1",
+      "status": "Active"
+    },
+    {
+      "title": "Document activation mismatch findings",
+      "configured_priority": "P1",
+      "status": "Active"
+    }
+  ],
   "parent_timeline_entry": {
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
@@ -347,8 +354,8 @@ This replaces the local existing-page mention list with exactly the page mention
 - `complete_task`: mark one task complete, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
 - `cancel_task`: mark one task cancelled, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
 - `create_top_level_task`: create a top-level task database row and use Notion's assigned `Ticket ID`.
-- `create_child_task`: create a child task database row under an existing parent, initialise the child Timeline log with a parent link, and append a parent timeline entry linking to the child.
-- `create_sibling_task`: create a task database row under the same parent as an existing task, or top-level when the existing task has no parent. If the sibling has a parent, initialise the new page with a parent link and append a parent timeline entry linking to the new page.
+- `split_task_into_children`: create two child task database rows under an existing source task, copy the source task's dependencies and dependants onto both children, clear the source task's own relation fields, initialise each child Timeline log with a parent link, and append source timeline entries linking to the children.
+- `split_task_with_sibling`: create one task database row under the same parent as an existing source task, or top-level when the source has no parent. The new sibling copies the source task's dependencies and dependants. If the sibling has a parent, initialise the new page with a parent link and append a parent timeline entry linking to the new page.
 - `record_page_id`: record a page id returned by a page creation write.
 - `refresh_task_pages`: update task database properties and the derived task landing pages.
 - `append_miscellaneous_note`: add lines to a dated miscellaneous subpage.

@@ -92,7 +92,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ticket-number", action="append", type=int, default=[])
     parser.add_argument("--parent-ticket-number", type=int)
     parser.add_argument("--sibling-ticket-number", type=int)
-    parser.add_argument("--title")
+    parser.add_argument("--title", action="append", default=[])
     parser.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default="P1")
     parser.add_argument("--dependency-ticket-number", action="append", type=int, default=[])
     parser.add_argument("--dependant-ticket-number", action="append", type=int, default=[])
@@ -524,8 +524,8 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "set_task_uncertainty": "set_uncertainty",
         "set_task_friction": "set_friction",
         "create_top_level_task": "parent",
-        "create_child_task": "child",
-        "create_sibling_task": "sibling",
+        "split_task_into_children": "child",
+        "split_task_with_sibling": "sibling",
         "append_miscellaneous_note": "misc",
         "create_synthesis_page": "synth",
     }[command["command"]]

@@ -86,7 +86,7 @@ Normal task commands do not query the full saved database view. They use targete
 
 ## Task Field Arguments
 
-Creation commands `--parent`, `--child`, and `--sibling` accept the task database field flags below:
+Creation command `--parent` accepts the task database field flags below:
 
 - `--dependency-ticket-number <number>` may be repeated. It writes the new task's `Dependencies` relation.
 - `--dependant-ticket-number <number>` may be repeated. It writes the new task's `Dependants` relation, for the case where known existing tasks should depend on the newly created task.
@@ -157,6 +157,8 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 6. Run `<venv>/bin/python -m notion_task_tracker --cancel --ticket-number <number> --content-path <content-path>`.
 7. The tracker owns cancellation behaviour: it sets status `Cancelled`, renders priority as `N/A` in derived views, updates the ongoing and completed landing pages, and appends or merges the timeline entry by date.
 
+Split commands `--child` and `--sibling` reject `--dependency-ticket-number` and `--dependant-ticket-number`. They copy the source task's upstream `Dependencies` and downstream `Dependants` onto the created split tasks. Manual relation edits remain available through `--set-dependencies` and `--set-dependants`.
+
 `notion_task parent [pX] [title]` creates a top-level task.
 
 1. Default priority is `P1`.
@@ -168,15 +170,17 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 7. Use a heading of `<mention-date start="YYYY-MM-DD"/>`.
 8. Run `<venv>/bin/python -m notion_task_tracker --parent --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
 
-`notion_task child <parent-number> [pX] [title]` creates a child task under an existing parent.
+`notion_task child <parent-number> [pX] [title one] [title two]` splits an existing task into two child tasks.
 
 1. Resolve `<parent-number>` to `ALOVYA-<parent-number>`.
-2. The parent must exist.
+2. The source task must exist.
 3. Default priority is `P1`.
 4. Default status is `Active`.
-5. Use `[title]` when provided; ask for a title if the user did not provide one.
-6. Run `<venv>/bin/python -m notion_task_tracker --child --parent-ticket-number <parent-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
-7. The tracker initialises the child page Timeline log with today's date and a parent-page mention, then writes a parent Timeline log entry that links to the created child page.
+5. Use the two titles when provided; ask for two titles if the user did not provide exactly two.
+6. Run `<venv>/bin/python -m notion_task_tracker --child --parent-ticket-number <parent-number> --title <title-one> --title <title-two> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` values and the tracker records the assigned task ids.
+7. Both new children copy the source task's `Dependencies` and `Dependants`.
+8. The source task becomes the parent/container. After creating the children, the tracker clears the source task's own `Dependencies` and `Dependants`.
+9. The tracker initialises each child page Timeline log with today's date and a parent-page mention, then writes source Timeline log entries that link to the created child pages.
 
 `notion_task sibling <existing-number> [pX] [title]` creates a sibling task next to an existing task.
 
@@ -186,8 +190,9 @@ Use these field-specific actions directly. Do not invent or use a generic metada
 4. Default status is `Active`.
 5. Use `[title]` when provided; ask for a title if the user did not provide one.
 6. Run `<venv>/bin/python -m notion_task_tracker --sibling --sibling-ticket-number <existing-number> --title <title> --priority <priority> --content-path <content-path>`; Notion assigns `Ticket ID` and the tracker records the assigned task id.
-7. If the existing task has a parent, the new task gets the same parent. If the existing task is top-level, the new task is also top-level.
-8. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page. This parent entry is only a backlink. Any detailed log requested with the sibling creation belongs in the new sibling task's initial timeline entry.
+7. The new sibling copies the source task's `Dependencies` and `Dependants`; the source task keeps its existing relations.
+8. If the existing task has a parent, the new task gets the same parent. If the existing task is top-level, the new task is also top-level.
+9. If the new sibling has a parent, the tracker initialises the new page Timeline log with a parent-page mention and writes a parent Timeline log entry that links to the new page. This parent entry is only a backlink. Any detailed log requested with the sibling creation belongs in the new sibling task's initial timeline entry.
 
 Never silently create a task from `notion_task <number>`.
 Do not use `new` for top-level tasks; use `parent`.

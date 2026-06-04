@@ -108,15 +108,15 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
     if command_name in {"append_task_timeline_log", "complete_task", "cancel_task"}:
         return [command["task_id"]]
 
-    if command_name == "create_child_task":
-        return [command["parent_task_id"]]
+    if command_name == "split_task_into_children":
+        return [command["source_task_id"]]
 
-    if command_name == "create_sibling_task":
-        sibling_task_id = command["sibling_task_id"]
-        sibling_task = tracker_state.get("tasks", {}).get(sibling_task_id, {})
-        task_ids = [sibling_task_id]
-        if sibling_task.get("parent_task_id") is not None:
-            task_ids.append(sibling_task["parent_task_id"])
+    if command_name == "split_task_with_sibling":
+        source_task_id = command["source_task_id"]
+        source_task = tracker_state.get("tasks", {}).get(source_task_id, {})
+        task_ids = [source_task_id]
+        if source_task.get("parent_task_id") is not None:
+            task_ids.append(source_task["parent_task_id"])
         return task_ids
 
     return []

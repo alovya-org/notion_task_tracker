@@ -184,16 +184,16 @@ class NotionRestClient:
         if command_result.page_registry is None:
             raise ValueError("REST write execution requires a page registry")
 
-        completed_operation_keys = []
+        executed_operation_keys = []
         captured_page_ids = {}
         for write_intent in command_result.write_intents:
             write_result = await self.execute_write_intent(write_intent, command_result.page_registry)
-            completed_operation_keys.append(write_result["operation_key"])
+            executed_operation_keys.append(write_result["operation_key"])
             if write_result.get("captured_page_key") is not None:
                 captured_page_ids[write_result["captured_page_key"]] = write_result["captured_page_id"]
 
         return NotionWriteExecutionResult(
-            completed_operation_keys=completed_operation_keys,
+            completed_operation_keys=executed_operation_keys,
             captured_page_ids=captured_page_ids,
         )
 
