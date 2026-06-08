@@ -34,12 +34,18 @@ def plan_repairs_for_task_tree_changes(
     refreshed_result: TrackerCommandResult,
     task_tree_changes: list[dict[str, Any]],
 ) -> TrackerCommandResult:
+    operation_keys = TaskTree.from_tracker_state(
+        refreshed_result.tracker_state
+    ).repair_operation_keys_for_changes(task_tree_changes)
+    if refreshed_result.refreshed_task_ids:
+        operation_keys = _keep_only_safe_repair_operation_keys(
+            operation_keys,
+            refreshed_result.refreshed_task_ids,
+        )
     repair_result = apply_command_to_tracker_state(
         command={
             "command": "refresh_task_pages",
-            "operation_keys": TaskTree.from_tracker_state(
-                refreshed_result.tracker_state
-            ).repair_operation_keys_for_changes(task_tree_changes),
+            "operation_keys": operation_keys,
         },
         tracker_state=refreshed_result.tracker_state,
     )
@@ -48,7 +54,25 @@ def plan_repairs_for_task_tree_changes(
         write_intents=repair_result.write_intents,
         page_registry=repair_result.page_registry,
         warnings=refreshed_result.warnings,
+        refreshed_task_ids=refreshed_result.refreshed_task_ids,
     )
+
+
+def _keep_only_safe_repair_operation_keys(
+    operation_keys: list[str],
+    refreshed_task_ids: frozenset[str],
+) -> list[str]:
+    safe_operation_keys = []
+    for operation_key in operation_keys:
+        if not operation_key.startswith("update_properties:task:"):
+            safe_operation_keys.append(operation_key)
+            continue
+
+        task_id = operation_key.removeprefix("update_properties:task:")
+        if task_id in refreshed_task_ids:
+            safe_operation_keys.append(operation_key)
+
+    return safe_operation_keys
 
 
 async def refresh_tracker_state_for_task_command(

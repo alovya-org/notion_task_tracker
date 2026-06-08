@@ -26,6 +26,7 @@ def refresh_tracker_state_from_database_rows(
     return TrackerCommandResult(
         tracker_state=task_tree.replace_task_tree_in_tracker_state(tracker_state),
         warnings=[],
+        refreshed_task_ids=frozenset(task.task_id for task in task_tree.tasks.values()),
     )
 
 
@@ -100,6 +101,7 @@ def _refresh_task_ids_in_task_tree(
     return TrackerCommandResult(
         tracker_state=task_tree.replace_task_tree_in_tracker_state(tracker_state),
         warnings=[],
+        refreshed_task_ids=frozenset(refreshed_task_ids),
     )
 
 

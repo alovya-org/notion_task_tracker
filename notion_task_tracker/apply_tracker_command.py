@@ -49,6 +49,7 @@ class TrackerCommandResult:
     write_intents: list[NotionWriteIntent] = field(default_factory=list)
     page_registry: NotionPageRegistry | None = None
     warnings: list[dict[str, str]] = field(default_factory=list)
+    refreshed_task_ids: frozenset[str] = frozenset()
 
 
 def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:

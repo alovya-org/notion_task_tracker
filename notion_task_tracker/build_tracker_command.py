@@ -220,13 +220,11 @@ def _build_parent_command(arguments: Namespace) -> dict[str, Any]:
 
 def _build_child_command(arguments: Namespace) -> dict[str, Any]:
     _reject_explicit_split_relations(arguments, "child")
-    titles = parse_title_args(arguments, "child", expected_count=2)
     command = {
         "command": "split_task_into_children",
         "source_task_id": ticket_id_from_number(arguments.parent_ticket_number),
         "child_tasks": [
-            _new_task_command(arguments, title)
-            for title in titles
+            _new_task_command(arguments, parse_one_title_arg(arguments, "child")),
         ],
     }
     if arguments.content_path is not None:

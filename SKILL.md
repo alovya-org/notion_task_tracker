@@ -29,7 +29,7 @@ Logs should preserve the facts needed to resume work without rereading the chat.
 ## Task Creation Judgment
 
 - Use `parent` for new top-level work, never an implicit or generic "new" task.
-- Use `child` when one source task should become a parent/container for exactly two new child tasks.
+- Use `child` when one source task should gain exactly one child task.
 - Use `sibling` when one source task should gain exactly one peer.
 - For split actions, dependency and dependant relations come from the source task. Use explicit relation-edit actions later only when the user asks for manual metadata changes.
 - If a create action includes useful initial context, write that context as the new task's initial timeline entry rather than creating a bare task and logging afterward.

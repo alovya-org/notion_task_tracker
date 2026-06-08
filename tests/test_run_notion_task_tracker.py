@@ -33,9 +33,9 @@ def test_parse_args_reads_install_skill_action():
 
 
 def test_parse_args_collects_repeated_titles():
-    args = parse_args(["--child", "--parent-ticket-number", "67", "--title", "One", "--title", "Two"])
+    args = parse_args(["--child", "--parent-ticket-number", "67", "--title", "One"])
 
-    assert args.title == ["One", "Two"]
+    assert args.title == ["One"]
 
 
 def test_main_rejects_removed_transport_flag():

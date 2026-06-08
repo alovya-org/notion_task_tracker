@@ -71,7 +71,7 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
     }
 
 
-def test_child_action_builds_split_command_from_two_titles(tmp_path):
+def test_child_action_builds_split_command_from_one_title(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
         json.dumps({
@@ -89,7 +89,7 @@ def test_child_action_builds_split_command_from_two_titles(tmp_path):
         _arguments(
             child=True,
             parent_ticket_number=67,
-            title=["Add explicit CLI actions", "Document explicit CLI actions"],
+            title=["Add explicit CLI actions"],
             priority="P2",
             content_path=str(content_path),
             entry_date="2026-05-30",
@@ -102,17 +102,6 @@ def test_child_action_builds_split_command_from_two_titles(tmp_path):
         "child_tasks": [
             {
                 "title": "Add explicit CLI actions",
-                "configured_priority": "P2",
-                "status": "Active",
-                "dependency_task_ids": [],
-                "dependant_task_ids": [],
-                "deadline": None,
-                "external_coordination": "No",
-                "uncertainty": "Low",
-                "friction": "None",
-            },
-            {
-                "title": "Document explicit CLI actions",
                 "configured_priority": "P2",
                 "status": "Active",
                 "dependency_task_ids": [],
@@ -137,8 +126,8 @@ def test_child_action_builds_split_command_from_two_titles(tmp_path):
 
 
 def test_child_action_rejects_wrong_title_counts():
-    for titles in [["Only one"], ["One", "Two", "Three"]]:
-        with pytest.raises(ValueError, match="--child requires exactly 2 --title value"):
+    for titles in [[], ["One", "Two"]]:
+        with pytest.raises(ValueError, match="--child requires exactly 1 --title value"):
             build_tracker_command_from_cli_action(
                 _arguments(child=True, parent_ticket_number=67, title=titles)
             )
