@@ -74,6 +74,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--work", action="store_true")
     action_group.add_argument("--log", action="store_true")
     action_group.add_argument("--complete", action="store_true")
+    action_group.add_argument("--complete-with-all-children", action="store_true")
     action_group.add_argument("--cancel", action="store_true")
     action_group.add_argument("--set-dependencies", action="store_true")
     action_group.add_argument("--set-dependants", action="store_true")
@@ -516,6 +517,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "work_task": "work",
         "append_task_timeline_log": "log",
         "complete_task": "complete",
+        "complete_task_with_all_children": "complete_with_all_children",
         "cancel_task": "cancel",
         "set_task_dependencies": "set_dependencies",
         "set_task_dependants": "set_dependants",

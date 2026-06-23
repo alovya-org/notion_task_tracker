@@ -110,6 +110,9 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
     if command_name in {"append_task_timeline_log", "complete_task", "cancel_task"}:
         return [command["task_id"]]
 
+    if command_name == "complete_task_with_all_children":
+        return _collect_task_ids_in_subtree_preorder(tracker_state, command["task_id"])
+
     if command_name == "split_task_into_children":
         return [command["source_task_id"]]
 
@@ -130,6 +133,14 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
         return task_ids
 
     return []
+
+
+def _collect_task_ids_in_subtree_preorder(tracker_state: dict[str, Any], task_id: str) -> list[str]:
+    task_ids = [task_id]
+    task = tracker_state.get("tasks", {}).get(task_id, {})
+    for child_task_id in task.get("child_task_ids", []):
+        task_ids.extend(_collect_task_ids_in_subtree_preorder(tracker_state, child_task_id))
+    return task_ids
 
 
 def _require_database_row_for_known_task(

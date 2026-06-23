@@ -46,6 +46,13 @@ def test_parse_args_reads_reparent_action():
     assert args.parent_ticket_number == 67
 
 
+def test_parse_args_reads_complete_with_all_children_action():
+    args = parse_args(["--complete-with-all-children", "--ticket-number", "67"])
+
+    assert args.complete_with_all_children is True
+    assert args.ticket_number == [67]
+
+
 def test_main_rejects_removed_transport_flag():
     with pytest.raises(SystemExit) as error:
         main(["--notion-" + "transport", "removed"])

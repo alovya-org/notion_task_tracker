@@ -360,6 +360,35 @@ class TestApplyCommandToTrackerState:
             write_intents_by_key["replace:ongoing_landing_page"].arguments["markdown"]
         )
 
+    def test_complete_task_with_all_children_completes_descendants_before_parent_and_refreshes_landing_pages_once(self):
+        tracker_state = _combined_tracker_state_with_two_tasks()
+        task_tree = TaskTree.from_tracker_state(tracker_state)
+        task_tree.link_parent_to_child(parent_task_id="ALOVYA-1", child_task_id="ALOVYA-2")
+        tracker_state = task_tree.replace_task_tree_in_tracker_state(tracker_state)
+
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "complete_task_with_all_children",
+                "task_id": "ALOVYA-1",
+                "timeline_entry": {
+                    "entry_date": "2026-06-23",
+                    "heading": '<mention-date start="2026-06-23"/>',
+                    "lines": ["Finished the task and all children."],
+                },
+            },
+            tracker_state=tracker_state,
+        )
+
+        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["status"] == "Complete"
+        assert command_result.tracker_state["tasks"]["ALOVYA-2"]["status"] == "Complete"
+        assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
+            "update_properties:task:ALOVYA-2",
+            "update_timeline_log:task:ALOVYA-2:2026-06-23",
+            "update_properties:task:ALOVYA-1",
+            "update_timeline_log:task:ALOVYA-1:2026-06-23",
+            "replace:ongoing_landing_page",
+        ]
+
     def test_set_task_deadline_updates_deadline_field(self):
         command_result = apply_command_to_tracker_state(
             command={

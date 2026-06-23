@@ -10,6 +10,7 @@ from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
+    build_task_database_property_refresh_intent,
     plan_completion_write_intents,
     plan_notion_writes_for_task_tree,
     build_task_deadline_update_intent,
@@ -38,6 +39,7 @@ from notion_task_tracker.miscellaneous_pages import MiscellaneousNotesMetadata
 from notion_task_tracker.synthesis_pages import SynthesisNotesMetadata, SynthesisPageMetadata, SynthesisSource
 from notion_task_tracker.tasks import (
     TaskCompletionChange,
+    TaskStatus,
     TaskTree,
     TimelineEntry,
     TimelineLogChange,
@@ -66,6 +68,9 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
 
     if command_name == "complete_task":
         return _apply_task_command(command, tracker_state, _complete_task)
+
+    if command_name == "complete_task_with_all_children":
+        return _complete_task_with_all_children(command, tracker_state)
 
     if command_name == "cancel_task":
         return _apply_task_command(command, tracker_state, _cancel_task)
@@ -203,6 +208,47 @@ def _cancel_task(
         task_id=command["task_id"],
         timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
     )
+
+
+def _complete_task_with_all_children(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    completion_changes = []
+    for task_id in _collect_task_ids_in_subtree_postorder(task_tree, command["task_id"]):
+        if task_tree.tasks[task_id].status in {TaskStatus.COMPLETE, TaskStatus.CANCELLED}:
+            continue
+        completion_changes.append(
+            task_tree.complete_task(
+                task_id=task_id,
+                timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+            )
+        )
+
+    page_registry = build_page_registry_for_task_tree(task_tree)
+    write_intents = [
+        write_intent
+        for completion_change in completion_changes
+        for write_intent in [
+            build_task_database_property_refresh_intent(task_tree.tasks[completion_change.task_id]),
+            build_timeline_log_write_intent(completion_change.timeline_log_change),
+        ]
+    ]
+    write_intents.extend([
+        build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
+        *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
+    ])
+    return TrackerCommandResult(
+        tracker_state=_replace_task_pages_in_tracker_state(tracker_state, task_tree),
+        write_intents=write_intents,
+        page_registry=page_registry,
+    )
+
+
+def _collect_task_ids_in_subtree_postorder(task_tree: TaskTree, task_id: str) -> list[str]:
+    task_ids = []
+    for child_task_id in task_tree.tasks[task_id].child_task_ids:
+        task_ids.extend(_collect_task_ids_in_subtree_postorder(task_tree, child_task_id))
+    task_ids.append(task_id)
+    return task_ids
 
 
 def _set_task_dependencies(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:

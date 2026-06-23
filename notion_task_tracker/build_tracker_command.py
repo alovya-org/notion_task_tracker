@@ -12,6 +12,7 @@ from typing import Any
 WRITE_ACTIONS = {
     "log",
     "complete",
+    "complete_with_all_children",
     "cancel",
     "set_dependencies",
     "set_dependants",
@@ -60,6 +61,8 @@ def build_tracker_command_from_cli_action(arguments: Namespace) -> dict[str, Any
         return _build_log_command(arguments)
     if action_name == "complete":
         return _build_complete_command(arguments)
+    if action_name == "complete_with_all_children":
+        return _build_complete_with_all_children_command(arguments)
     if action_name == "cancel":
         return _build_cancel_command(arguments)
     if action_name == "set_dependencies":
@@ -131,6 +134,14 @@ def _build_log_command(arguments: Namespace) -> dict[str, Any]:
 def _build_complete_command(arguments: Namespace) -> dict[str, Any]:
     return {
         "command": "complete_task",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+    }
+
+
+def _build_complete_with_all_children_command(arguments: Namespace) -> dict[str, Any]:
+    return {
+        "command": "complete_task_with_all_children",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
     }

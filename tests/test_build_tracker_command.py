@@ -260,6 +260,33 @@ def test_reparent_action_requires_parent_ticket_number():
         build_tracker_command_from_cli_action(_arguments(reparent=True, ticket_number=[68]))
 
 
+def test_complete_with_all_children_action_builds_completion_with_all_children_command(tmp_path):
+    content_path = tmp_path / "content.json"
+    content_path.write_text(
+        json.dumps({"lines": ["Finished the task and all children."]}),
+        encoding="utf-8",
+    )
+
+    command = build_tracker_command_from_cli_action(
+        _arguments(
+            complete_with_all_children=True,
+            ticket_number=[67],
+            content_path=str(content_path),
+            entry_date="2026-06-23",
+        )
+    )
+
+    assert command == {
+        "command": "complete_task_with_all_children",
+        "task_id": "ALOVYA-67",
+        "timeline_entry": {
+            "entry_date": "2026-06-23",
+            "heading": '<mention-date start="2026-06-23"/>',
+            "lines": ["Finished the task and all children."],
+        },
+    }
+
+
 def test_set_deadline_actions_build_field_specific_commands():
     assert build_tracker_command_from_cli_action(
         _arguments(set_deadline=True, ticket_number=[67], deadline="2026-06-15")
@@ -356,6 +383,7 @@ def _arguments(**overrides):
         "work": False,
         "log": False,
         "complete": False,
+        "complete_with_all_children": False,
         "cancel": False,
         "set_dependencies": False,
         "set_dependants": False,

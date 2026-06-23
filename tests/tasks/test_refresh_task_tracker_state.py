@@ -17,6 +17,20 @@ def test_find_task_ids_to_refresh_before_command_for_reparent_task_includes_move
     assert task_ids == ["ALOVYA-2", "ALOVYA-3", "ALOVYA-1"]
 
 
+def test_find_task_ids_to_refresh_before_command_for_complete_task_with_all_children_includes_root_and_descendants():
+    tracker_state = _tracker_state_with_child_and_new_parent()
+
+    task_ids = find_task_ids_to_refresh_before_command(
+        {
+            "command": "complete_task_with_all_children",
+            "task_id": "ALOVYA-1",
+        },
+        tracker_state,
+    )
+
+    assert task_ids == ["ALOVYA-1", "ALOVYA-2"]
+
+
 def _tracker_state_with_child_and_new_parent() -> dict:
     task_tree = TaskTree()
     task_tree.add_task(
