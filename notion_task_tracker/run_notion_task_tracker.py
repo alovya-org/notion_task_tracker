@@ -525,6 +525,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "set_task_uncertainty": "set_uncertainty",
         "set_task_friction": "set_friction",
         "reparent_task": "reparent",
+        "refresh_task_pages": "refresh_task_pages",
         "create_top_level_task": "parent",
         "split_task_into_children": "child",
         "split_task_with_sibling": "sibling",

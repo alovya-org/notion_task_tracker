@@ -299,7 +299,7 @@ class TestTaskTreeBuildNotionWritePlan:
             "Friction": "None",
             "Priority": "P3",
             "Status": "Complete",
-            "Ticket page": _visible_strikethrough_text("Complete calibration branch"),
+            "Ticket page": _visible_strikethrough_text("[4] Complete calibration branch"),
             "Uncertainty": "Low",
         }
 

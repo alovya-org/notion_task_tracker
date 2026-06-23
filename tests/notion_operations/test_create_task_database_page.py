@@ -129,7 +129,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         ]
     )
     assert notion_client.calls[1].arguments["properties"] == {
-        "Ticket page": "Child task",
+        "Ticket page": "[72] Child task",
     }
     assert notion_client.calls[2].operation_name == "replace_page_markdown"
     assert notion_client.calls[2].arguments["markdown"] == "\n".join(

@@ -32,7 +32,11 @@ from notion_task_tracker.tasks.database import (
     task_database_data_source_id_from_tracker_state,
     task_id_from_fetched_task_database_page,
 )
-from notion_task_tracker.tasks.task import TASK_PAGE_TIMELINE_LOG_HEADING, TimelineEntry
+from notion_task_tracker.tasks.task import (
+    TASK_PAGE_TIMELINE_LOG_HEADING,
+    TimelineEntry,
+    render_task_database_page_title,
+)
 
 
 async def execute_create_task_database_page_command(
@@ -130,7 +134,7 @@ async def _create_database_page_and_read_ticket_id(
     completed_update_operation_key = await notion_client.update_task_database_page_title(
         page_id=created_page.notion_page_id,
         title_property=TASK_DATABASE_TITLE_PROPERTY,
-        title=task_creation.task_title,
+        title=render_task_database_page_title(created_task_id, task_creation.task_title),
         operation_key=update_title_operation_key,
     )
     return (

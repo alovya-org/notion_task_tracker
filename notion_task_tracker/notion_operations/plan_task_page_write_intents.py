@@ -122,7 +122,7 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
         target_page_key=task.local_page_key,
         arguments={
             "properties": {
-                TASK_DATABASE_TITLE_PROPERTY: task.page_title(),
+                TASK_DATABASE_TITLE_PROPERTY: task.render_page_title(),
                 TASK_DATABASE_PRIORITY_PROPERTY: task.configured_priority.value,
                 TASK_DATABASE_STATUS_PROPERTY: task.status.value,
                 TASK_DATABASE_DEADLINE_PROPERTY: task.deadline,
@@ -375,7 +375,7 @@ def _collect_pages_that_should_exist(task_tree: TaskTree) -> list[TrackedPage]:
         pages.append(
             TrackedPage(
                 local_page_key=task.local_page_key,
-                title=task.page_title(),
+                title=task.render_page_title(),
                 notion_page_id=task.notion_page_id,
                 parent_page_key=None,
             )

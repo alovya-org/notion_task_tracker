@@ -183,11 +183,12 @@ class Task:
     def should_contribute_priority_to_ancestors(self) -> bool:
         return self.status in _STATUS_VALUES_THAT_PROPAGATE_PRIORITY
 
-    def page_title(self) -> str:
+    def render_page_title(self) -> str:
+        title = render_task_database_page_title(self.task_id, self.title)
         if self.status == TaskStatus.COMPLETE:
-            return _render_visible_strikethrough_text(self.title)
+            return _render_visible_strikethrough_text(title)
 
-        return self.title
+        return title
 
     def append_timeline_log(self, timeline_entry: TimelineEntry) -> TimelineLogChange:
         self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
@@ -325,3 +326,7 @@ def _timeline_block_from_command(block: Any) -> dict[str, str]:
 
 def _render_visible_strikethrough_text(text: str) -> str:
     return "".join(f"{character}\u0336" for character in text)
+
+
+def render_task_database_page_title(task_id: str, title: str) -> str:
+    return f"[{task_id.removeprefix('ALOVYA-')}] {title}"

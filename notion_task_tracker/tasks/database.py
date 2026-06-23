@@ -40,7 +40,7 @@ TASK_DATABASE_DEADLINE_PROPERTY = "Deadline"
 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
 TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
 TASK_DATABASE_FRICTION_PROPERTY = "Friction"
-_TASK_TITLE_PREFIX_PATTERN = re.compile(r"^ALOVYA-\d+:\s+")
+_TASK_TITLE_PREFIX_PATTERN = re.compile(r"^(?:ALOVYA-\d+:|\[\d+\])\s+")
 
 
 def build_task_tree_from_database_query_results(
