@@ -49,6 +49,7 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEPENDANTS_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
+    TASK_DATABASE_PARENT_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
 )
 from notion_task_tracker.tasks.task_tree import TaskTree
@@ -156,6 +157,18 @@ def build_task_dependants_update_intent(task: Task) -> NotionWriteIntent:
                 for dependant_task_id in task.dependant_task_ids
             ]
         },
+    )
+
+
+def build_task_parent_update_intent(task: Task) -> NotionWriteIntent:
+    parent_page_keys = []
+    if task.parent_task_id is not None:
+        parent_page_keys.append(f"task:{task.parent_task_id}")
+
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_parent:{task.local_page_key}",
+        properties={TASK_DATABASE_PARENT_PROPERTY: parent_page_keys},
     )
 
 

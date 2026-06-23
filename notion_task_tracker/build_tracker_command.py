@@ -20,6 +20,7 @@ WRITE_ACTIONS = {
     "set_external_coordination",
     "set_uncertainty",
     "set_friction",
+    "reparent",
     "parent",
     "child",
     "sibling",
@@ -75,6 +76,8 @@ def build_tracker_command_from_cli_action(arguments: Namespace) -> dict[str, Any
         return _build_set_uncertainty_command(arguments)
     if action_name == "set_friction":
         return _build_set_friction_command(arguments)
+    if action_name == "reparent":
+        return _build_reparent_command(arguments)
     if action_name == "parent":
         return _build_parent_command(arguments)
     if action_name == "child":
@@ -205,6 +208,17 @@ def _build_set_friction_command(arguments: Namespace) -> dict[str, Any]:
         "command": "set_task_friction",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
         "friction": arguments.friction,
+    }
+
+
+def _build_reparent_command(arguments: Namespace) -> dict[str, Any]:
+    if arguments.parent_ticket_number is None:
+        raise ValueError("--reparent requires --parent-ticket-number")
+
+    return {
+        "command": "reparent_task",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "parent_task_id": ticket_id_from_number(arguments.parent_ticket_number),
     }
 
 

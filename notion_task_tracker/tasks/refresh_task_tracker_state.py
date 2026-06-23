@@ -121,6 +121,14 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
             task_ids.append(source_task["parent_task_id"])
         return task_ids
 
+    if command_name == "reparent_task":
+        moved_task_id = command["task_id"]
+        moved_task = tracker_state.get("tasks", {}).get(moved_task_id, {})
+        task_ids = [moved_task_id, command["parent_task_id"]]
+        if moved_task.get("parent_task_id") is not None:
+            task_ids.append(moved_task["parent_task_id"])
+        return task_ids
+
     return []
 
 

@@ -329,6 +329,37 @@ class TestApplyCommandToTrackerState:
             "Dependants": ["task:ALOVYA-2"],
         }
 
+    def test_reparent_task_moves_task_and_refreshes_landing_page(self):
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "reparent_task",
+                "task_id": "ALOVYA-2",
+                "parent_task_id": "ALOVYA-1",
+            },
+            tracker_state=_combined_tracker_state_with_two_tasks(),
+        )
+
+        write_intents_by_key = {
+            write_intent.operation_key: write_intent
+            for write_intent in command_result.write_intents
+        }
+
+        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["child_task_ids"] == ["ALOVYA-2"]
+        assert command_result.tracker_state["tasks"]["ALOVYA-2"]["parent_task_id"] == "ALOVYA-1"
+        assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
+            "update_parent:task:ALOVYA-2",
+            "replace:ongoing_landing_page",
+        ]
+        assert write_intents_by_key["update_parent:task:ALOVYA-2"].arguments["properties"] == {
+            "Parent": ["task:ALOVYA-1"],
+        }
+        assert "22222222222222222222222222222222" in (
+            write_intents_by_key["replace:ongoing_landing_page"].arguments["markdown"]
+        )
+        assert "33333333333333333333333333333333" in (
+            write_intents_by_key["replace:ongoing_landing_page"].arguments["markdown"]
+        )
+
     def test_set_task_deadline_updates_deadline_field(self):
         command_result = apply_command_to_tracker_state(
             command={

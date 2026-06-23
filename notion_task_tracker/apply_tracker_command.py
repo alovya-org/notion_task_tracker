@@ -17,9 +17,12 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_task_dependants_update_intent,
     build_task_external_coordination_update_intent,
     build_task_friction_update_intent,
+    build_task_parent_update_intent,
     build_task_uncertainty_update_intent,
+    build_ongoing_landing_page_refresh_intent,
     build_page_registry_for_task_tree,
     build_timeline_log_write_intent,
+    plan_completed_landing_page_refresh_intents,
 )
 from notion_task_tracker.notion_operations.miscellaneous_writes import (
     miscellaneous_note_append_write_intent,
@@ -87,6 +90,9 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
 
     if command_name == "set_task_friction":
         return _set_task_friction(command, tracker_state)
+
+    if command_name == "reparent_task":
+        return _reparent_task(command, tracker_state)
 
     if command_name == "refresh_task_pages":
         return _refresh_task_pages(command, tracker_state)
@@ -268,6 +274,26 @@ def _set_task_friction(command: dict[str, Any], tracker_state: dict[str, Any]) -
         tracker_state=tracker_state,
         update_task=lambda task_tree: task_tree.set_task_friction(command["task_id"], command["friction"]),
         build_write_intent=build_task_friction_update_intent,
+    )
+
+
+def _reparent_task(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_tree.set_task_parent(
+        task_id=command["task_id"],
+        parent_task_id=command["parent_task_id"],
+    )
+    task_tree.validate()
+    task_tree.recalculate_display_priorities()
+    page_registry = build_page_registry_for_task_tree(task_tree)
+    return TrackerCommandResult(
+        tracker_state=_replace_task_pages_in_tracker_state(tracker_state, task_tree),
+        write_intents=[
+            build_task_parent_update_intent(task_tree.tasks[command["task_id"]]),
+            build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
+            *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
+        ],
+        page_registry=page_registry,
     )
 
 

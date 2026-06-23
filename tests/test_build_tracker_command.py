@@ -239,6 +239,27 @@ def test_set_dependants_action_builds_field_specific_command():
     }
 
 
+def test_reparent_action_builds_parent_relation_command():
+    command = build_tracker_command_from_cli_action(
+        _arguments(
+            reparent=True,
+            ticket_number=[68],
+            parent_ticket_number=67,
+        )
+    )
+
+    assert command == {
+        "command": "reparent_task",
+        "task_id": "ALOVYA-68",
+        "parent_task_id": "ALOVYA-67",
+    }
+
+
+def test_reparent_action_requires_parent_ticket_number():
+    with pytest.raises(ValueError, match="--reparent requires --parent-ticket-number"):
+        build_tracker_command_from_cli_action(_arguments(reparent=True, ticket_number=[68]))
+
+
 def test_set_deadline_actions_build_field_specific_commands():
     assert build_tracker_command_from_cli_action(
         _arguments(set_deadline=True, ticket_number=[67], deadline="2026-06-15")
@@ -343,6 +364,7 @@ def _arguments(**overrides):
         "set_external_coordination": False,
         "set_uncertainty": False,
         "set_friction": False,
+        "reparent": False,
         "parent": False,
         "child": False,
         "sibling": False,

@@ -82,6 +82,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--set-external-coordination", action="store_true")
     action_group.add_argument("--set-uncertainty", action="store_true")
     action_group.add_argument("--set-friction", action="store_true")
+    action_group.add_argument("--reparent", action="store_true")
     action_group.add_argument("--parent", action="store_true")
     action_group.add_argument("--child", action="store_true")
     action_group.add_argument("--sibling", action="store_true")
@@ -523,6 +524,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "set_task_external_coordination": "set_external_coordination",
         "set_task_uncertainty": "set_uncertainty",
         "set_task_friction": "set_friction",
+        "reparent_task": "reparent",
         "create_top_level_task": "parent",
         "split_task_into_children": "child",
         "split_task_with_sibling": "sibling",

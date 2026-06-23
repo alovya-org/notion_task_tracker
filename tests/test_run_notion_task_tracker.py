@@ -38,6 +38,14 @@ def test_parse_args_collects_repeated_titles():
     assert args.title == ["One"]
 
 
+def test_parse_args_reads_reparent_action():
+    args = parse_args(["--reparent", "--ticket-number", "68", "--parent-ticket-number", "67"])
+
+    assert args.reparent is True
+    assert args.ticket_number == [68]
+    assert args.parent_ticket_number == 67
+
+
 def test_main_rejects_removed_transport_flag():
     with pytest.raises(SystemExit) as error:
         main(["--notion-" + "transport", "removed"])
