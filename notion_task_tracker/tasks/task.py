@@ -184,11 +184,7 @@ class Task:
         return self.status in _STATUS_VALUES_THAT_PROPAGATE_PRIORITY
 
     def render_page_title(self) -> str:
-        title = render_task_database_page_title(self.task_id, self.title)
-        if self.status == TaskStatus.COMPLETE:
-            return _render_visible_strikethrough_text(title)
-
-        return title
+        return render_task_database_page_title(self.task_id, self.title)
 
     def append_timeline_log(self, timeline_entry: TimelineEntry) -> TimelineLogChange:
         self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
@@ -322,10 +318,6 @@ def _timeline_block_from_command(block: Any) -> dict[str, str]:
         timeline_block["language"] = language
 
     return timeline_block
-
-
-def _render_visible_strikethrough_text(text: str) -> str:
-    return "".join(f"{character}\u0336" for character in text)
 
 
 def render_task_database_page_title(task_id: str, title: str) -> str:

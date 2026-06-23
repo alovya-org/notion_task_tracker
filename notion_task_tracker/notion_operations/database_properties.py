@@ -34,6 +34,23 @@ def rich_text_items(text: str) -> list[dict[str, Any]]:
     return rich_text_items or [_text_item("")]
 
 
+def strikethrough_rich_text_items(text: str) -> list[dict[str, Any]]:
+    return [
+        {
+            **rich_text_item,
+            "annotations": {
+                "bold": False,
+                "italic": False,
+                "strikethrough": True,
+                "underline": False,
+                "code": False,
+                "color": "default",
+            },
+        }
+        for rich_text_item in rich_text_items(text)
+    ]
+
+
 def _first_mention_match(text: str) -> re.Match[str] | None:
     matches = [
         match

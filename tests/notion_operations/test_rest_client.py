@@ -180,6 +180,46 @@ def test_update_properties_call_uses_rest_page_property_shape():
     ]
 
 
+def test_update_properties_call_preserves_structured_title_rich_text():
+    notion_client = _FakeNotionRestClient(
+        responses=[{"id": "22222222-2222-2222-2222-222222222222"}]
+    )
+    title_rich_text = [
+        {
+            "type": "text",
+            "text": {"content": "[1] Root task"},
+            "annotations": {
+                "bold": False,
+                "italic": False,
+                "strikethrough": True,
+                "underline": False,
+                "code": False,
+                "color": "default",
+            },
+        }
+    ]
+
+    asyncio.run(
+        notion_client.execute_write_intent(
+            NotionWriteIntent(
+                operation_key="update_properties:task:ALOVYA-1",
+                operation_name="update_page_properties",
+                target_page_key="task:ALOVYA-1",
+                arguments={"properties": {"Ticket page": {"rich_text": title_rich_text}}},
+            ),
+            _page_registry(),
+        )
+    )
+
+    assert notion_client.requests == [
+        (
+            "PATCH",
+            "/v1/pages/22222222222222222222222222222222",
+            {"properties": {"Ticket page": {"title": title_rich_text}}},
+        )
+    ]
+
+
 def test_replace_content_uses_page_markdown_endpoint():
     notion_client = _FakeNotionRestClient(
         responses=[{}]

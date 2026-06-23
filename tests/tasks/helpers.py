@@ -61,6 +61,3 @@ def _build_recursive_task_tree() -> TaskTree:
     task_tree.link_parent_to_child(parent_task_id="ALOVYA-3", child_task_id="ALOVYA-5")
     return task_tree
 
-
-def _visible_strikethrough_text(text):
-    return "".join(f"{character}\u0336" for character in text)

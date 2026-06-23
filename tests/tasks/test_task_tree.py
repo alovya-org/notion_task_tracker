@@ -17,7 +17,6 @@ from notion_task_tracker.tasks import (
 )
 from tests.tasks.helpers import (
     _build_recursive_task_tree,
-    _visible_strikethrough_text,
 )
 
 
@@ -267,7 +266,7 @@ class TestTaskTreeBuildNotionWritePlan:
         assert '- [P0] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Active {color="red"}' in landing_markdown
         assert '\t- [P0] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Active {color="red"}' in landing_markdown
         assert '\t\t- [P0] <mention-page url="https://www.notion.so/55555555555555555555555555555555"/>: Blocked {color="red"}' in landing_markdown
-        assert '\t- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Complete {color="green"}' in landing_markdown
+        assert '\t- [N/A] ~~<mention-page url="https://www.notion.so/44444444444444444444444444444444"/>~~: Complete {color="green"}' in landing_markdown
 
     def test_renders_completed_page_from_completed_tasks_without_completed_parents(self):
         task_tree = _build_recursive_task_tree()
@@ -281,7 +280,7 @@ class TestTaskTreeBuildNotionWritePlan:
 
         assert completed_landing_refresh_intent.arguments["markdown"] == "\n".join([
             "## Completed",
-            '- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Complete {color="green"}',
+            '- [N/A] ~~<mention-page url="https://www.notion.so/44444444444444444444444444444444"/>~~: Complete {color="green"}',
         ])
 
     def test_completed_task_page_title_strikes_through_and_properties_include_database_metadata(self):
@@ -299,7 +298,22 @@ class TestTaskTreeBuildNotionWritePlan:
             "Friction": "None",
             "Priority": "P3",
             "Status": "Complete",
-            "Ticket page": _visible_strikethrough_text("[4] Complete calibration branch"),
+            "Ticket page": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": "[4] Complete calibration branch"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": False,
+                            "strikethrough": True,
+                            "underline": False,
+                            "code": False,
+                            "color": "default",
+                        },
+                    }
+                ],
+            },
             "Uncertainty": "Low",
         }
 

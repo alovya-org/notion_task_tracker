@@ -18,6 +18,7 @@ from notion_task_tracker.notion_operations.markdown import (
     page_mention,
     toggle,
 )
+from notion_task_tracker.notion_operations.database_properties import strikethrough_rich_text_items
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.landing_pages import (
@@ -122,7 +123,7 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
         target_page_key=task.local_page_key,
         arguments={
             "properties": {
-                TASK_DATABASE_TITLE_PROPERTY: task.render_page_title(),
+                TASK_DATABASE_TITLE_PROPERTY: render_task_database_title_property(task),
                 TASK_DATABASE_PRIORITY_PROPERTY: task.configured_priority.value,
                 TASK_DATABASE_STATUS_PROPERTY: task.status.value,
                 TASK_DATABASE_DEADLINE_PROPERTY: task.deadline,
@@ -132,6 +133,14 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
             }
         },
     )
+
+
+def render_task_database_title_property(task: Task) -> str | dict:
+    title = task.render_page_title()
+    if task.status == TaskStatus.COMPLETE:
+        return {"rich_text": strikethrough_rich_text_items(title)}
+
+    return title
 
 
 def build_task_dependencies_update_intent(task: Task) -> NotionWriteIntent:
@@ -464,6 +473,9 @@ def _format_landing_task_text(
     page_registry: NotionPageRegistry,
 ) -> str:
     priority_label = _format_priority_label_for_task(task, displayed_priority)
+    if task.status in {TaskStatus.COMPLETE, TaskStatus.CANCELLED}:
+        return f"[{priority_label}] ~~{page_mention(task.local_page_key, page_registry)}~~: {task.status.value}"
+
     return f"[{priority_label}] {page_mention(task.local_page_key, page_registry)}: {task.status.value}"
 
 

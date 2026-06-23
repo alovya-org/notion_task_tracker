@@ -490,7 +490,7 @@ def _rest_database_properties(
     rest_properties = {}
     for property_name, property_value in properties.items():
         if property_name in {"title", TASK_DATABASE_TITLE_PROPERTY}:
-            rest_properties[property_name] = {"title": rich_text_items(str(property_value))}
+            rest_properties[property_name] = {"title": _title_rich_text_items(property_value)}
         elif property_name == TASK_DATABASE_PRIORITY_PROPERTY:
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
         elif property_name == TASK_DATABASE_STATUS_PROPERTY:
@@ -512,6 +512,13 @@ def _rest_database_properties(
         else:
             rest_properties[property_name] = property_value
     return rest_properties
+
+
+def _title_rich_text_items(property_value: Any) -> list[dict[str, Any]]:
+    if isinstance(property_value, dict) and "rich_text" in property_value:
+        return list(property_value["rich_text"])
+
+    return rich_text_items(str(property_value))
 
 
 def _plain_property_value(property_value: dict[str, Any] | None) -> str:

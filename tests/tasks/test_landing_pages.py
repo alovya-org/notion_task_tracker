@@ -40,7 +40,7 @@ def test_ongoing_tasks_landing_page_renders_priority_sections_and_child_depth():
     assert markdown == "\n".join([
         "## P1 (high impact)",
         '- [P1] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Active {color="orange"}',
-        '\t- [N/A] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Complete {color="green"}',
+        '\t- [N/A] ~~<mention-page url="https://www.notion.so/22222222222222222222222222222222"/>~~: Complete {color="green"}',
     ])
 
 
@@ -71,7 +71,7 @@ def test_completed_tasks_landing_page_starts_from_completed_tasks_without_visibl
 
     assert markdown == "\n".join([
         "## Completed",
-        '- [N/A] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Complete {color="green"}',
+        '- [N/A] ~~<mention-page url="https://www.notion.so/22222222222222222222222222222222"/>~~: Complete {color="green"}',
     ])
 
 
@@ -273,11 +273,11 @@ def test_completed_tasks_landing_page_orders_sibling_roots_by_dependency_without
 
     assert markdown == "\n".join([
         "## Completed",
-        '- [N/A] <mention-page url="https://www.notion.so/11111111111111111111111111111111"/>: Complete {color="green"}',
-        '- [N/A] <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>: Complete {color="green"}',
+        '- [N/A] ~~<mention-page url="https://www.notion.so/11111111111111111111111111111111"/>~~: Complete {color="green"}',
+        '- [N/A] ~~<mention-page url="https://www.notion.so/22222222222222222222222222222222"/>~~: Complete {color="green"}',
         "## Cancelled",
-        '- [N/A] <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>: Cancelled {color="gray"}',
-        '- [N/A] <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>: Cancelled {color="gray"}',
+        '- [N/A] ~~<mention-page url="https://www.notion.so/33333333333333333333333333333333"/>~~: Cancelled {color="gray"}',
+        '- [N/A] ~~<mention-page url="https://www.notion.so/44444444444444444444444444444444"/>~~: Cancelled {color="gray"}',
     ])
 
 
