@@ -22,6 +22,7 @@ Logs should preserve the facts needed to resume work without rereading the chat.
 
 - Prefer rich blocks for normal logs: paragraphs for conclusions and decisions, code blocks for commands, outputs, diffs, stack traces, paths, JSON/YAML, and structured observations.
 - Include exact commands, files, errors, outputs, and test results when they matter.
+- In paragraph text, wrap inline technical names such as file paths, commands, environment variables, functions, class names, field names, tickets, and literal values in backticks.
 - Keep observation, inference, decision, and follow-up distinct.
 - Avoid bland summaries such as "Discussed X" when the useful content is what happened, what changed, and why.
 - Put detailed work on the most specific task page. Parent timeline entries created by child or sibling splits are bookkeeping links, not substitutes for the real log.
