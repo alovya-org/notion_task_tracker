@@ -39,7 +39,7 @@ def test_derive_task_timeline_log_from_fetched_page_content_records_missing_time
             [
                 "<page>",
                 "<properties>",
-                '{"Ticket ID":"1","Ticket page":"Root task"}',
+                '{"Task ID":"1","Task page":"Root task"}',
                 "</properties>",
                 "Loose notes written before the tracker touched the page.",
                 "</page>",

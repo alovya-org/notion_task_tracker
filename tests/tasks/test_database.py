@@ -342,7 +342,7 @@ class TestTaskIdFromFetchedTaskDatabasePage:
                 [
                     "<page>",
                     "<properties>",
-                    '{"Ticket ID":"72","Ticket page":"Fresh task"}',
+                    '{"Task ID":"72","Task page":"Fresh task"}',
                     "</properties>",
                     "</page>",
                 ]
@@ -373,8 +373,8 @@ def _build_task_database_row(
     friction: str = "None",
 ) -> dict:
     return {
-        "Ticket page": ticket_page,
-        "Ticket ID": ticket_id,
+        "Task page": ticket_page,
+        "Task ID": ticket_id,
         "Priority": priority,
         "Status": status,
         "Parent": _render_relation_urls(parent_page_ids or []),

@@ -26,7 +26,7 @@ def test_fetch_task_page_content_uses_page_properties_and_markdown():
         notion_client.fetch_task_page_content("22222222222222222222222222222222")
     )
 
-    assert '"Ticket ID": "1"' in fetched_page_content
+    assert '"Task ID": "1"' in fetched_page_content
     assert "## Timeline log" in fetched_page_content
     assert notion_client.requests == [
         ("GET", "/v1/pages/22222222222222222222222222222222", None),
@@ -112,8 +112,8 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
             "Dependants": '["https://www.notion.so/44444444444444444444444444444444"]',
             "External coordination": "Yes",
             "Friction": "Charged",
-            "Ticket page": "Root task",
-            "Ticket ID": "7",
+            "Task page": "Root task",
+            "Task ID": "7",
             "Priority": "P1",
             "Status": "Active",
             "Parent": "[]",
@@ -139,7 +139,7 @@ def test_update_properties_call_uses_rest_page_property_shape():
                 target_page_key="task:ALOVYA-1",
                 arguments={
                     "properties": {
-                        "Ticket page": "Root task",
+                        "Task page": "Root task",
                         "Priority": "P2",
                         "Status": "Blocked",
                         "Dependencies": ["task:ALOVYA-2"],
@@ -161,7 +161,7 @@ def test_update_properties_call_uses_rest_page_property_shape():
             "/v1/pages/22222222222222222222222222222222",
             {
                 "properties": {
-                    "Ticket page": {"title": [{"type": "text", "text": {"content": "Root task"}}]},
+                    "Task page": {"title": [{"type": "text", "text": {"content": "Root task"}}]},
                     "Priority": {"select": {"name": "P2"}},
                     "Status": {"select": {"name": "Blocked"}},
                     "Dependencies": {
@@ -205,7 +205,7 @@ def test_update_properties_call_preserves_structured_title_rich_text():
                 operation_key="update_properties:task:ALOVYA-1",
                 operation_name="update_page_properties",
                 target_page_key="task:ALOVYA-1",
-                arguments={"properties": {"Ticket page": {"rich_text": title_rich_text}}},
+                arguments={"properties": {"Task page": {"rich_text": title_rich_text}}},
             ),
             _page_registry(),
         )
@@ -215,7 +215,7 @@ def test_update_properties_call_preserves_structured_title_rich_text():
         (
             "PATCH",
             "/v1/pages/22222222222222222222222222222222",
-            {"properties": {"Ticket page": {"title": title_rich_text}}},
+            {"properties": {"Task page": {"title": title_rich_text}}},
         )
     ]
 
@@ -306,7 +306,7 @@ def test_create_pages_call_creates_database_page_with_children():
         notion_client.create_database_page(
             data_source_id="data-source-a",
             properties={
-                "Ticket page": "Child task",
+                "Task page": "Child task",
                 "Priority": "P1",
                 "Status": "Active",
                 "Parent": json.dumps([
@@ -419,11 +419,11 @@ def _page_registry() -> NotionPageRegistry:
 
 def _task_properties(ticket_number: int) -> dict:
     return {
-        "Ticket page": {
+        "Task page": {
             "type": "title",
             "title": [{"plain_text": "Root task"}],
         },
-        "Ticket ID": {
+        "Task ID": {
             "type": "unique_id",
             "unique_id": {"number": ticket_number},
         },

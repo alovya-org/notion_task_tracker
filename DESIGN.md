@@ -13,8 +13,8 @@ The tracker is deterministic. Agents provide semantic input; Python owns tree pr
 Every task is a row in `Alovya's task database`. Notion owns the structured fields:
 
 ```text
-Ticket ID: 72
-Ticket page: Measure activation mismatch after QNN export
+Task ID: 72
+Task page: Measure activation mismatch after QNN export
 Priority: P1
 Status: Active
 Parent: ALOVYA-5
@@ -37,7 +37,7 @@ Task-page body details:
 4. PRs, Jira tickets, branches, docs, and source notes belong inside the relevant timeline entry.
 5. Completed task pages use strikethrough page titles and priority `N/A` in derived views.
 
-Task ids are always derived from Notion's `Ticket ID`.
+Task ids are always derived from Notion's `Task ID`.
 
 ## Task Tree
 
@@ -207,7 +207,7 @@ replace page Markdown
 update page Markdown
 ```
 
-After miscellaneous or synthesis page creation, the CLI records the returned page id and runs the needed refresh command. Task creation captures the new database row and assigned `Ticket ID` during live command execution.
+After miscellaneous or synthesis page creation, the CLI records the returned page id and runs the needed refresh command. Task creation captures the new database row and assigned `Task ID` during live command execution.
 
 Footgun: page replacement overwrites the whole page body Markdown. Use it only for tracker-owned landing, miscellaneous, or synthesis pages.
 

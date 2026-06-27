@@ -21,8 +21,8 @@ def test_refresh_tracker_state_from_notion_task_database_uses_configured_data_so
     notion_client = FakeNotionClient(
         database_rows=[
             {
-                "Ticket page": "Root task edited in database",
-                "Ticket ID": "1",
+                "Task page": "Root task edited in database",
+                "Task ID": "1",
                 "Priority": "P2",
                 "Status": "Blocked",
                 "Parent": "[]",
@@ -54,8 +54,8 @@ def test_refresh_tracker_state_from_notion_task_database_does_not_depend_on_view
     notion_client = FakeNotionClient(
         database_rows=[
             {
-                "Ticket page": "Root task edited in database",
-                "Ticket ID": "1",
+                "Task page": "Root task edited in database",
+                "Task ID": "1",
                 "Priority": "P2",
                 "Status": "Blocked",
                 "Parent": "[]",

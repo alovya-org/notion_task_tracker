@@ -209,8 +209,8 @@ def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_wr
                 "<page>",
                 "<properties>",
                 json.dumps({
-                    "Ticket page": "Read task summaries",
-                    "Ticket ID": "1",
+                    "Task page": "Read task summaries",
+                    "Task ID": "1",
                     "Priority": "P2",
                     "Status": "Active",
                     "Parent": "[]",

@@ -43,8 +43,8 @@ Create these two objects in the Notion UI:
 
 | Property | Notion type | Required values or relation |
 |---|---|---|
-| `Ticket page` | Title | Task title |
-| `Ticket ID` | Unique ID | Notion-assigned number |
+| `Task page` | Title | Task title |
+| `Task ID` | Unique ID | Notion-assigned number |
 | `Priority` | Select | `P0`, `P1`, `P2`, `P3` |
 | `Status` | Select | `Active`, `Blocked`, `Parked`, `Complete`, `Cancelled` |
 | `Parent` | Relation | Same task database |
@@ -206,9 +206,9 @@ Normal commands are fast because they only refresh the task pages they touch. Th
 
 Run full reconciliation when a task was created only in Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
 
-Targeted preflight intentionally fails instead of guessing when the touched page has malformed task properties, reports a different `Ticket ID` than the requested task, has more than one parent, or points to a parent page that is absent from local tracker state.
+Targeted preflight intentionally fails instead of guessing when the touched page has malformed task properties, reports a different `Task ID` than the requested task, has more than one parent, or points to a parent page that is absent from local tracker state.
 
-Task ids are derived from Notion's `Ticket ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
+Task ids are derived from Notion's `Task ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
 
 ## Task Commands
 
@@ -269,7 +269,7 @@ Cancel a task. The tracker marks the task `Cancelled`, appends or merges the tim
 }
 ```
 
-Create a top-level task. In database-backed mode, the tracker creates a database row, Notion assigns `Ticket ID`, and the tracker then records the assigned task id:
+Create a top-level task. In database-backed mode, the tracker creates a database row, Notion assigns `Task ID`, and the tracker then records the assigned task id:
 
 ```json
 {
@@ -308,7 +308,7 @@ Add one child task under an existing parent task. The command does not include a
 }
 ```
 
-Record a page id returned by `notion-create-pages`. This is used by miscellaneous and synthesis page creation; task creation captures the created database row and assigned `Ticket ID` inside live command execution:
+Record a page id returned by `notion-create-pages`. This is used by miscellaneous and synthesis page creation; task creation captures the created database row and assigned `Task ID` inside live command execution:
 
 ```json
 {
@@ -396,7 +396,7 @@ This replaces the local existing-page mention list with exactly the page mention
 - `append_task_timeline_log`: add a dated timeline entry to one task with targeted page content. New dates are prepended under `Timeline log`; existing dates are updated under their date heading. It must not replace the task page or landing pages.
 - `complete_task`: mark one task complete, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
 - `cancel_task`: mark one task cancelled, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
-- `create_top_level_task`: create a top-level task database row and use Notion's assigned `Ticket ID`.
+- `create_top_level_task`: create a top-level task database row and use Notion's assigned `Task ID`.
 - `split_task_into_children`: create one child task database row under an existing source task, copy the source task's dependencies and dependants onto the child, clear the source task's own relation fields, initialise the child Timeline log with a parent link, and append a source timeline entry linking to the child.
 - `split_task_with_sibling`: create one task database row under the same parent as an existing source task, or top-level when the source has no parent. The new sibling copies the source task's dependencies and dependants. If the sibling has a parent, initialise the new page with a parent link and append a parent timeline entry linking to the new page.
 - `record_page_id`: record a page id returned by a page creation write.

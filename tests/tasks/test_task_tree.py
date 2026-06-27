@@ -296,7 +296,7 @@ class TestTaskTreeBuildNotionWritePlan:
             "Friction": "None",
             "Priority": "P3",
             "Status": "Complete",
-            "Ticket page": {
+            "Task page": {
                 "rich_text": [
                     {
                         "type": "text",

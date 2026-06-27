@@ -11,7 +11,7 @@ from notion_task_tracker.external_links import ExternalLink
 
 
 COMPLETED_TASK_PRIORITY_LABEL = "N/A"
-TASK_DATABASE_TITLE_PROPERTY = "Ticket page"
+TASK_DATABASE_TITLE_PROPERTY = "Task page"
 TASK_DATABASE_PRIORITY_PROPERTY = "Priority"
 TASK_DATABASE_STATUS_PROPERTY = "Status"
 

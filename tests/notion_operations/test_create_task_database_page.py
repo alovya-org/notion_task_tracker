@@ -23,7 +23,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
                 [
                     "<page>",
                     "<properties>",
-                    '{"Ticket ID":"72","Ticket page":"Child task"}',
+                    '{"Task ID":"72","Task page":"Child task"}',
                     "</properties>",
                     "</page>",
                 ]
@@ -32,7 +32,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
                 [
                     "<page>",
                     "<properties>",
-                    '{"Ticket ID":"73","Ticket page":"Other child task"}',
+                    '{"Task ID":"73","Task page":"Other child task"}',
                     "</properties>",
                     "</page>",
                 ]
@@ -112,7 +112,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         "Deadline": None,
         "External coordination": "No",
         "Friction": "None",
-        "Ticket page": "Child task",
+        "Task page": "Child task",
         "Priority": "P2",
         "Status": "Active",
         "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
@@ -129,7 +129,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         ]
     )
     assert notion_client.calls[1].arguments["properties"] == {
-        "Ticket page": "[72] Child task",
+        "Task page": "[72] Child task",
     }
     assert notion_client.calls[2].operation_name == "replace_page_markdown"
     assert notion_client.calls[2].arguments["markdown"] == "\n".join(
@@ -156,7 +156,7 @@ def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_t
                 [
                     "<page>",
                     "<properties>",
-                    '{"Ticket ID":"73","Ticket page":"Sibling task"}',
+                    '{"Task ID":"73","Task page":"Sibling task"}',
                     "</properties>",
                     "</page>",
                 ]
@@ -238,7 +238,7 @@ def test_execute_create_task_database_page_command_copies_sibling_split_relation
                 [
                     "<page>",
                     "<properties>",
-                    '{"Ticket ID":"74","Ticket page":"Sibling task"}',
+                    '{"Task ID":"74","Task page":"Sibling task"}',
                     "</properties>",
                     "</page>",
                 ]

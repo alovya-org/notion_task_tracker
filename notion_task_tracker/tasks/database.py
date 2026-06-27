@@ -27,7 +27,7 @@ from notion_task_tracker.tasks.task import (
 from notion_task_tracker.tracked_pages import TrackedPage
 
 
-TASK_DATABASE_TICKET_ID_PROPERTY = "Ticket ID"
+TASK_DATABASE_TICKET_ID_PROPERTY = "Task ID"
 TASK_DATABASE_PARENT_PROPERTY = "Parent"
 TASK_DATABASE_DEPENDENCIES_PROPERTY = "Dependencies"
 TASK_DATABASE_DEPENDANTS_PROPERTY = "Dependants"
@@ -394,7 +394,7 @@ def _relation_page_urls(raw_relation: Any) -> list[str]:
 def _required_ticket_number(query_result: dict[str, Any]) -> int:
     raw_ticket_number = query_result.get(TASK_DATABASE_TICKET_ID_PROPERTY)
     if raw_ticket_number in {None, ""}:
-        raise NotionPlanningError("Task database row has no Ticket ID")
+        raise NotionPlanningError("Task database row has no Task ID")
 
     return int(raw_ticket_number)
 

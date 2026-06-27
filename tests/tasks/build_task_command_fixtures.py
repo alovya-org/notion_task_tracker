@@ -60,8 +60,8 @@ def build_fetched_task_page(
             "<properties>",
             json.dumps(
                 {
-                    "Ticket ID": ticket_id,
-                    "Ticket page": title,
+                    "Task ID": ticket_id,
+                    "Task page": title,
                     "Priority": priority,
                     "Status": status,
                     "Parent": json.dumps(parent_urls),
