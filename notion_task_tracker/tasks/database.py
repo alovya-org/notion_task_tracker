@@ -27,11 +27,6 @@ from notion_task_tracker.tasks.task import (
 from notion_task_tracker.tracked_pages import TrackedPage
 
 
-TASK_DATABASE_DATA_SOURCE_ID = "36b03da5-d69a-8080-91d1-000b5d7c1c8d"
-TASK_DATABASE_DATA_SOURCE_URL = f"collection://{TASK_DATABASE_DATA_SOURCE_ID}"
-TASK_DATABASE_VIEW_URL = (
-    "https://www.notion.so/wayve/36b03da5d69a80b4acacf711623b59e8?v=36b03da5d69a800c893f000cf2aefead"
-)
 TASK_DATABASE_TICKET_ID_PROPERTY = "Ticket ID"
 TASK_DATABASE_PARENT_PROPERTY = "Parent"
 TASK_DATABASE_DEPENDENCIES_PROPERTY = "Dependencies"
@@ -40,18 +35,19 @@ TASK_DATABASE_DEADLINE_PROPERTY = "Deadline"
 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
 TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
 TASK_DATABASE_FRICTION_PROPERTY = "Friction"
-_TASK_TITLE_PREFIX_PATTERN = re.compile(r"^(?:ALOVYA-\d+:|\[\d+\])\s+")
+_TASK_TITLE_PREFIX_PATTERN = re.compile(r"^(?:[A-Z][A-Z0-9_]*-\d+:|\[\d+\])\s+")
 
 
 def build_task_tree_from_database_query_results(
     query_results: list[dict[str, Any]],
+    ticket_prefix: str,
     landing_page: TrackedPage,
     completed_landing_page: TrackedPage | None = None,
     previous_task_tree: TaskTree | None = None,
 ) -> TaskTree:
     previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_task_tree)
     previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_task_tree)
-    database_rows = _database_rows_from_query_results(query_results)
+    database_rows = _database_rows_from_query_results(query_results, ticket_prefix)
     database_rows = _database_rows_that_belong_to_task_tree(database_rows)
     task_tree = TaskTree(
         ongoing_tasks_landing_page=OngoingTasksLandingPage(page=landing_page),
@@ -95,63 +91,51 @@ class TaskDatabaseRow:
 
 def task_database_query_for_tracker_state(tracker_state: dict[str, Any]) -> str:
     return (
-        f'SELECT * FROM "{TASK_DATABASE_DATA_SOURCE_URL}" '
+        f'SELECT * FROM "{task_database_data_source_url_from_tracker_state(tracker_state)}" '
         f'WHERE "{TASK_DATABASE_PRIORITY_PROPERTY}" IS NOT NULL '
         f'AND "{TASK_DATABASE_STATUS_PROPERTY}" IS NOT NULL'
     )
 
 
 def task_database_data_source_url_from_tracker_state(tracker_state: dict[str, Any]) -> str:
-    return tracker_state.get("task_database", {}).get("data_source_url", TASK_DATABASE_DATA_SOURCE_URL)
-
-
-def task_database_view_url_from_tracker_state(tracker_state: dict[str, Any]) -> str | None:
-    return tracker_state.get("task_database", {}).get("view_url")
+    return str(tracker_state["task_database"]["data_source_url"])
 
 
 def task_database_data_source_id_from_tracker_state(tracker_state: dict[str, Any]) -> str:
-    return tracker_state.get("task_database", {}).get("data_source_id", TASK_DATABASE_DATA_SOURCE_ID)
+    return str(tracker_state["task_database"]["data_source_id"])
 
 
-def task_id_from_fetched_task_database_page(fetched_page_content: str) -> str:
-    return f"ALOVYA-{_ticket_number_from_fetched_task_database_page(fetched_page_content)}"
+def task_id_from_fetched_task_database_page(fetched_page_content: str, ticket_prefix: str) -> str:
+    return f"{ticket_prefix}-{_ticket_number_from_fetched_task_database_page(fetched_page_content)}"
 
 
 def task_database_row_from_fetched_task_database_page(
     fetched_page_content: str,
     notion_page_id: str,
+    ticket_prefix: str,
 ) -> TaskDatabaseRow:
     properties = _properties_from_fetched_task_database_page(fetched_page_content)
     properties.setdefault("url", f"https://www.notion.so/{canonical_notion_page_id(notion_page_id)}")
-    return _database_row_from_query_result(properties)
+    return _database_row_from_query_result(properties, ticket_prefix)
 
 
-def default_task_database_tracker_state() -> dict[str, Any]:
+def build_task_database_tracker_state(data_source_id: str) -> dict[str, str]:
     return {
-        "data_source_id": TASK_DATABASE_DATA_SOURCE_ID,
-        "data_source_url": TASK_DATABASE_DATA_SOURCE_URL,
-        "view_url": TASK_DATABASE_VIEW_URL,
-        "title_property": TASK_DATABASE_TITLE_PROPERTY,
-        "ticket_id_property": TASK_DATABASE_TICKET_ID_PROPERTY,
-        "priority_property": TASK_DATABASE_PRIORITY_PROPERTY,
-        "status_property": TASK_DATABASE_STATUS_PROPERTY,
-        "parent_property": TASK_DATABASE_PARENT_PROPERTY,
-        "dependencies_property": TASK_DATABASE_DEPENDENCIES_PROPERTY,
-        "dependants_property": TASK_DATABASE_DEPENDANTS_PROPERTY,
-        "deadline_property": TASK_DATABASE_DEADLINE_PROPERTY,
-        "external_coordination_property": TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
-        "uncertainty_property": TASK_DATABASE_UNCERTAINTY_PROPERTY,
-        "friction_property": TASK_DATABASE_FRICTION_PROPERTY,
+        "data_source_id": data_source_id,
+        "data_source_url": f"collection://{data_source_id}",
     }
 
 
-def _database_rows_from_query_results(query_results: list[dict[str, Any]]) -> list[TaskDatabaseRow]:
+def _database_rows_from_query_results(
+    query_results: list[dict[str, Any]],
+    ticket_prefix: str,
+) -> list[TaskDatabaseRow]:
     database_rows_by_task_id = {}
 
     for query_result in query_results:
         if not _query_result_has_task_identity(query_result):
             continue
-        database_row = _database_row_from_query_result(query_result)
+        database_row = _database_row_from_query_result(query_result, ticket_prefix)
         _record_database_row_by_task_id(database_rows_by_task_id, database_row)
 
     return list(database_rows_by_task_id.values())
@@ -197,14 +181,13 @@ def _properties_from_fetched_task_database_page(fetched_page_content: str) -> di
     return json.loads(properties_match.group(1))
 
 
-def _database_row_from_query_result(query_result: dict[str, Any]) -> TaskDatabaseRow:
+def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix: str) -> TaskDatabaseRow:
     ticket_number = _required_ticket_number(query_result)
     notion_page_url = _required_text_property(query_result, "url")
     notion_page_id = notion_page_id_from_url(notion_page_url)
-    task_id = f"ALOVYA-{ticket_number}"
+    task_id = f"{ticket_prefix}-{ticket_number}"
     title = _task_title_from_database_title(
         database_title=_required_text_property(query_result, TASK_DATABASE_TITLE_PROPERTY),
-        task_id=task_id,
     )
     return TaskDatabaseRow(
         task_id=task_id,
@@ -383,7 +366,7 @@ def _record_database_row_by_task_id(
     raise NotionPlanningError(f"Duplicate task id {database_row.task_id} in task database")
 
 
-def _task_title_from_database_title(database_title: str, task_id: str) -> str:
+def _task_title_from_database_title(database_title: str) -> str:
     database_title = _plain_database_title(database_title)
     while True:
         task_title_match = _TASK_TITLE_PREFIX_PATTERN.match(database_title)

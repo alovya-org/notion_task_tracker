@@ -32,6 +32,20 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
+def test_parse_args_reads_initialise_action_and_configuration():
+    args = parse_args([
+        "--init",
+        "--display-name", "Alovya",
+        "--ticket-prefix", "ALOVYA",
+        "--parent-page-url", "https://www.notion.so/parent",
+        "--task-database-url", "https://www.notion.so/database",
+    ])
+
+    assert args.init is True
+    assert args.display_name == "Alovya"
+    assert args.ticket_prefix == "ALOVYA"
+
+
 def test_parse_args_collects_repeated_titles():
     args = parse_args(["--child", "--parent-ticket-number", "67", "--title", "One"])
 

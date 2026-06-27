@@ -4,9 +4,7 @@ from notion_task_tracker.notion_operations.rest_client import CreatedTaskDatabas
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TITLE_PROPERTY,
-    task_database_data_source_url_from_tracker_state,
-    task_database_query_for_tracker_state,
-    task_database_view_url_from_tracker_state,
+    task_database_data_source_id_from_tracker_state,
 )
 
 
@@ -45,14 +43,10 @@ class FakeNotionClient:
         return list(self.database_rows)
 
     async def query_task_database_rows(self, tracker_state: dict):
-        view_url = task_database_view_url_from_tracker_state(tracker_state)
-        if view_url is not None:
-            return await self.query_database_view(view_url)
-
-        return await self.query_data_source(
-            data_source_url=task_database_data_source_url_from_tracker_state(tracker_state),
-            query=task_database_query_for_tracker_state(tracker_state),
-        )
+        self.queries.append({
+            "data_source_id": task_database_data_source_id_from_tracker_state(tracker_state),
+        })
+        return list(self.database_rows)
 
     async def create_task_database_page(
         self,

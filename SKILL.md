@@ -1,6 +1,6 @@
 ---
 name: notion_task_tracker
-description: Work or create ALOVYA tasks, read ALOVYA task context, log ALOVYA task progress, complete or cancel ALOVYA tasks, capture miscellaneous notes, or create synthesis notes from the personal Notion task tree. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], notion_task misc [title] NOTES, notion_task synth [title] SOURCES NOTES, asks to continue an existing ALOVYA task, or asks to write task/misc/synthesis context to Notion.
+description: Work or create tracker tasks, read tracker task context, log tracker task progress, complete or cancel tracker tasks, capture miscellaneous notes, or create synthesis notes from the personal Notion task tree. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], notion_task misc [title] NOTES, notion_task synth [title] SOURCES NOTES, asks to continue an existing tracker task, or asks to write task/misc/synthesis context to Notion.
 ---
 
 # Notion Task

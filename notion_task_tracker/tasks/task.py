@@ -19,7 +19,6 @@ TASK_PAGE_TIMELINE_LOG_HEADING = "Timeline log"
 
 UPDATE_TIMELINE_LOG_OPERATION_NAME = "update_timeline_log"
 
-TASK_ID_PATTERN = re.compile(r"^(ALOVYA-\d+):\s*(.+)$")
 MENTION_DATE_START_PATTERN = re.compile(r'<mention-date\s+[^>]*start="([^"]+)"[^>]*/>')
 PROPERTIES_BLOCK_PATTERN = re.compile(r"<properties>\s*(.*?)\s*</properties>", re.DOTALL)
 
@@ -321,4 +320,7 @@ def _timeline_block_from_command(block: Any) -> dict[str, str]:
 
 
 def render_task_database_page_title(task_id: str, title: str) -> str:
-    return f"[{task_id.removeprefix('ALOVYA-')}] {title}"
+    _ticket_prefix, separator, ticket_number = task_id.rpartition("-")
+    if not separator or not ticket_number.isdigit():
+        raise ValueError(f"Task id {task_id!r} must end with a numeric ticket number")
+    return f"[{ticket_number}] {title}"

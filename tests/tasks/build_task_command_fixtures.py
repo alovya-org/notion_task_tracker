@@ -15,7 +15,9 @@ def build_tracker_state_with_root_task() -> dict:
             notion_page_id="22222222222222222222222222222222",
         )
     )
-    return task_tree.to_tracker_state()
+    tracker_state = task_tree.to_tracker_state()
+    tracker_state["identity"] = {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
+    return tracker_state
 
 
 def build_tracker_state_with_root_and_child_task() -> dict:
@@ -40,7 +42,9 @@ def build_tracker_state_with_root_and_child_task() -> dict:
         )
     )
     task_tree.link_parent_to_child(parent_task_id="ALOVYA-1", child_task_id="ALOVYA-2")
-    return task_tree.to_tracker_state()
+    tracker_state = task_tree.to_tracker_state()
+    tracker_state["identity"] = {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
+    return tracker_state
 
 
 def build_fetched_task_page(

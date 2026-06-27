@@ -127,7 +127,12 @@ async def _fetch_database_rows_for_command_tasks(
         if task_id in refreshed_task_ids:
             continue
 
-        database_row = await _fetch_known_task_database_row(task_id, task_tree, notion_client)
+        database_row = await _fetch_known_task_database_row(
+            task_id,
+            ticket_prefix=tracker_state["identity"]["ticket_prefix"],
+            task_tree=task_tree,
+            notion_client=notion_client,
+        )
         database_rows_by_task_id[task_id] = database_row
         refreshed_task_ids.add(task_id)
 
@@ -153,7 +158,12 @@ async def _fetch_database_rows_for_task_ids(
         if task_id in refreshed_task_ids:
             continue
 
-        database_row = await _fetch_known_task_database_row(task_id, task_tree, notion_client)
+        database_row = await _fetch_known_task_database_row(
+            task_id,
+            ticket_prefix=tracker_state["identity"]["ticket_prefix"],
+            task_tree=task_tree,
+            notion_client=notion_client,
+        )
         database_rows_by_task_id[task_id] = database_row
         refreshed_task_ids.add(task_id)
 
@@ -166,6 +176,7 @@ async def _fetch_database_rows_for_task_ids(
 
 async def _fetch_known_task_database_row(
     task_id: str,
+    ticket_prefix: str,
     task_tree: TaskTree,
     notion_client: NotionRestClient,
 ) -> TaskDatabaseRow:
@@ -180,6 +191,7 @@ async def _fetch_known_task_database_row(
     return task_database_row_from_fetched_task_database_page(
         fetched_page_content=fetched_page_content,
         notion_page_id=notion_page_id,
+        ticket_prefix=ticket_prefix,
     )
 
 

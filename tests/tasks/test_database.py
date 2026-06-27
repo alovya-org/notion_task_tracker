@@ -15,12 +15,9 @@ from notion_task_tracker.tasks import (
     Uncertainty,
 )
 from notion_task_tracker.tasks.database import (
-    TASK_DATABASE_DATA_SOURCE_URL,
-    TASK_DATABASE_VIEW_URL,
-    default_task_database_tracker_state,
+    build_task_database_tracker_state,
     task_database_data_source_url_from_tracker_state,
     task_database_query_for_tracker_state,
-    task_database_view_url_from_tracker_state,
     build_task_tree_from_database_query_results,
     task_id_from_fetched_task_database_page,
 )
@@ -40,7 +37,7 @@ class TestTaskTreeFromDatabaseQueryResults:
             )
         )
 
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-1: Root task",
@@ -75,7 +72,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         previous_task_tree = TaskTree()
         previous_task_tree.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
 
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[],
             landing_page=TrackedPage(
                 local_page_key="ongoing_landing_page",
@@ -89,7 +86,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.completed_tasks_landing_page.page.notion_page_id == "completed-landing-page-id"
 
     def test_uses_notion_ticket_id_for_task_id(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="New database-native task",
@@ -108,7 +105,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-70"].title == "New database-native task"
 
     def test_accepts_slugged_notion_urls(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Root task",
@@ -126,7 +123,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-1"].notion_page_id == "22222222222222222222222222222222"
 
     def test_reads_completed_struckthrough_title_as_plain_task_title(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page=(
@@ -149,7 +146,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-68"].title == "Finished task"
 
     def test_sorts_child_relations_by_task_number(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-1: Root task",
@@ -179,7 +176,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69", "ALOVYA-70"]
 
     def test_reads_dependency_relations_and_task_metadata(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Dependency task",
@@ -214,7 +211,7 @@ class TestTaskTreeFromDatabaseQueryResults:
 
     def test_rejects_dependency_and_dependant_relation_mismatch(self):
         with pytest.raises(ValueError, match="Dependants for task ALOVYA-1 do not match"):
-            build_task_tree_from_database_query_results(
+            _build_task_tree(
                 query_results=[
                     _build_task_database_row(
                         ticket_page="Dependency task",
@@ -244,7 +241,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         del row["External coordination"]
 
         with pytest.raises(ValueError, match="Task database row has no External coordination"):
-            build_task_tree_from_database_query_results(
+            _build_task_tree(
                 query_results=[row],
                 landing_page=TrackedPage(
                     local_page_key="ongoing_landing_page",
@@ -254,7 +251,7 @@ class TestTaskTreeFromDatabaseQueryResults:
             )
 
     def test_skips_rows_that_point_to_unknown_parent_rows(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="ALOVYA-2: Child task",
@@ -275,7 +272,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks == {}
 
     def test_skips_orphan_subtrees(self):
-        task_tree = build_task_tree_from_database_query_results(
+        task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
                     ticket_page="Parent prototype",
@@ -301,7 +298,7 @@ class TestTaskTreeFromDatabaseQueryResults:
 
     def test_rejects_duplicate_task_ids(self):
         with pytest.raises(ValueError, match="Duplicate task id ALOVYA-68"):
-            build_task_tree_from_database_query_results(
+            _build_task_tree(
                 query_results=[
                     _build_task_database_row(
                         ticket_page="ALOVYA-1: First task",
@@ -324,17 +321,16 @@ class TestTaskTreeFromDatabaseQueryResults:
 
 
 class TestTaskDatabaseTrackerState:
-    def test_defaults_to_task_property_filtered_query(self):
-        tracker_state = default_task_database_tracker_state()
+    def test_builds_task_property_filtered_query_for_configured_data_source(self):
+        tracker_state = build_task_database_tracker_state(
+            data_source_id="configured-data-source-id",
+        )
 
         assert task_database_data_source_url_from_tracker_state(tracker_state={"task_database": tracker_state}) == (
-            TASK_DATABASE_DATA_SOURCE_URL
-        )
-        assert task_database_view_url_from_tracker_state(tracker_state={"task_database": tracker_state}) == (
-            TASK_DATABASE_VIEW_URL
+            "collection://configured-data-source-id"
         )
         assert task_database_query_for_tracker_state({"task_database": tracker_state}) == (
-            f'SELECT * FROM "{TASK_DATABASE_DATA_SOURCE_URL}" '
+            'SELECT * FROM "collection://configured-data-source-id" '
             'WHERE "Priority" IS NOT NULL AND "Status" IS NOT NULL'
         )
 
@@ -350,10 +346,15 @@ class TestTaskIdFromFetchedTaskDatabasePage:
                     "</properties>",
                     "</page>",
                 ]
-            )
+            ),
+            ticket_prefix="PERSONAL",
         )
 
-        assert task_id == "ALOVYA-72"
+        assert task_id == "PERSONAL-72"
+
+
+def _build_task_tree(*args, **kwargs) -> TaskTree:
+    return build_task_tree_from_database_query_results(*args, ticket_prefix="ALOVYA", **kwargs)
 
 
 def _build_task_database_row(

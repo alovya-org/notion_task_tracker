@@ -1,31 +1,23 @@
 # Notion Task Tracker
 
-This package turns explicit CLI actions into Notion writes. The tracker owns tree projection, page shape, rendering, write ordering, and Notion SDK calls. Task metadata now comes from `Alovya's task database`; task page bodies contain timeline logs only, and the ongoing and completed task landing pages are derived views.
+This package turns explicit CLI actions into Notion writes. Each user supplies one parent page and one fixed-schema task database. Initialisation creates the four tracker-owned pages beneath that parent:
 
-Fixed page names live in `fixed_pages.py`:
-
-1. `Alovya's ongoing tasks landing page`
-2. `Alovya's completed tasks landing page`
-3. `Alovya's miscellanous notes`
-4. `Alovya's synthesis notes`
-
-Notion page ids live in tracker state because Notion assigns them. The task database source and saved-view URLs live in `tasks/database.py`.
-
-Run an explicit action from an environment where `notion-task-tracker` is installed:
-
-```bash
-ntt \
-  --log \
-  --ticket-number 67 \
-  --content-path /tmp/notion_task_log.json
+```text
+Tracker parent page
+├── <display name>'s ongoing tasks
+├── <display name>'s completed tasks
+├── <display name>'s miscellaneous notes
+└── <display name>'s synthesis notes
 ```
 
-Execution needs `NOTION_API_KEY` to contain the `ntn_` Notion integration token.
+Task metadata lives in the database. Task page bodies contain timeline logs, while the ongoing and completed pages are derived views.
 
-Install the package into the local venv with:
+## Install
+
+Install the package into a virtual environment from the repository directory:
 
 ```bash
-/workspace/venv/bin/python -m pip install /home/alovyachowdhury/notion_task_tracker
+python -m pip install .
 ```
 
 Install it from GitHub with:
@@ -37,10 +29,77 @@ python -m pip install git+https://github.com/alovya/notion_task_tracker.git
 During local development, install it as editable:
 
 ```bash
-/workspace/venv/bin/python -m pip install -e /home/alovyachowdhury/notion_task_tracker
+python -m pip install -e .
 ```
 
 The package installs `ntt` and `notion-task-tracker` console commands. `python -m notion_task_tracker` remains supported.
+
+## Initialise A Tracker
+
+Create these two objects in the Notion UI:
+
+1. One ordinary parent page. Connect the Notion integration to this page so it can create the four managed child pages.
+2. One task database using the fixed schema below. The database may also live beneath the parent page. Connect the integration to the database as well.
+
+| Property | Notion type | Required values or relation |
+|---|---|---|
+| `Ticket page` | Title | Task title |
+| `Ticket ID` | Unique ID | Notion-assigned number |
+| `Priority` | Select | `P0`, `P1`, `P2`, `P3` |
+| `Status` | Select | `Active`, `Blocked`, `Parked`, `Complete`, `Cancelled` |
+| `Parent` | Relation | Same task database |
+| `Dependencies` | Relation | Same task database |
+| `Dependants` | Relation | Same task database |
+| `Deadline` | Date | Optional date |
+| `External coordination` | Select | `No`, `Yes` |
+| `Uncertainty` | Select | `Low`, `High` |
+| `Friction` | Select | `None`, `Insufficiently decomposed`, `Charged`, `Stale` |
+
+Set `NOTION_API_KEY` to the integration token, then initialise with the two URLs:
+
+```bash
+ntt --init \
+  --display-name "Example" \
+  --ticket-prefix EXAMPLE \
+  --parent-page-url "https://www.notion.so/..." \
+  --task-database-url "https://www.notion.so/..."
+```
+
+Initialisation validates the database property names and types, discovers its data-source ID, creates the four managed pages, and records the URLs returned by Notion. It refuses to replace existing tracker files.
+
+Configuration is written to the platform user-configuration directory:
+
+- Linux: `$XDG_CONFIG_HOME/notion-task-tracker/config.toml`, falling back to `~/.config/notion-task-tracker/config.toml`.
+- macOS: `~/Library/Application Support/notion-task-tracker/config.toml`.
+- Windows: the user application-data directory returned by `platformdirs`.
+
+Set `NTT_CONFIG_PATH` or pass `--config-path` to use another file. Mutable tracker state remains at `~/.notion-task-tracker/notion_tasks_tree.json` unless `--tracker-state-path` is supplied.
+
+The configuration contains identity, the two supplied URLs, and the four generated page URLs. Database property names are defined by the codebase, not user configuration. Keep `NOTION_API_KEY` in the environment or a private secret store; it is never written to configuration or state.
+
+```toml
+[identity]
+display_name = "Example"
+ticket_prefix = "EXAMPLE"
+
+[notion]
+parent_page_url = "https://www.notion.so/..."
+task_database_url = "https://www.notion.so/..."
+
+[pages]
+ongoing_tasks_url = "https://www.notion.so/..."
+completed_tasks_url = "https://www.notion.so/..."
+miscellaneous_notes_url = "https://www.notion.so/..."
+synthesis_notes_url = "https://www.notion.so/..."
+```
+
+Run an explicit action after initialisation:
+
+```bash
+ntt --log --ticket-number 67 --content-path /tmp/notion_task_log.json
+```
+
+## Install The Agent Skill
 
 Install the task-tracker skill into Codex and Claude user-scope skill directories with:
 
@@ -114,8 +173,8 @@ Synthesis content files use this shape:
   "sources": [
     {
       "source_type": "Notion page",
-      "label": "ALOVYA-67",
-      "page_key": "task:ALOVYA-67"
+      "label": "EXAMPLE-67",
+      "page_key": "task:EXAMPLE-67"
     }
   ],
   "lines": ["Actions freeze schemas; content remains free-form."]
@@ -130,9 +189,9 @@ Use this when the user edited task rows in the Notion UI:
 ntt --reconcile-from-notion
 ```
 
-This command creates a timestamped backup under `/tmp`, queries the saved `Alovya's task database` view, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed.
+This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed.
 
-Ordinary commands do not query the full database view. They fetch the task pages they depend on, so command execution is not blocked by slow saved-view export. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
+Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
 ### Targeted Preflight Footguns
 
@@ -141,15 +200,15 @@ Normal commands are fast because they only refresh the task pages they touch. Th
 1. `append_task_timeline_log`, `complete_task`, and `cancel_task` fetch the target task page, refresh that task's database properties in local state, fetch timeline headings, then write.
 2. `split_task_into_children` fetches the source task and parent chain, creates one child database row, clears the source task's dependency/dependant relations, updates the source timeline, and refreshes derived landing pages.
 3. `split_task_with_sibling` fetches the source sibling and parent chain, creates one new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
-4. `create_top_level_task` creates a new top-level database row without fetching the full database view.
-5. Miscellaneous and synthesis commands do not use the task database view.
-6. `--reconcile-from-notion` is the only normal path that pulls the saved task database view and rebuilds the whole local task tree projection.
+4. `create_top_level_task` creates a new top-level database row without fetching the full database.
+5. Miscellaneous and synthesis commands do not use the task database.
+6. `--reconcile-from-notion` is the only normal path that queries every task row and rebuilds the whole local task tree projection.
 
 Run full reconciliation when a task was created only in Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
 
 Targeted preflight intentionally fails instead of guessing when the touched page has malformed task properties, reports a different `Ticket ID` than the requested task, has more than one parent, or points to a parent page that is absent from local tracker state.
 
-Task ids are derived from Notion's `Ticket ID`. The visible Notion page title stays as the human title and does not include the `ALOVYA-N` prefix.
+Task ids are derived from Notion's `Ticket ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
 
 ## Task Commands
 
@@ -158,7 +217,7 @@ Append a timeline log. Timeline logs are user-owned in Notion and may contain ha
 ```json
 {
   "command": "append_task_timeline_log",
-  "task_id": "ALOVYA-5",
+  "task_id": "EXAMPLE-5",
   "timeline_entry": {
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
@@ -172,7 +231,7 @@ Add `subheading` to put the new log lines under a Notion toggle for that date:
 ```json
 {
   "command": "append_task_timeline_log",
-  "task_id": "ALOVYA-5",
+  "task_id": "EXAMPLE-5",
   "timeline_entry": {
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
@@ -187,7 +246,7 @@ Complete a task. The tracker marks the task `Complete`, appends or merges the ti
 ```json
 {
   "command": "complete_task",
-  "task_id": "ALOVYA-5",
+  "task_id": "EXAMPLE-5",
   "timeline_entry": {
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
@@ -201,7 +260,7 @@ Cancel a task. The tracker marks the task `Cancelled`, appends or merges the tim
 ```json
 {
   "command": "cancel_task",
-  "task_id": "ALOVYA-5",
+  "task_id": "EXAMPLE-5",
   "timeline_entry": {
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
@@ -233,7 +292,7 @@ Add one child task under an existing parent task. The command does not include a
 ```json
 {
   "command": "split_task_into_children",
-  "source_task_id": "ALOVYA-5",
+  "source_task_id": "EXAMPLE-5",
   "child_tasks": [
     {
       "title": "Measure activation mismatch after QNN export",
@@ -264,7 +323,7 @@ Refresh task views and task database properties:
 ```json
 {
   "command": "refresh_task_pages",
-  "operation_keys": ["update_properties:task:ALOVYA-5", "replace:ongoing_landing_page"]
+  "operation_keys": ["update_properties:task:EXAMPLE-5", "replace:ongoing_landing_page"]
 }
 ```
 
@@ -305,8 +364,8 @@ Create a synthesis page with explicit sources:
   "sources": [
     {
       "source_type": "Notion page",
-      "label": "ALOVYA-2",
-      "page_key": "task:ALOVYA-2"
+      "label": "EXAMPLE-2",
+      "page_key": "task:EXAMPLE-2"
     },
     {
       "source_type": "Google doc",
@@ -323,7 +382,7 @@ Reconcile the synthesis root after editing page mentions in Notion:
 ```json
 {
   "command": "reconcile_synthesis_root_page_mentions",
-  "root_page_content": "<mention-page url=\"https://www.notion.so/wayve/Guide-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\">Guide</mention-page>",
+  "root_page_content": "<mention-page url=\"https://www.notion.so/Guide-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\">Guide</mention-page>",
   "page_titles_by_id": {
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "Title for a bare page mention"
   }
@@ -355,6 +414,8 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `pyproject.toml`: package metadata, runtime dependencies, and console scripts.
 - `notion_task_tracker/__main__.py`: tiny shim for `python -m notion_task_tracker`.
 - `notion_task_tracker/build_tracker_command.py`: build deterministic tracker commands from explicit CLI flags.
+- `notion_task_tracker/config.py`: load and write per-user identity and Notion location configuration.
+- `notion_task_tracker/initialise_tracker.py`: validate the supplied database, create managed pages, and write initial local files.
 - `notion_task_tracker/run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full database reconciliation.
 - `notion_task_tracker/apply_tracker_command.py`: apply one already-built tracker command to local state and derive Notion write intents.
 - `notion_task_tracker/tasks/task_tree.py`: task tree validation, priority rollup, and task-write orchestration.
@@ -366,13 +427,13 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `notion_task_tracker/tasks/derive_task_timeline_log.py`: timeline-log facts derived from fetched task page content.
 - `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task tree refresh from Notion database rows.
 - `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, the REST client, and write execution.
-- `notion_task_tracker/fixed_pages.py`: names and local keys for fixed tracker pages.
+- `notion_task_tracker/fixed_pages.py`: stable local keys and generic defaults for tracker pages.
 - `notion_task_tracker/miscellaneous_pages.py`: dated miscellaneous notes.
 - `notion_task_tracker/synthesis_pages.py`: flat synthesis root mentions and synthesis subpages with sources.
 
 ## Tests
 
 ```bash
-cd /home/alovyachowdhury/notion_task_tracker
-/workspace/venv/bin/python -m pytest tests
+cd /path/to/notion_task_tracker
+python -m pytest tests
 ```

@@ -6,13 +6,13 @@ from tests.tasks.build_task_command_fixtures import (
     build_tracker_state_with_root_and_child_task,
     build_tracker_state_with_root_task,
 )
-from notion_task_tracker.tasks.database import default_task_database_tracker_state
+from notion_task_tracker.tasks.database import build_task_database_tracker_state
 from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskTree
 
 
 def test_execute_create_task_database_page_command_creates_child_split_rows_then_refreshes_landing():
     tracker_state = _tracker_state_with_split_relations(build_tracker_state_with_root_task(), "ALOVYA-1")
-    tracker_state["task_database"] = default_task_database_tracker_state()
+    tracker_state["task_database"] = _task_database_state()
     notion_client = FakeNotionClient(
         created_page_ids=[
             "33333333333333333333333333333333",
@@ -107,7 +107,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         "replace:ongoing_landing_page",
     ]
     assert notion_client.calls[0].operation_name == "create_task_database_page"
-    assert notion_client.calls[0].arguments["data_source_id"] == "36b03da5-d69a-8080-91d1-000b5d7c1c8d"
+    assert notion_client.calls[0].arguments["data_source_id"] == "configured-data-source-id"
     assert notion_client.calls[0].arguments["properties"] == {
         "Deadline": None,
         "External coordination": "No",
@@ -148,7 +148,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
 
 def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_task():
     tracker_state = build_tracker_state_with_root_and_child_task()
-    tracker_state["task_database"] = default_task_database_tracker_state()
+    tracker_state["task_database"] = _task_database_state()
     notion_client = FakeNotionClient(
         created_page_ids=["44444444444444444444444444444444"],
         fetched_page_content_by_id={
@@ -230,7 +230,7 @@ def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_t
 
 def test_execute_create_task_database_page_command_copies_sibling_split_relations():
     tracker_state = _tracker_state_with_split_relations(build_tracker_state_with_root_and_child_task(), "ALOVYA-2")
-    tracker_state["task_database"] = default_task_database_tracker_state()
+    tracker_state["task_database"] = _task_database_state()
     notion_client = FakeNotionClient(
         created_page_ids=["55555555555555555555555555555555"],
         fetched_page_content_by_id={
@@ -304,3 +304,9 @@ def _tracker_state_with_split_relations(tracker_state: dict, source_task_id: str
     task_tree.derive_dependant_task_ids_from_dependencies()
     task_tree.validate()
     return task_tree.replace_task_tree_in_tracker_state(tracker_state)
+
+
+def _task_database_state() -> dict:
+    return build_task_database_tracker_state(
+        data_source_id="configured-data-source-id",
+    )

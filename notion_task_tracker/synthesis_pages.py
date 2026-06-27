@@ -98,7 +98,6 @@ class SynthesisNotesMetadata:
             page=fixed_tracked_page_from_tracker_state(
                 tracker_state["page"],
                 local_page_key=SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
-                title=SYNTHESIS_NOTES_PAGE_TITLE,
             )
         )
         synthesis_notes.pages = {
@@ -171,7 +170,6 @@ class SynthesisNotesMetadata:
         validate_fixed_tracked_page(
             page=self.page,
             expected_local_page_key=SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
-            expected_title=SYNTHESIS_NOTES_PAGE_TITLE,
         )
         self._validate_page_keys_match_page_values()
         self._validate_root_block_types()

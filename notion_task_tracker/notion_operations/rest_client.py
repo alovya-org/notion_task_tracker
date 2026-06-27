@@ -23,7 +23,6 @@ from notion_task_tracker.notion_operations.database_properties import (
     rich_text_items,
 )
 from notion_task_tracker.tasks.database import (
-    TASK_DATABASE_DATA_SOURCE_ID,
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
     TASK_DATABASE_DEPENDANTS_PROPERTY,
@@ -35,9 +34,7 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
-    task_database_data_source_url_from_tracker_state,
-    task_database_query_for_tracker_state,
-    task_database_view_url_from_tracker_state,
+    task_database_data_source_id_from_tracker_state,
 )
 
 
@@ -85,6 +82,12 @@ class NotionRestClient:
     async def fetch_page(self, page_id: str) -> dict[str, Any]:
         return await self._send_json("GET", f"/v1/pages/{page_id}", None)
 
+    async def fetch_database(self, database_id: str) -> dict[str, Any]:
+        return await self._send_json("GET", f"/v1/databases/{database_id}", None)
+
+    async def fetch_data_source(self, data_source_id: str) -> dict[str, Any]:
+        return await self._send_json("GET", f"/v1/data_sources/{data_source_id}", None)
+
     async def fetch_page_markdown(self, page_id: str) -> str:
         response = await self._send_json("GET", f"/v1/pages/{page_id}/markdown", None)
         return _markdown_from_sdk_response(response)
@@ -92,17 +95,9 @@ class NotionRestClient:
     async def query_data_source(self, data_source_url: str, query: str) -> list[dict[str, Any]]:
         return await self.query_data_source_id(_data_source_id_from_url(data_source_url))
 
-    async def query_database_view(self, view_url: str) -> list[dict[str, Any]]:
-        return await self.query_data_source_id(TASK_DATABASE_DATA_SOURCE_ID)
-
     async def query_task_database_rows(self, tracker_state: dict[str, Any]) -> list[dict[str, Any]]:
-        view_url = task_database_view_url_from_tracker_state(tracker_state)
-        if view_url is not None:
-            return await self.query_database_view(view_url)
-
-        return await self.query_data_source(
-            data_source_url=task_database_data_source_url_from_tracker_state(tracker_state),
-            query=task_database_query_for_tracker_state(tracker_state),
+        return await self.query_data_source_id(
+            task_database_data_source_id_from_tracker_state(tracker_state)
         )
 
     async def query_data_source_id(self, data_source_id: str) -> list[dict[str, Any]]:
@@ -431,6 +426,12 @@ class NotionRestClient:
 
         if method == "GET" and path_parts[:2] == ["v1", "pages"]:
             return await self.client.pages.retrieve(page_id=path_parts[2])
+
+        if method == "GET" and path_parts[:2] == ["v1", "databases"]:
+            return await self.client.databases.retrieve(database_id=path_parts[2])
+
+        if method == "GET" and path_parts[:2] == ["v1", "data_sources"]:
+            return await self.client.data_sources.retrieve(data_source_id=path_parts[2])
 
         if method == "PATCH" and path_parts[:2] == ["v1", "pages"]:
             return await self.client.pages.update(page_id=path_parts[2], **body)

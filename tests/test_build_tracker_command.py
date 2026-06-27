@@ -7,13 +7,13 @@ from notion_task_tracker.build_tracker_command import build_tracker_command_from
 
 
 def test_reconcile_action_builds_refresh_command():
-    command = build_tracker_command_from_cli_action(_arguments(reconcile_from_notion=True))
+    command = _build_tracker_command(_arguments(reconcile_from_notion=True))
 
     assert command == {"command": "reconcile_from_notion"}
 
 
 def test_read_action_builds_read_command_for_all_ticket_numbers():
-    command = build_tracker_command_from_cli_action(_arguments(read=True, ticket_number=[67, 68]))
+    command = _build_tracker_command(_arguments(read=True, ticket_number=[67, 68]))
 
     assert command == {
         "command": "read_tasks",
@@ -21,8 +21,17 @@ def test_read_action_builds_read_command_for_all_ticket_numbers():
     }
 
 
+def test_read_action_uses_configured_ticket_prefix():
+    command = _build_tracker_command(
+        _arguments(read=True, ticket_number=[67]),
+        ticket_prefix="PERSONAL",
+    )
+
+    assert command["task_ids"] == ["PERSONAL-67"]
+
+
 def test_work_action_builds_work_command_for_one_ticket_number():
-    command = build_tracker_command_from_cli_action(_arguments(work=True, ticket_number=[67]))
+    command = _build_tracker_command(_arguments(work=True, ticket_number=[67]))
 
     assert command == {
         "command": "work_task",
@@ -45,7 +54,7 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
         encoding="utf-8",
     )
 
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             log=True,
             ticket_number=[67],
@@ -85,7 +94,7 @@ def test_child_action_builds_split_command_from_one_title(tmp_path):
         encoding="utf-8",
     )
 
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             child=True,
             parent_ticket_number=67,
@@ -128,13 +137,13 @@ def test_child_action_builds_split_command_from_one_title(tmp_path):
 def test_child_action_rejects_wrong_title_counts():
     for titles in [[], ["One", "Two"]]:
         with pytest.raises(ValueError, match="--child requires exactly 1 --title value"):
-            build_tracker_command_from_cli_action(
+            _build_tracker_command(
                 _arguments(child=True, parent_ticket_number=67, title=titles)
             )
 
 
 def test_sibling_action_requires_one_title():
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(sibling=True, sibling_ticket_number=67, title=["Sibling task"])
     )
 
@@ -143,34 +152,34 @@ def test_sibling_action_requires_one_title():
     assert command["sibling_task"]["title"] == "Sibling task"
 
     with pytest.raises(ValueError, match="--sibling requires exactly 1 --title value"):
-        build_tracker_command_from_cli_action(
+        _build_tracker_command(
             _arguments(sibling=True, sibling_ticket_number=67, title=["One", "Two"])
         )
 
 
 def test_parent_action_requires_one_title():
-    command = build_tracker_command_from_cli_action(_arguments(parent=True, title=["Parent task"]))
+    command = _build_tracker_command(_arguments(parent=True, title=["Parent task"]))
 
     assert command["task"]["title"] == "Parent task"
 
     with pytest.raises(ValueError, match="--parent requires exactly 1 --title value"):
-        build_tracker_command_from_cli_action(_arguments(parent=True, title=["One", "Two"]))
+        _build_tracker_command(_arguments(parent=True, title=["One", "Two"]))
 
 
 def test_split_actions_reject_explicit_relation_flags():
     with pytest.raises(ValueError, match="--child derives dependencies"):
-        build_tracker_command_from_cli_action(
+        _build_tracker_command(
             _arguments(child=True, parent_ticket_number=67, title=["One", "Two"], dependency_ticket_number=[1])
         )
 
     with pytest.raises(ValueError, match="--sibling derives dependants"):
-        build_tracker_command_from_cli_action(
+        _build_tracker_command(
             _arguments(sibling=True, sibling_ticket_number=67, title=["One"], dependant_ticket_number=[1])
         )
 
 
 def test_parent_action_builds_task_creation_command_with_dependencies():
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             parent=True,
             title="Create dependent task",
@@ -197,7 +206,7 @@ def test_parent_action_builds_task_creation_command_with_dependencies():
 
 def test_parent_action_rejects_dependencies_and_dependants_together():
     with pytest.raises(ValueError, match="Choose dependencies or dependants"):
-        build_tracker_command_from_cli_action(
+        _build_tracker_command(
             _arguments(
                 parent=True,
                 title="Ambiguous relation task",
@@ -208,7 +217,7 @@ def test_parent_action_rejects_dependencies_and_dependants_together():
 
 
 def test_set_dependencies_action_builds_field_specific_command():
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             set_dependencies=True,
             ticket_number=[67],
@@ -224,7 +233,7 @@ def test_set_dependencies_action_builds_field_specific_command():
 
 
 def test_set_dependants_action_builds_field_specific_command():
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             set_dependants=True,
             ticket_number=[67],
@@ -240,7 +249,7 @@ def test_set_dependants_action_builds_field_specific_command():
 
 
 def test_reparent_action_builds_parent_relation_command():
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             reparent=True,
             ticket_number=[68],
@@ -257,7 +266,7 @@ def test_reparent_action_builds_parent_relation_command():
 
 def test_reparent_action_requires_parent_ticket_number():
     with pytest.raises(ValueError, match="--reparent requires --parent-ticket-number"):
-        build_tracker_command_from_cli_action(_arguments(reparent=True, ticket_number=[68]))
+        _build_tracker_command(_arguments(reparent=True, ticket_number=[68]))
 
 
 def test_complete_with_all_children_action_builds_completion_with_all_children_command(tmp_path):
@@ -267,7 +276,7 @@ def test_complete_with_all_children_action_builds_completion_with_all_children_c
         encoding="utf-8",
     )
 
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             complete_with_all_children=True,
             ticket_number=[67],
@@ -288,14 +297,14 @@ def test_complete_with_all_children_action_builds_completion_with_all_children_c
 
 
 def test_set_deadline_actions_build_field_specific_commands():
-    assert build_tracker_command_from_cli_action(
+    assert _build_tracker_command(
         _arguments(set_deadline=True, ticket_number=[67], deadline="2026-06-15")
     ) == {
         "command": "set_task_deadline",
         "task_id": "ALOVYA-67",
         "deadline": "2026-06-15",
     }
-    assert build_tracker_command_from_cli_action(
+    assert _build_tracker_command(
         _arguments(clear_deadline=True, ticket_number=[67])
     ) == {
         "command": "clear_task_deadline",
@@ -304,21 +313,21 @@ def test_set_deadline_actions_build_field_specific_commands():
 
 
 def test_set_enum_field_actions_build_field_specific_commands():
-    assert build_tracker_command_from_cli_action(
+    assert _build_tracker_command(
         _arguments(set_external_coordination=True, ticket_number=[67], external_coordination="Yes")
     ) == {
         "command": "set_task_external_coordination",
         "task_id": "ALOVYA-67",
         "external_coordination": "Yes",
     }
-    assert build_tracker_command_from_cli_action(
+    assert _build_tracker_command(
         _arguments(set_uncertainty=True, ticket_number=[67], uncertainty="High")
     ) == {
         "command": "set_task_uncertainty",
         "task_id": "ALOVYA-67",
         "uncertainty": "High",
     }
-    assert build_tracker_command_from_cli_action(
+    assert _build_tracker_command(
         _arguments(set_friction=True, ticket_number=[67], friction="Stale")
     ) == {
         "command": "set_task_friction",
@@ -344,7 +353,7 @@ def test_synthesis_action_keeps_rich_sources_inside_content_payload(tmp_path):
         encoding="utf-8",
     )
 
-    command = build_tracker_command_from_cli_action(
+    command = _build_tracker_command(
         _arguments(
             synth=True,
             synthesis_key="explicit_tracker_cli",
@@ -371,9 +380,13 @@ def test_synthesis_action_keeps_rich_sources_inside_content_payload(tmp_path):
 
 def test_ticket_ids_from_numbers_rejects_invalid_ticket_numbers():
     with pytest.raises(ValueError) as error:
-        ticket_ids_from_numbers([0])
+        ticket_ids_from_numbers([0], "ALOVYA")
 
     assert str(error.value) == "Ticket numbers must be positive"
+
+
+def _build_tracker_command(arguments: Namespace, ticket_prefix: str = "ALOVYA") -> dict:
+    return build_tracker_command_from_cli_action(arguments, ticket_prefix=ticket_prefix)
 
 
 def _arguments(**overrides):

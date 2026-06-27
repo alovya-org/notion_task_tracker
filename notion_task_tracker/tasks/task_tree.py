@@ -68,14 +68,12 @@ class TaskTree:
                 page=fixed_tracked_page_from_tracker_state(
                     tracker_state=tracker_state["ongoing_landing_page"],
                     local_page_key=ONGOING_LANDING_PAGE_LOCAL_KEY,
-                    title=ONGOING_LANDING_PAGE_TITLE,
                 )
             ),
             completed_tasks_landing_page=CompletedTasksLandingPage(
                 page=fixed_tracked_page_from_tracker_state(
-                    tracker_state=tracker_state.get("completed_landing_page") or {},
+                    tracker_state=tracker_state["completed_landing_page"],
                     local_page_key=COMPLETED_LANDING_PAGE_LOCAL_KEY,
-                    title=COMPLETED_LANDING_PAGE_TITLE,
                 )
             ),
         )
@@ -323,12 +321,10 @@ class TaskTree:
         validate_fixed_tracked_page(
             page=self.ongoing_tasks_landing_page.page,
             expected_local_page_key=ONGOING_LANDING_PAGE_LOCAL_KEY,
-            expected_title=ONGOING_LANDING_PAGE_TITLE,
         )
         validate_fixed_tracked_page(
             page=self.completed_tasks_landing_page.page,
             expected_local_page_key=COMPLETED_LANDING_PAGE_LOCAL_KEY,
-            expected_title=COMPLETED_LANDING_PAGE_TITLE,
         )
 
     def _validate_task_keys_match_task_values(self) -> None:

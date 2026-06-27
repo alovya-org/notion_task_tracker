@@ -12,12 +12,12 @@ from tests.tasks.build_task_command_fixtures import (
     build_tracker_state_with_root_and_child_task,
     build_tracker_state_with_root_task,
 )
-from notion_task_tracker.tasks.database import default_task_database_tracker_state
+from notion_task_tracker.tasks.database import build_task_database_tracker_state
 
 
-def test_refresh_tracker_state_from_notion_task_database_uses_database_view_when_configured():
+def test_refresh_tracker_state_from_notion_task_database_uses_configured_data_source():
     tracker_state = build_tracker_state_with_root_task()
-    tracker_state["task_database"] = default_task_database_tracker_state()
+    tracker_state["task_database"] = _task_database_state()
     notion_client = FakeNotionClient(
         database_rows=[
             {
@@ -43,17 +43,14 @@ def test_refresh_tracker_state_from_notion_task_database_uses_database_view_when
     assert command_result.tracker_state["tasks"]["ALOVYA-1"]["title"] == "Root task edited in database"
     assert command_result.tracker_state["tasks"]["ALOVYA-1"]["configured_priority"] == "P2"
     assert command_result.tracker_state["tasks"]["ALOVYA-1"]["status"] == "Blocked"
-    assert notion_client.view_queries == [
-        "https://www.notion.so/wayve/36b03da5d69a80b4acacf711623b59e8?v=36b03da5d69a800c893f000cf2aefead"
-    ]
-    assert notion_client.queries == []
+    assert notion_client.queries == [{"data_source_id": "configured-data-source-id"}]
     assert notion_client.fetched_pages == []
 
 
-def test_refresh_tracker_state_from_notion_task_database_uses_sql_when_view_is_not_configured():
+def test_refresh_tracker_state_from_notion_task_database_does_not_depend_on_view_url():
     tracker_state = build_tracker_state_with_root_task()
-    tracker_state["task_database"] = default_task_database_tracker_state()
-    tracker_state["task_database"].pop("view_url")
+    tracker_state["task_database"] = _task_database_state()
+    assert "view_url" not in tracker_state["task_database"]
     notion_client = FakeNotionClient(
         database_rows=[
             {
@@ -78,15 +75,7 @@ def test_refresh_tracker_state_from_notion_task_database_uses_sql_when_view_is_n
 
     assert command_result.tracker_state["tasks"]["ALOVYA-1"]["configured_priority"] == "P2"
     assert notion_client.view_queries == []
-    assert notion_client.queries == [
-        {
-            "data_source_url": "collection://36b03da5-d69a-8080-91d1-000b5d7c1c8d",
-            "query": (
-                'SELECT * FROM "collection://36b03da5-d69a-8080-91d1-000b5d7c1c8d" '
-                'WHERE "Priority" IS NOT NULL AND "Status" IS NOT NULL'
-            ),
-        }
-    ]
+    assert notion_client.queries == [{"data_source_id": "configured-data-source-id"}]
 
 
 def test_refresh_tracker_state_for_task_command_fetches_only_relevant_pages():
@@ -162,3 +151,9 @@ def test_refresh_tracker_state_for_task_command_requires_known_tasks():
     assert notion_client.fetched_pages == []
     assert notion_client.view_queries == []
     assert notion_client.queries == []
+
+
+def _task_database_state() -> dict:
+    return build_task_database_tracker_state(
+        data_source_id="configured-data-source-id",
+    )

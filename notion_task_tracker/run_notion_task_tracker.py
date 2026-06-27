@@ -13,6 +13,8 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.install_skill import install_skill
+from notion_task_tracker.config import load_config, resolve_config_path
+from notion_task_tracker.initialise_tracker import initialise_tracker
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.create_task_database_page import (
     should_create_task_database_page_for_command,
@@ -67,6 +69,7 @@ def parse_args(
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     action_group = parser.add_mutually_exclusive_group()
+    action_group.add_argument("--init", action="store_true")
     action_group.add_argument("--install-skill", action="store_true")
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
@@ -90,7 +93,12 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--misc", action="store_true")
     action_group.add_argument("--synth", action="store_true")
     parser.add_argument("--tracker-state-path")
+    parser.add_argument("--config-path")
     parser.add_argument("--output-path")
+    parser.add_argument("--display-name")
+    parser.add_argument("--ticket-prefix")
+    parser.add_argument("--parent-page-url")
+    parser.add_argument("--task-database-url")
     parser.add_argument("--ticket-number", action="append", type=int, default=[])
     parser.add_argument("--parent-ticket-number", type=int)
     parser.add_argument("--sibling-ticket-number", type=int)
@@ -113,17 +121,47 @@ def _enum_values(enum_type) -> list[str]:
 
 
 def _run_requested_cli_action(args: argparse.Namespace) -> None:
+    if args.init:
+        _run_initialise_tracker_action(args)
+        return
+
     if args.install_skill:
         install_skill(force=args.force)
         return
 
-    command = build_tracker_command_from_cli_action(args)
+    config = load_config(args.config_path)
+    command = build_tracker_command_from_cli_action(args, ticket_prefix=config.ticket_prefix)
     execution_summary = execute_tracker_command(
         command=command,
         tracker_state_path=args.tracker_state_path,
         output_path=args.output_path,
     )
     print(json.dumps(execution_summary.to_json_summary(), indent=2, sort_keys=True))
+
+
+def _run_initialise_tracker_action(arguments: argparse.Namespace) -> None:
+    required_values = {
+        "--display-name": arguments.display_name,
+        "--ticket-prefix": arguments.ticket_prefix,
+        "--parent-page-url": arguments.parent_page_url,
+        "--task-database-url": arguments.task_database_url,
+    }
+    missing_flags = [flag for flag, value in required_values.items() if not value]
+    if missing_flags:
+        raise ValueError("--init requires " + ", ".join(missing_flags))
+
+    initialisation_result = asyncio.run(
+        initialise_tracker(
+            display_name=arguments.display_name,
+            ticket_prefix=arguments.ticket_prefix,
+            parent_page_url=arguments.parent_page_url,
+            task_database_url=arguments.task_database_url,
+            config_path=resolve_config_path(arguments.config_path),
+            tracker_state_path=resolve_tracker_state_path(arguments.tracker_state_path),
+            notion_client=NotionRestClient.from_environment(),
+        )
+    )
+    print(json.dumps(initialisation_result.to_json_summary(), indent=2, sort_keys=True))
 
 
 def execute_tracker_command(
@@ -395,7 +433,7 @@ def _task_read_item_from_tracker_state(
     timeline_entries = parse_timeline_entries_from_fetched_task_page_content(fetched_page_content)
     return {
         "task_id": task_id,
-        "ticket_number": int(task_id.removeprefix("ALOVYA-")),
+        "ticket_number": _ticket_number_from_task_id(task_id),
         "title": task["title"],
         "status": task["status"],
         "configured_priority": task["configured_priority"],
@@ -417,6 +455,13 @@ def _task_notion_url(task: dict[str, Any]) -> str | None:
         return None
 
     return f"https://www.notion.so/{notion_page_id.replace('-', '')}"
+
+
+def _ticket_number_from_task_id(task_id: str) -> int:
+    _ticket_prefix, separator, ticket_number = task_id.rpartition("-")
+    if not separator or not ticket_number.isdigit():
+        raise ValueError(f"Task id {task_id!r} must end with a numeric ticket number")
+    return int(ticket_number)
 
 
 def _summarise_fetched_page_content(fetched_page_content: str) -> list[str]:

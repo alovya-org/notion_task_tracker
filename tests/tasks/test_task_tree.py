@@ -156,22 +156,20 @@ class TestTaskTreeValidate:
 
 
 class TestTaskTreeFromSnapshot:
-    def test_loads_null_completed_landing_page_as_missing_page_id(self):
-        task_tree = TaskTree.from_tracker_state(
-            {
-                "ongoing_landing_page": {
-                    "local_page_key": "ongoing_landing_page",
-                    "title": ONGOING_LANDING_PAGE_TITLE,
-                    "notion_page_id": "11111111111111111111111111111111",
-                    "parent_page_key": None,
-                },
-                "completed_landing_page": None,
-                "tasks": {},
-            }
-        )
-
-        assert task_tree.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
-        assert task_tree.completed_tasks_landing_page.page.notion_page_id is None
+    def test_rejects_state_without_configured_completed_landing_page(self):
+        with pytest.raises(ValueError, match="completed_landing_page.*configured title"):
+            TaskTree.from_tracker_state(
+                {
+                    "ongoing_landing_page": {
+                        "local_page_key": "ongoing_landing_page",
+                        "title": ONGOING_LANDING_PAGE_TITLE,
+                        "notion_page_id": "11111111111111111111111111111111",
+                        "parent_page_key": None,
+                    },
+                    "completed_landing_page": None,
+                    "tasks": {},
+                }
+            )
 
 
 class TestTaskTreeTaskIdsGroupedForLandingPage:
@@ -524,14 +522,14 @@ class TestTaskTreeCompleteTask:
 
 
 class TestTaskTreeFromTrackerState:
-    def test_normalizes_fixed_page_titles(self):
+    def test_preserves_configured_fixed_page_titles(self):
         tracker_state = TaskTree().to_tracker_state()
         tracker_state["ongoing_landing_page"]["title"] = "User-edited landing title"
         tracker_state["ongoing_landing_page"]["notion_page_id"] = "landing-page-id"
 
         loaded_task_tree = TaskTree.from_tracker_state(tracker_state)
 
-        assert loaded_task_tree.ongoing_tasks_landing_page.page.title == ONGOING_LANDING_PAGE_TITLE
+        assert loaded_task_tree.ongoing_tasks_landing_page.page.title == "User-edited landing title"
         assert loaded_task_tree.ongoing_tasks_landing_page.page.notion_page_id == "landing-page-id"
 
     def test_round_trips_dependency_source_and_dependant_inverse(self):

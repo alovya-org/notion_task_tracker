@@ -19,6 +19,7 @@ def refresh_tracker_state_from_database_rows(
     previous_task_tree = TaskTree.from_tracker_state(tracker_state)
     task_tree = build_task_tree_from_database_query_results(
         query_results=database_rows,
+        ticket_prefix=tracker_state["identity"]["ticket_prefix"],
         landing_page=previous_task_tree.ongoing_tasks_landing_page.page,
         completed_landing_page=previous_task_tree.completed_tasks_landing_page.page,
         previous_task_tree=previous_task_tree,

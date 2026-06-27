@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "notion-client==3.1.0",
+    "platformdirs>=4.0,<5",
+    "tomli>=2.0,<3; python_version < '3.11'",
 ]
 
 [project.scripts]

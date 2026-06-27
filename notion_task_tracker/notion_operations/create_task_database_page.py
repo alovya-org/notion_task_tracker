@@ -129,7 +129,10 @@ async def _create_database_page_and_read_ticket_id(
         operation_key=create_operation_key,
     )
     fetched_page_content = await notion_client.fetch_task_page_content(created_page.notion_page_id)
-    created_task_id = task_id_from_fetched_task_database_page(fetched_page_content)
+    created_task_id = task_id_from_fetched_task_database_page(
+        fetched_page_content,
+        ticket_prefix=tracker_state["identity"]["ticket_prefix"],
+    )
     update_title_operation_key = f"update_properties:task:{created_task_id}"
     completed_update_operation_key = await notion_client.update_task_database_page_title(
         page_id=created_page.notion_page_id,

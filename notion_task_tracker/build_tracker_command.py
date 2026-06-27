@@ -47,46 +47,46 @@ def selected_cli_action_from_arguments(arguments: Namespace) -> str | None:
     return None
 
 
-def build_tracker_command_from_cli_action(arguments: Namespace) -> dict[str, Any]:
+def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     action_name = selected_cli_action_from_arguments(arguments)
     if action_name is None:
         raise ValueError("Choose --reconcile-from-notion or one tracker action")
     if action_name == "reconcile_from_notion":
         return {"command": "reconcile_from_notion"}
     if action_name == "read":
-        return _build_read_command(arguments)
+        return _build_read_command(arguments, ticket_prefix)
     if action_name == "work":
-        return _build_work_command(arguments)
+        return _build_work_command(arguments, ticket_prefix)
     if action_name == "log":
-        return _build_log_command(arguments)
+        return _build_log_command(arguments, ticket_prefix)
     if action_name == "complete":
-        return _build_complete_command(arguments)
+        return _build_complete_command(arguments, ticket_prefix)
     if action_name == "complete_with_all_children":
-        return _build_complete_with_all_children_command(arguments)
+        return _build_complete_with_all_children_command(arguments, ticket_prefix)
     if action_name == "cancel":
-        return _build_cancel_command(arguments)
+        return _build_cancel_command(arguments, ticket_prefix)
     if action_name == "set_dependencies":
-        return _build_set_dependencies_command(arguments)
+        return _build_set_dependencies_command(arguments, ticket_prefix)
     if action_name == "set_dependants":
-        return _build_set_dependants_command(arguments)
+        return _build_set_dependants_command(arguments, ticket_prefix)
     if action_name == "set_deadline":
-        return _build_set_deadline_command(arguments)
+        return _build_set_deadline_command(arguments, ticket_prefix)
     if action_name == "clear_deadline":
-        return _build_clear_deadline_command(arguments)
+        return _build_clear_deadline_command(arguments, ticket_prefix)
     if action_name == "set_external_coordination":
-        return _build_set_external_coordination_command(arguments)
+        return _build_set_external_coordination_command(arguments, ticket_prefix)
     if action_name == "set_uncertainty":
-        return _build_set_uncertainty_command(arguments)
+        return _build_set_uncertainty_command(arguments, ticket_prefix)
     if action_name == "set_friction":
-        return _build_set_friction_command(arguments)
+        return _build_set_friction_command(arguments, ticket_prefix)
     if action_name == "reparent":
-        return _build_reparent_command(arguments)
+        return _build_reparent_command(arguments, ticket_prefix)
     if action_name == "parent":
-        return _build_parent_command(arguments)
+        return _build_parent_command(arguments, ticket_prefix)
     if action_name == "child":
-        return _build_child_command(arguments)
+        return _build_child_command(arguments, ticket_prefix)
     if action_name == "sibling":
-        return _build_sibling_command(arguments)
+        return _build_sibling_command(arguments, ticket_prefix)
     if action_name == "misc":
         return _build_miscellaneous_command(arguments)
     if action_name == "synth":
@@ -95,161 +95,161 @@ def build_tracker_command_from_cli_action(arguments: Namespace) -> dict[str, Any
     raise ValueError(f"CLI action {action_name!r} does not produce a tracker command")
 
 
-def ticket_id_from_number(ticket_number: int) -> str:
+def ticket_id_from_number(ticket_number: int, ticket_prefix: str) -> str:
     if ticket_number < 1:
         raise ValueError("Ticket numbers must be positive")
 
-    return f"ALOVYA-{ticket_number}"
+    return f"{ticket_prefix}-{ticket_number}"
 
 
-def ticket_ids_from_numbers(ticket_numbers: list[int]) -> list[str]:
-    return [ticket_id_from_number(ticket_number) for ticket_number in ticket_numbers]
+def ticket_ids_from_numbers(ticket_numbers: list[int], ticket_prefix: str) -> list[str]:
+    return [ticket_id_from_number(ticket_number, ticket_prefix) for ticket_number in ticket_numbers]
 
 
-def _build_read_command(arguments: Namespace) -> dict[str, Any]:
+def _build_read_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if not arguments.ticket_number:
         raise ValueError("--read requires at least one --ticket-number")
 
     return {
         "command": "read_tasks",
-        "task_ids": ticket_ids_from_numbers(arguments.ticket_number),
+        "task_ids": ticket_ids_from_numbers(arguments.ticket_number, ticket_prefix),
     }
 
 
-def _build_work_command(arguments: Namespace) -> dict[str, Any]:
+def _build_work_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "work_task",
-        "task_ids": [_single_task_id_from_ticket_numbers(arguments.ticket_number)],
+        "task_ids": [_single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix)],
     }
 
 
-def _build_log_command(arguments: Namespace) -> dict[str, Any]:
+def _build_log_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "append_task_timeline_log",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
     }
 
 
-def _build_complete_command(arguments: Namespace) -> dict[str, Any]:
+def _build_complete_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "complete_task",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
     }
 
 
-def _build_complete_with_all_children_command(arguments: Namespace) -> dict[str, Any]:
+def _build_complete_with_all_children_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "complete_task_with_all_children",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
     }
 
 
-def _build_cancel_command(arguments: Namespace) -> dict[str, Any]:
+def _build_cancel_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "cancel_task",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
     }
 
 
-def _build_set_dependencies_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_dependencies_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "set_task_dependencies",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
-        "dependency_task_ids": ticket_ids_from_numbers(arguments.dependency_ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "dependency_task_ids": ticket_ids_from_numbers(arguments.dependency_ticket_number, ticket_prefix),
     }
 
 
-def _build_set_dependants_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_dependants_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "set_task_dependants",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
-        "dependant_task_ids": ticket_ids_from_numbers(arguments.dependant_ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "dependant_task_ids": ticket_ids_from_numbers(arguments.dependant_ticket_number, ticket_prefix),
     }
 
 
-def _build_set_deadline_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_deadline_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.deadline is None:
         raise ValueError("--set-deadline requires --deadline")
 
     return {
         "command": "set_task_deadline",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "deadline": arguments.deadline,
     }
 
 
-def _build_clear_deadline_command(arguments: Namespace) -> dict[str, Any]:
+def _build_clear_deadline_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "clear_task_deadline",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
     }
 
 
-def _build_set_external_coordination_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_external_coordination_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.external_coordination is None:
         raise ValueError("--set-external-coordination requires --external-coordination")
 
     return {
         "command": "set_task_external_coordination",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "external_coordination": arguments.external_coordination,
     }
 
 
-def _build_set_uncertainty_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_uncertainty_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.uncertainty is None:
         raise ValueError("--set-uncertainty requires --uncertainty")
 
     return {
         "command": "set_task_uncertainty",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "uncertainty": arguments.uncertainty,
     }
 
 
-def _build_set_friction_command(arguments: Namespace) -> dict[str, Any]:
+def _build_set_friction_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.friction is None:
         raise ValueError("--set-friction requires --friction")
 
     return {
         "command": "set_task_friction",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "friction": arguments.friction,
     }
 
 
-def _build_reparent_command(arguments: Namespace) -> dict[str, Any]:
+def _build_reparent_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.parent_ticket_number is None:
         raise ValueError("--reparent requires --parent-ticket-number")
 
     return {
         "command": "reparent_task",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number),
-        "parent_task_id": ticket_id_from_number(arguments.parent_ticket_number),
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "parent_task_id": ticket_id_from_number(arguments.parent_ticket_number, ticket_prefix),
     }
 
 
-def _build_parent_command(arguments: Namespace) -> dict[str, Any]:
+def _build_parent_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     command = {
         "command": "create_top_level_task",
-        "task": _new_task_command(arguments, parse_one_title_arg(arguments, "parent")),
+        "task": _new_task_command(arguments, parse_one_title_arg(arguments, "parent"), ticket_prefix),
     }
     if arguments.content_path is not None:
         command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
     return command
 
 
-def _build_child_command(arguments: Namespace) -> dict[str, Any]:
+def _build_child_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     _reject_explicit_split_relations(arguments, "child")
     command = {
         "command": "split_task_into_children",
-        "source_task_id": ticket_id_from_number(arguments.parent_ticket_number),
+        "source_task_id": ticket_id_from_number(arguments.parent_ticket_number, ticket_prefix),
         "child_tasks": [
-            _new_task_command(arguments, parse_one_title_arg(arguments, "child")),
+            _new_task_command(arguments, parse_one_title_arg(arguments, "child"), ticket_prefix),
         ],
     }
     if arguments.content_path is not None:
@@ -257,12 +257,12 @@ def _build_child_command(arguments: Namespace) -> dict[str, Any]:
     return command
 
 
-def _build_sibling_command(arguments: Namespace) -> dict[str, Any]:
+def _build_sibling_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     _reject_explicit_split_relations(arguments, "sibling")
     command = {
         "command": "split_task_with_sibling",
-        "source_task_id": ticket_id_from_number(arguments.sibling_ticket_number),
-        "sibling_task": _new_task_command(arguments, parse_one_title_arg(arguments, "sibling")),
+        "source_task_id": ticket_id_from_number(arguments.sibling_ticket_number, ticket_prefix),
+        "sibling_task": _new_task_command(arguments, parse_one_title_arg(arguments, "sibling"), ticket_prefix),
     }
     if arguments.content_path is not None:
         command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
@@ -290,19 +290,19 @@ def _build_synthesis_command(arguments: Namespace) -> dict[str, Any]:
     }
 
 
-def _single_task_id_from_ticket_numbers(ticket_numbers: list[int]) -> str:
+def _single_task_id_from_ticket_numbers(ticket_numbers: list[int], ticket_prefix: str) -> str:
     if len(ticket_numbers) != 1:
         raise ValueError("This action requires exactly one --ticket-number")
 
-    return ticket_id_from_number(ticket_numbers[0])
+    return ticket_id_from_number(ticket_numbers[0], ticket_prefix)
 
 
-def _new_task_command(arguments: Namespace, title: str) -> dict[str, Any]:
+def _new_task_command(arguments: Namespace, title: str, ticket_prefix: str) -> dict[str, Any]:
     return {
         "title": title,
         "configured_priority": arguments.priority,
         "status": "Active",
-        **_new_task_database_fields_from_arguments(arguments),
+        **_new_task_database_fields_from_arguments(arguments, ticket_prefix),
     }
 
 
@@ -326,9 +326,9 @@ def _reject_explicit_split_relations(arguments: Namespace, action_name: str) -> 
         raise ValueError(f"--{action_name} derives dependants from the source task; do not pass --dependant-ticket-number")
 
 
-def _new_task_database_fields_from_arguments(arguments: Namespace) -> dict[str, Any]:
-    dependency_task_ids = ticket_ids_from_numbers(arguments.dependency_ticket_number)
-    dependant_task_ids = ticket_ids_from_numbers(arguments.dependant_ticket_number)
+def _new_task_database_fields_from_arguments(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    dependency_task_ids = ticket_ids_from_numbers(arguments.dependency_ticket_number, ticket_prefix)
+    dependant_task_ids = ticket_ids_from_numbers(arguments.dependant_ticket_number, ticket_prefix)
     if dependency_task_ids and dependant_task_ids:
         raise ValueError("Choose dependencies or dependants, not both")
 

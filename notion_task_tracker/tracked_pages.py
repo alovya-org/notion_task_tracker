@@ -25,10 +25,14 @@ def tracked_page_to_tracker_state(page: TrackedPage) -> dict[str, str | None]:
 
 
 def fixed_tracked_page_from_tracker_state(
-    tracker_state: dict[str, str | None],
+    tracker_state: dict[str, str | None] | None,
     local_page_key: str,
-    title: str,
 ) -> TrackedPage:
+    if not isinstance(tracker_state, dict):
+        raise ValueError(f"Fixed page {local_page_key!r} has no configured title")
+    title = tracker_state.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError(f"Fixed page {local_page_key!r} has no configured title")
     return TrackedPage(
         local_page_key=local_page_key,
         title=title,
@@ -40,14 +44,11 @@ def fixed_tracked_page_from_tracker_state(
 def validate_fixed_tracked_page(
     page: TrackedPage,
     expected_local_page_key: str,
-    expected_title: str,
 ) -> None:
     if page.local_page_key != expected_local_page_key:
         raise ValueError(
             f"Fixed page key {page.local_page_key!r} should be {expected_local_page_key!r}"
         )
 
-    if page.title != expected_title:
-        raise ValueError(
-            f"Fixed page title {page.title!r} should be {expected_title!r}"
-        )
+    if not page.title.strip():
+        raise ValueError(f"Fixed page {page.local_page_key!r} must have a title")

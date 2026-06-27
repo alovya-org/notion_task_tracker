@@ -62,7 +62,6 @@ class MiscellaneousNotesMetadata:
             page=fixed_tracked_page_from_tracker_state(
                 tracker_state=tracker_state["page"],
                 local_page_key=MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
-                title=MISCELLANEOUS_NOTES_PAGE_TITLE,
             ),
         )
         miscellaneous_notes.dated_pages = {
@@ -96,7 +95,6 @@ class MiscellaneousNotesMetadata:
         validate_fixed_tracked_page(
             page=self.page,
             expected_local_page_key=MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
-            expected_title=MISCELLANEOUS_NOTES_PAGE_TITLE,
         )
         self._validate_page_keys_match_page_values()
 
