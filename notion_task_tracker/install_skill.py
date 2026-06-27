@@ -42,9 +42,17 @@ def install_skill(
     codex_home_path: str | Path | None = None,
     claude_config_dir_path: str | Path | None = None,
     output_stream: TextIO = sys.stdout,
+    warning_stream: TextIO = sys.stderr,
     force: bool = False,
 ) -> list[SkillInstallResult]:
     source_skill_path = find_source_skill_path()
+    if codex_home_path is None and not os.environ.get("CODEX_HOME"):
+        print("Warning: CODEX_HOME is not set; skipping Codex skill installation.", file=warning_stream)
+    if claude_config_dir_path is None and not os.environ.get("CLAUDE_CONFIG_DIR"):
+        print(
+            "Warning: CLAUDE_CONFIG_DIR is not set; skipping Claude skill installation.",
+            file=warning_stream,
+        )
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
@@ -81,16 +89,18 @@ def skill_install_targets(
     resolved_codex_home_path = _codex_home_path(codex_home_path)
     resolved_claude_config_dir_path = _claude_config_dir_path(claude_config_dir_path)
 
-    return [
-        SkillInstallTarget(
+    targets: list[SkillInstallTarget] = []
+    if resolved_codex_home_path is not None:
+        targets.append(SkillInstallTarget(
             tool_name="codex",
             skill_path=resolved_codex_home_path / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
-        ),
-        SkillInstallTarget(
+        ))
+    if resolved_claude_config_dir_path is not None:
+        targets.append(SkillInstallTarget(
             tool_name="claude",
             skill_path=resolved_claude_config_dir_path / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
-        ),
-    ]
+        ))
+    return targets
 
 
 def install_skill_for_target(
@@ -128,7 +138,7 @@ def install_skill_for_target(
     )
 
 
-def _codex_home_path(codex_home_path: str | Path | None) -> Path:
+def _codex_home_path(codex_home_path: str | Path | None) -> Path | None:
     if codex_home_path:
         return Path(codex_home_path).expanduser()
 
@@ -136,10 +146,10 @@ def _codex_home_path(codex_home_path: str | Path | None) -> Path:
     if configured_codex_home_path:
         return Path(configured_codex_home_path).expanduser()
 
-    raise RuntimeError("CODEX_HOME must be set or codex_home_path must be provided.")
+    return None
 
 
-def _claude_config_dir_path(claude_config_dir_path: str | Path | None) -> Path:
+def _claude_config_dir_path(claude_config_dir_path: str | Path | None) -> Path | None:
     if claude_config_dir_path:
         return Path(claude_config_dir_path).expanduser()
 
@@ -147,4 +157,4 @@ def _claude_config_dir_path(claude_config_dir_path: str | Path | None) -> Path:
     if configured_claude_config_dir_path:
         return Path(configured_claude_config_dir_path).expanduser()
 
-    raise RuntimeError("CLAUDE_CONFIG_DIR must be set or claude_config_dir_path must be provided.")
+    return None

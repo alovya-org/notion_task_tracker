@@ -63,18 +63,41 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
     ]
 
 
-def test_skill_install_targets_require_codex_home(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CODEX_HOME", raising=False)
+@pytest.mark.parametrize(
+    ("missing_environment_variable", "configured_paths", "installed_tool", "missing_tool"),
+    [
+        ("CODEX_HOME", {"claude_config_dir_path": "claude"}, "claude", "Codex"),
+        ("CLAUDE_CONFIG_DIR", {"codex_home_path": "codex"}, "codex", "Claude"),
+    ],
+)
+def test_install_skill_skips_and_warns_for_unconfigured_tool(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    missing_environment_variable: str,
+    configured_paths: dict[str, str],
+    installed_tool: str,
+    missing_tool: str,
+) -> None:
+    monkeypatch.delenv(missing_environment_variable, raising=False)
+    output_stream = io.StringIO()
+    warning_stream = io.StringIO()
+    resolved_configured_paths = {
+        parameter_name: tmp_path / relative_path
+        for parameter_name, relative_path in configured_paths.items()
+    }
 
-    with pytest.raises(RuntimeError, match="CODEX_HOME must be set"):
-        skill_install_targets(claude_config_dir_path="/workspace/.claude")
+    results = install_skill(
+        output_stream=output_stream,
+        warning_stream=warning_stream,
+        **resolved_configured_paths,
+    )
 
-
-def test_skill_install_targets_require_claude_config_dir(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
-
-    with pytest.raises(RuntimeError, match="CLAUDE_CONFIG_DIR must be set"):
-        skill_install_targets(codex_home_path="/workspace/.codex")
+    assert [result.tool_name for result in results] == [installed_tool]
+    assert json.loads(output_stream.getvalue())[0]["status"] == "installed"
+    assert warning_stream.getvalue() == (
+        f"Warning: {missing_environment_variable} is not set; "
+        f"skipping {missing_tool} skill installation.\n"
+    )
 
 
 def test_install_skill_is_noop_when_existing_file_is_identical(tmp_path: Path):
