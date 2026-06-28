@@ -134,6 +134,15 @@ class FakeNotionClient:
                 },
             )
             return _write_result(write_intent.operation_key)
+        if write_intent.operation_name == "archive_page":
+            self._record_call(
+                operation_key=write_intent.operation_key,
+                operation_name="archive_page",
+                arguments={
+                    "page_id": page_registry.page_id(_required_target_page_key(write_intent)),
+                },
+            )
+            return _write_result(write_intent.operation_key)
         if write_intent.operation_name == "update_timeline_log":
             return self._execute_timeline_log_update_intent(write_intent, page_registry)
         if write_intent.operation_name == "append_miscellaneous_context":

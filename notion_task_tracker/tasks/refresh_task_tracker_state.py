@@ -111,6 +111,15 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
     if command_name in {"append_task_timeline_log", "complete_task", "cancel_task"}:
         return [command["task_id"]]
 
+    if command_name == "delete_task":
+        task_id = command["task_id"]
+        task = tracker_state.get("tasks", {}).get(task_id, {})
+        return [
+            task_id,
+            *task.get("child_task_ids", []),
+            *task.get("dependant_task_ids", []),
+        ]
+
     if command_name == "complete_task_with_all_children":
         return _collect_task_ids_in_subtree_preorder(tracker_state, command["task_id"])
 

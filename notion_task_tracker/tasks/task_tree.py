@@ -218,6 +218,23 @@ class TaskTree:
         self.recalculate_display_priorities()
         return cancellation_change
 
+    def delete_task(self, task_id: str) -> None:
+        deleted_task = self.tasks[task_id]
+        replacement_parent_task_id = deleted_task.parent_task_id
+
+        for child_task_id in list(deleted_task.child_task_ids):
+            self.set_task_parent(child_task_id, replacement_parent_task_id)
+
+        for task in self.tasks.values():
+            if task_id in task.dependency_task_ids:
+                task.dependency_task_ids.remove(task_id)
+
+        if replacement_parent_task_id is not None:
+            self.tasks[replacement_parent_task_id].child_task_ids.remove(task_id)
+
+        del self.tasks[task_id]
+        self._validate_after_task_field_change()
+
     def set_task_dependencies(self, task_id: str, dependency_task_ids: list[str]) -> None:
         self.tasks[task_id].dependency_task_ids = list(dependency_task_ids)
         self._validate_after_task_field_change()

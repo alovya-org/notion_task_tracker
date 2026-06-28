@@ -67,6 +67,13 @@ def test_parse_args_reads_complete_with_all_children_action():
     assert args.ticket_number == [67]
 
 
+def test_parse_args_reads_delete_action():
+    args = parse_args(["--delete", "--ticket-number", "67"])
+
+    assert args.delete is True
+    assert args.ticket_number == [67]
+
+
 def test_main_rejects_removed_transport_flag():
     with pytest.raises(SystemExit) as error:
         main(["--notion-" + "transport", "removed"])

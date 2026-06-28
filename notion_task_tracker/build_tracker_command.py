@@ -14,6 +14,7 @@ WRITE_ACTIONS = {
     "complete",
     "complete_with_all_children",
     "cancel",
+    "delete",
     "set_dependencies",
     "set_dependants",
     "set_deadline",
@@ -65,6 +66,8 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return _build_complete_with_all_children_command(arguments, ticket_prefix)
     if action_name == "cancel":
         return _build_cancel_command(arguments, ticket_prefix)
+    if action_name == "delete":
+        return _build_delete_command(arguments, ticket_prefix)
     if action_name == "set_dependencies":
         return _build_set_dependencies_command(arguments, ticket_prefix)
     if action_name == "set_dependants":
@@ -152,6 +155,13 @@ def _build_cancel_command(arguments: Namespace, ticket_prefix: str) -> dict[str,
         "command": "cancel_task",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
         "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+    }
+
+
+def _build_delete_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    return {
+        "command": "delete_task",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
     }
 
 

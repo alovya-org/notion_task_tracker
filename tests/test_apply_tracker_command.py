@@ -451,6 +451,63 @@ def test_cancel_task_updates_status_and_produces_write_intents():
     ])
 
 
+def test_delete_task_promotes_children_removes_dependencies_and_refreshes_views():
+    tracker_state = _combined_tracker_state()
+    tracker_state["completed_landing_page"]["notion_page_id"] = "66666666666666666666666666666666"
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    task_tree.add_task(
+        Task(
+            task_id="ALOVYA-2",
+            title="Deleted task",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            notion_page_id="33333333333333333333333333333333",
+        )
+    )
+    task_tree.add_task(
+        Task(
+            task_id="ALOVYA-3",
+            title="Promoted child",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            notion_page_id="77777777777777777777777777777777",
+        )
+    )
+    task_tree.add_task(
+        Task(
+            task_id="ALOVYA-4",
+            title="Former dependant",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            dependency_task_ids=["ALOVYA-2"],
+            notion_page_id="88888888888888888888888888888888",
+        )
+    )
+    task_tree.link_parent_to_child("ALOVYA-1", "ALOVYA-2")
+    task_tree.link_parent_to_child("ALOVYA-2", "ALOVYA-3")
+    task_tree.derive_dependant_task_ids_from_dependencies()
+
+    command_result = apply_command_to_tracker_state(
+        command={"command": "delete_task", "task_id": "ALOVYA-2"},
+        tracker_state=task_tree.replace_task_tree_in_tracker_state(tracker_state),
+    )
+
+    tasks = command_result.tracker_state["tasks"]
+    assert "ALOVYA-2" not in tasks
+    assert tasks["ALOVYA-1"]["child_task_ids"] == ["ALOVYA-3"]
+    assert tasks["ALOVYA-3"]["parent_task_id"] == "ALOVYA-1"
+    assert tasks["ALOVYA-4"]["dependency_task_ids"] == []
+    assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
+        "update_parent:task:ALOVYA-3",
+        "update_dependencies:task:ALOVYA-4",
+        "archive:task:ALOVYA-2",
+        "replace:ongoing_landing_page",
+        "replace:completed_landing_page",
+    ]
+    assert "Deleted task" not in command_result.write_intents[-2].arguments["markdown"]
+    assert command_result.page_registry.page_id("task:ALOVYA-2") == "33333333333333333333333333333333"
+
+
 def _combined_tracker_state():
     tracker_state = _task_tracker_state()
     tracker_state["miscellaneous_notes"] = {

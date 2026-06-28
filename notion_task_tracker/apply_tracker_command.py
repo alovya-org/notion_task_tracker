@@ -10,9 +10,10 @@ from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
+    build_ongoing_landing_page_refresh_intent,
+    build_page_registry_for_task_tree,
+    build_task_archive_intent,
     build_task_database_property_refresh_intent,
-    plan_completion_write_intents,
-    plan_notion_writes_for_task_tree,
     build_task_deadline_update_intent,
     build_task_dependencies_update_intent,
     build_task_dependants_update_intent,
@@ -20,10 +21,10 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_task_friction_update_intent,
     build_task_parent_update_intent,
     build_task_uncertainty_update_intent,
-    build_ongoing_landing_page_refresh_intent,
-    build_page_registry_for_task_tree,
     build_timeline_log_write_intent,
+    plan_completion_write_intents,
     plan_completed_landing_page_refresh_intents,
+    plan_notion_writes_for_task_tree,
 )
 from notion_task_tracker.notion_operations.miscellaneous_writes import (
     miscellaneous_note_append_write_intent,
@@ -74,6 +75,9 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
 
     if command_name == "cancel_task":
         return _apply_task_command(command, tracker_state, _cancel_task)
+
+    if command_name == "delete_task":
+        return _delete_task(command, tracker_state)
 
     if command_name == "set_task_dependencies":
         return _set_task_dependencies(command, tracker_state)
@@ -207,6 +211,34 @@ def _cancel_task(
     return task_tree.cancel_task(
         task_id=command["task_id"],
         timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+    )
+
+
+def _delete_task(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    task_tree = TaskTree.from_tracker_state(tracker_state)
+    deleted_task = task_tree.tasks[command["task_id"]]
+    child_task_ids = list(deleted_task.child_task_ids)
+    dependant_task_ids = list(deleted_task.dependant_task_ids)
+    page_registry = build_page_registry_for_task_tree(task_tree)
+
+    task_tree.delete_task(deleted_task.task_id)
+    write_intents = [
+        *[
+            build_task_parent_update_intent(task_tree.tasks[child_task_id])
+            for child_task_id in child_task_ids
+        ],
+        *[
+            build_task_dependencies_update_intent(task_tree.tasks[dependant_task_id])
+            for dependant_task_id in dependant_task_ids
+        ],
+        build_task_archive_intent(deleted_task),
+        build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
+        *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
+    ]
+    return TrackerCommandResult(
+        tracker_state=_replace_task_pages_in_tracker_state(tracker_state, task_tree),
+        write_intents=write_intents,
+        page_registry=page_registry,
     )
 
 

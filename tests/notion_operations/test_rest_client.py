@@ -220,6 +220,31 @@ def test_update_properties_call_preserves_structured_title_rich_text():
     ]
 
 
+def test_archive_page_marks_database_page_as_archived():
+    notion_client = _FakeNotionRestClient(
+        responses=[{"id": "22222222-2222-2222-2222-222222222222", "archived": True}]
+    )
+
+    asyncio.run(
+        notion_client.execute_write_intent(
+            NotionWriteIntent(
+                operation_key="archive:task:ALOVYA-1",
+                operation_name="archive_page",
+                target_page_key="task:ALOVYA-1",
+                arguments={},
+            ),
+            _page_registry(),
+        )
+    )
+
+    assert notion_client.requests == [
+        (
+            "PATCH",
+            "/v1/pages/22222222222222222222222222222222",
+            {"archived": True},
+        )
+    ]
+
 def test_replace_content_uses_page_markdown_endpoint():
     notion_client = _FakeNotionRestClient(
         responses=[{}]

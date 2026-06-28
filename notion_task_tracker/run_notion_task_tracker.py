@@ -79,6 +79,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--complete", action="store_true")
     action_group.add_argument("--complete-with-all-children", action="store_true")
     action_group.add_argument("--cancel", action="store_true")
+    action_group.add_argument("--delete", action="store_true")
     action_group.add_argument("--set-dependencies", action="store_true")
     action_group.add_argument("--set-dependants", action="store_true")
     action_group.add_argument("--set-deadline", action="store_true")

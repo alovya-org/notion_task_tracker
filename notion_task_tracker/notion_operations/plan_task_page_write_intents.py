@@ -135,6 +135,15 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
     )
 
 
+def build_task_archive_intent(task: Task) -> NotionWriteIntent:
+    return NotionWriteIntent(
+        operation_key=f"archive:{task.local_page_key}",
+        operation_name="archive_page",
+        target_page_key=task.local_page_key,
+        arguments={},
+    )
+
+
 def render_task_database_title_property(task: Task) -> str | dict:
     title = task.render_page_title()
     if task.status == TaskStatus.COMPLETE:

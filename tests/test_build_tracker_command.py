@@ -39,6 +39,15 @@ def test_work_action_builds_work_command_for_one_ticket_number():
     }
 
 
+def test_delete_action_builds_delete_command_for_one_ticket_number():
+    command = _build_tracker_command(_arguments(delete=True, ticket_number=[67]))
+
+    assert command == {
+        "command": "delete_task",
+        "task_id": "ALOVYA-67",
+    }
+
+
 def test_log_action_builds_timeline_command_from_content_path(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
@@ -398,6 +407,7 @@ def _arguments(**overrides):
         "complete": False,
         "complete_with_all_children": False,
         "cancel": False,
+        "delete": False,
         "set_dependencies": False,
         "set_dependants": False,
         "set_deadline": False,
