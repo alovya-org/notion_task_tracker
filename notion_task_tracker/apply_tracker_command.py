@@ -12,7 +12,7 @@ from notion_task_tracker.notion_operations.page_registry import NotionPageRegist
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_ongoing_landing_page_refresh_intent,
     build_page_registry_for_task_tree,
-    build_task_archive_intent,
+    build_task_trash_intent,
     build_task_database_property_refresh_intent,
     build_task_deadline_update_intent,
     build_task_dependencies_update_intent,
@@ -231,7 +231,7 @@ def _delete_task(command: dict[str, Any], tracker_state: dict[str, Any]) -> Trac
             build_task_dependencies_update_intent(task_tree.tasks[dependant_task_id])
             for dependant_task_id in dependant_task_ids
         ],
-        build_task_archive_intent(deleted_task),
+        build_task_trash_intent(deleted_task),
         build_ongoing_landing_page_refresh_intent(task_tree, page_registry),
         *plan_completed_landing_page_refresh_intents(task_tree, page_registry),
     ]

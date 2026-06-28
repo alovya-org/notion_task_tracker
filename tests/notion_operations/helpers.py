@@ -134,10 +134,10 @@ class FakeNotionClient:
                 },
             )
             return _write_result(write_intent.operation_key)
-        if write_intent.operation_name == "archive_page":
+        if write_intent.operation_name == "trash_page":
             self._record_call(
                 operation_key=write_intent.operation_key,
-                operation_name="archive_page",
+                operation_name="trash_page",
                 arguments={
                     "page_id": page_registry.page_id(_required_target_page_key(write_intent)),
                 },

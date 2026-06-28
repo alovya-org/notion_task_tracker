@@ -270,7 +270,7 @@ Cancel a task. The tracker marks the task `Cancelled`, appends or merges the tim
 }
 ```
 
-Delete a task. The tracker archives its Notion database page, removes it from local state and both landing pages, promotes its children to its parent, and removes it from dependency relationships:
+Delete a task. The tracker moves its Notion database page to trash, removes it from local state and both landing pages, promotes its children to its parent, and removes it from dependency relationships:
 
 ```bash
 ntt --delete --ticket-number 67
@@ -403,7 +403,7 @@ This replaces the local existing-page mention list with exactly the page mention
 - `append_task_timeline_log`: add a dated timeline entry to one task with targeted page content. New dates are prepended under `Timeline log`; existing dates are updated under their date heading. It must not replace the task page or landing pages.
 - `complete_task`: mark one task complete, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
 - `cancel_task`: mark one task cancelled, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
-- `delete_task`: archive one task page, remove its local state and relationships, promote its children, and refresh both landing pages.
+- `delete_task`: move one task page to trash, remove its local state and relationships, promote its children, and refresh both landing pages.
 - `create_top_level_task`: create a top-level task database row and use Notion's assigned `Task ID`.
 - `split_task_into_children`: create one child task database row under an existing source task, copy the source task's dependencies and dependants onto the child, clear the source task's own relation fields, initialise the child Timeline log with a parent link, and append a source timeline entry linking to the child.
 - `split_task_with_sibling`: create one task database row under the same parent as an existing source task, or top-level when the source has no parent. The new sibling copies the source task's dependencies and dependants. If the sibling has a parent, initialise the new page with a parent link and append a parent timeline entry linking to the new page.

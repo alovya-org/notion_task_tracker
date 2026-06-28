@@ -135,10 +135,10 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
     )
 
 
-def build_task_archive_intent(task: Task) -> NotionWriteIntent:
+def build_task_trash_intent(task: Task) -> NotionWriteIntent:
     return NotionWriteIntent(
-        operation_key=f"archive:{task.local_page_key}",
-        operation_name="archive_page",
+        operation_key=f"trash:{task.local_page_key}",
+        operation_name="trash_page",
         target_page_key=task.local_page_key,
         arguments={},
     )

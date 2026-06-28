@@ -500,7 +500,7 @@ def test_delete_task_promotes_children_removes_dependencies_and_refreshes_views(
     assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
         "update_parent:task:ALOVYA-3",
         "update_dependencies:task:ALOVYA-4",
-        "archive:task:ALOVYA-2",
+        "trash:task:ALOVYA-2",
         "replace:ongoing_landing_page",
         "replace:completed_landing_page",
     ]

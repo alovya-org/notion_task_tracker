@@ -11,6 +11,7 @@ from tests.notion_operations.helpers import FakeNotionClient
 from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
 from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
+    _action_name_from_tracker_command,
     _run_read_task_pages,
     main,
     parse_args,
@@ -72,6 +73,10 @@ def test_parse_args_reads_delete_action():
 
     assert args.delete is True
     assert args.ticket_number == [67]
+
+
+def test_delete_command_reports_delete_action_name():
+    assert _action_name_from_tracker_command({"command": "delete_task"}) == "delete"
 
 
 def test_main_rejects_removed_transport_flag():

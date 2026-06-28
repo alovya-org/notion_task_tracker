@@ -565,6 +565,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "complete_task": "complete",
         "complete_task_with_all_children": "complete_with_all_children",
         "cancel_task": "cancel",
+        "delete_task": "delete",
         "set_task_dependencies": "set_dependencies",
         "set_task_dependants": "set_dependants",
         "set_task_deadline": "set_deadline",

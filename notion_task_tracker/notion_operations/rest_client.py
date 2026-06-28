@@ -125,8 +125,8 @@ class NotionRestClient:
             return await self._execute_replace_page_markdown_intent(write_intent, page_registry)
         if write_intent.operation_name == "update_page_properties":
             return await self._execute_update_page_properties_intent(write_intent, page_registry)
-        if write_intent.operation_name == "archive_page":
-            return await self._execute_archive_page_intent(write_intent, page_registry)
+        if write_intent.operation_name == "trash_page":
+            return await self._execute_trash_page_intent(write_intent, page_registry)
         if write_intent.operation_name == "update_timeline_log":
             return await self._execute_timeline_log_update_intent(write_intent, page_registry)
         if write_intent.operation_name == "append_miscellaneous_context":
@@ -230,12 +230,12 @@ class NotionRestClient:
         )
         return _write_result(write_intent.operation_key, None, updated_page)
 
-    async def _execute_archive_page_intent(
+    async def _execute_trash_page_intent(
         self,
         write_intent: NotionWriteIntent,
         page_registry: NotionPageRegistry,
     ) -> dict[str, Any]:
-        await self.archive_page(page_registry.page_id(_required_target_page_key(write_intent)))
+        await self.trash_page(page_registry.page_id(_required_target_page_key(write_intent)))
         return _write_result(write_intent.operation_key)
 
     async def _execute_timeline_log_update_intent(
@@ -355,8 +355,8 @@ class NotionRestClient:
             {"properties": _rest_database_properties(properties, page_registry)},
         )
 
-    async def archive_page(self, page_id: str) -> dict[str, Any]:
-        return await self._send_json("PATCH", f"/v1/pages/{page_id}", {"archived": True})
+    async def trash_page(self, page_id: str) -> dict[str, Any]:
+        return await self._send_json("PATCH", f"/v1/pages/{page_id}", {"in_trash": True})
 
     async def replace_page_content(
         self,
