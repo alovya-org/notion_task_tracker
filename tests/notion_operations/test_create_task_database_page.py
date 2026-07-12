@@ -82,6 +82,8 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
 
     assert updated_tracker_state["tasks"]["ALOVYA-72"]["parent_task_id"] == "ALOVYA-1"
     assert updated_tracker_state["tasks"]["ALOVYA-73"]["parent_task_id"] == "ALOVYA-1"
+    assert updated_tracker_state["tasks"]["ALOVYA-72"]["configured_priority"] == "P1"
+    assert updated_tracker_state["tasks"]["ALOVYA-73"]["configured_priority"] == "P1"
     assert updated_tracker_state["tasks"]["ALOVYA-72"]["dependency_task_ids"] == ["ALOVYA-10"]
     assert updated_tracker_state["tasks"]["ALOVYA-73"]["dependency_task_ids"] == ["ALOVYA-10"]
     assert updated_tracker_state["tasks"]["ALOVYA-20"]["dependency_task_ids"] == ["ALOVYA-72", "ALOVYA-73"]
@@ -113,7 +115,7 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         "External coordination": "No",
         "Friction": "None",
         "Task page": "Child task",
-        "Priority": "P2",
+        "Priority": "P1",
         "Status": "Active",
         "Parent": '["https://www.notion.so/22222222222222222222222222222222"]',
         "Dependencies": '["https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]',

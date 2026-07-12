@@ -103,12 +103,14 @@ def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCr
 
 
 def _derive_child_task_creations_from_command(command: dict[str, Any], task_tree: TaskTree) -> list[TaskCreation]:
+    child_priority = _derive_child_priority_from_parent(task_tree, command["source_task_id"])
     split_relations = copy_source_task_relations_to_split_tasks(task_tree, command["source_task_id"])
     parent_timeline_entry = command.get("parent_timeline_entry")
     return [
         _derive_split_child_task_creation(
             command=command,
             child_task_command=child_task_command,
+            child_priority=child_priority,
             dependency_task_ids=split_relations["dependency_task_ids"],
             dependant_task_ids=split_relations["dependant_task_ids"],
             parent_timeline_entry=parent_timeline_entry,
@@ -120,6 +122,7 @@ def _derive_child_task_creations_from_command(command: dict[str, Any], task_tree
 def _derive_split_child_task_creation(
     command: dict[str, Any],
     child_task_command: dict[str, Any],
+    child_priority: Priority,
     dependency_task_ids: list[str],
     dependant_task_ids: list[str],
     parent_timeline_entry: dict[str, Any] | None,
@@ -127,7 +130,7 @@ def _derive_split_child_task_creation(
     return TaskCreation(
         command_name=command["command"],
         task_title=child_task_command["title"],
-        configured_priority=Priority(child_task_command["configured_priority"]),
+        configured_priority=child_priority,
         status=TaskStatus(child_task_command["status"]),
         parent_task_id=command["source_task_id"],
         dependency_task_ids=list(dependency_task_ids),
@@ -139,6 +142,12 @@ def _derive_split_child_task_creation(
         initial_child_timeline_entry=parent_timeline_entry,
         parent_timeline_entry=_timeline_entry_date_shell(parent_timeline_entry),
     )
+
+
+def _derive_child_priority_from_parent(task_tree: TaskTree, parent_task_id: str) -> Priority:
+    task_tree.recalculate_display_priorities()
+    parent_task = task_tree.tasks[parent_task_id]
+    return parent_task.displayed_priority or parent_task.configured_priority
 
 
 def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tree: TaskTree) -> TaskCreation:

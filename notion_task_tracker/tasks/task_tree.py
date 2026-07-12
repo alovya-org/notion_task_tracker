@@ -402,11 +402,17 @@ class TaskTree:
                 current_task_id = self.tasks[current_task_id].parent_task_id
 
     def _calculate_priority_visible_on_task(self, task: Task) -> Priority:
-        priorities_visible_in_subtree = [task.configured_priority]
+        if not task.child_task_ids:
+            return task.configured_priority
+
+        priorities_visible_in_subtree = []
         for child_task_id in task.child_task_ids:
             child_task = self.tasks[child_task_id]
             if child_task.should_contribute_priority_to_ancestors():
                 priorities_visible_in_subtree.append(child_task.displayed_priority or child_task.configured_priority)
+        if not priorities_visible_in_subtree:
+            return task.configured_priority
+
         return _highest_priority(priorities_visible_in_subtree)
 
     def _normalise_task_timelines(self) -> None:

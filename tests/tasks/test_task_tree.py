@@ -31,6 +31,31 @@ class TestTaskTreeRecalculateDisplayPriorities:
         assert task_tree.tasks["ALOVYA-2"].displayed_priority == Priority.P0
         assert task_tree.tasks["ALOVYA-4"].displayed_priority == Priority.P3
 
+    def test_intermediate_task_priority_comes_from_children_not_its_configured_priority(self):
+        task_tree = TaskTree()
+        task_tree.add_task(
+            Task(
+                task_id="ALOVYA-1",
+                title="Parent with urgent stored priority",
+                configured_priority=Priority.P0,
+                status=TaskStatus.ACTIVE,
+            )
+        )
+        task_tree.add_task(
+            Task(
+                task_id="ALOVYA-2",
+                title="Only active leaf",
+                configured_priority=Priority.P3,
+                status=TaskStatus.ACTIVE,
+            )
+        )
+        task_tree.link_parent_to_child(parent_task_id="ALOVYA-1", child_task_id="ALOVYA-2")
+
+        task_tree.recalculate_display_priorities()
+
+        assert task_tree.tasks["ALOVYA-1"].displayed_priority == Priority.P3
+        assert task_tree.tasks["ALOVYA-2"].displayed_priority == Priority.P3
+
     def test_completed_deep_child_priority_stops_rolling_up(self):
         task_tree = _build_recursive_task_tree()
         task_tree.tasks["ALOVYA-5"].status = TaskStatus.COMPLETE
