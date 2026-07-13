@@ -173,6 +173,8 @@ class Task:
     dependency_task_ids: list[str] = field(default_factory=list)
     dependant_task_ids: list[str] = field(default_factory=list)
     deadline: str | None = None
+    start_date_time: str | None = None
+    end_date_time: str | None = None
     external_coordination: ExternalCoordination = DEFAULT_TASK_EXTERNAL_COORDINATION
     uncertainty: Uncertainty = DEFAULT_TASK_UNCERTAINTY
     friction: Friction = DEFAULT_TASK_FRICTION

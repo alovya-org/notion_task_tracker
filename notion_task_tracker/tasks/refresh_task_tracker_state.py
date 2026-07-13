@@ -88,6 +88,8 @@ def _refresh_task_ids_in_task_tree(
             dependency_task_ids=dependency_task_ids,
             dependant_task_ids=dependant_task_ids,
             deadline=database_row.deadline,
+            start_date_time=database_row.start_date_time,
+            end_date_time=database_row.end_date_time,
             external_coordination=database_row.external_coordination,
             uncertainty=database_row.uncertainty,
             friction=database_row.friction,

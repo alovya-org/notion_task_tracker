@@ -312,6 +312,8 @@ def _tracker_state(title: str, priority: str) -> dict:
                 "dependency_task_ids": [],
                 "dependant_task_ids": [],
                 "deadline": None,
+                "start_date_time": None,
+                "end_date_time": None,
                 "external_coordination": "No",
                 "uncertainty": "Low",
                 "friction": "None",

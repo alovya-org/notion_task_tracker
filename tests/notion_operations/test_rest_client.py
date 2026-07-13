@@ -108,6 +108,8 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
     assert rows == [
         {
             "Deadline": "2026-06-15",
+            "Start date & time": "",
+            "End date & time": "",
             "Dependencies": '["https://www.notion.so/33333333333333333333333333333333"]',
             "Dependants": '["https://www.notion.so/44444444444444444444444444444444"]',
             "External coordination": "Yes",
@@ -145,6 +147,8 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "Dependencies": ["task:ALOVYA-2"],
                         "Dependants": ["task:ALOVYA-3"],
                         "Deadline": "2026-06-15",
+                        "Start date & time": "",
+                        "End date & time": "2026-06-15T12:30:00+06:00",
                         "External coordination": "Yes",
                         "Uncertainty": "High",
                         "Friction": "Charged",
@@ -171,6 +175,8 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "relation": [{"id": "44444444444444444444444444444444"}],
                     },
                     "Deadline": {"date": {"start": "2026-06-15"}},
+                    "Start date & time": {"date": None},
+                    "End date & time": {"date": {"start": "2026-06-15T12:30:00+06:00"}},
                     "External coordination": {"select": {"name": "Yes"}},
                     "Uncertainty": {"select": {"name": "High"}},
                     "Friction": {"select": {"name": "Charged"}},

@@ -167,6 +167,8 @@ class TaskTree:
         dependency_task_ids: list[str],
         dependant_task_ids: list[str],
         deadline: str | None,
+        start_date_time: str | None,
+        end_date_time: str | None,
         external_coordination: ExternalCoordination,
         uncertainty: Uncertainty,
         friction: Friction,
@@ -179,6 +181,8 @@ class TaskTree:
         task.dependency_task_ids = list(dependency_task_ids)
         self._replace_task_dependants(task_id, list(dependant_task_ids))
         task.deadline = deadline
+        task.start_date_time = start_date_time
+        task.end_date_time = end_date_time
         task.external_coordination = external_coordination
         task.uncertainty = uncertainty
         task.friction = friction
@@ -478,6 +482,8 @@ def _changed_task_tree_fields(
         "dependency_task_ids",
         "dependant_task_ids",
         "deadline",
+        "start_date_time",
+        "end_date_time",
         "external_coordination",
         "uncertainty",
         "friction",
@@ -506,6 +512,8 @@ def _task_to_tracker_state(task: Task) -> dict[str, Any]:
         "dependency_task_ids": list(task.dependency_task_ids),
         "dependant_task_ids": list(task.dependant_task_ids),
         "deadline": task.deadline,
+        "start_date_time": task.start_date_time,
+        "end_date_time": task.end_date_time,
         "external_coordination": task.external_coordination.value,
         "uncertainty": task.uncertainty.value,
         "friction": task.friction.value,
@@ -522,29 +530,31 @@ def _task_to_tracker_state(task: Task) -> dict[str, Any]:
 
 
 def _task_from_tracker_state(tracker_state: dict[str, Any]) -> Task:
-    displayed_priority = tracker_state.get("displayed_priority")
+    displayed_priority = tracker_state["displayed_priority"]
     return Task(
         task_id=tracker_state["task_id"],
         title=tracker_state["title"],
         configured_priority=Priority(tracker_state["configured_priority"]),
         displayed_priority=Priority(displayed_priority) if displayed_priority else None,
         status=TaskStatus(tracker_state["status"]),
-        status_update=tracker_state.get("status_update", ""),
-        parent_task_id=tracker_state.get("parent_task_id"),
-        child_task_ids=list(tracker_state.get("child_task_ids", [])),
+        status_update=tracker_state["status_update"],
+        parent_task_id=tracker_state["parent_task_id"],
+        child_task_ids=list(tracker_state["child_task_ids"]),
         dependency_task_ids=list(tracker_state["dependency_task_ids"]),
         dependant_task_ids=list(tracker_state["dependant_task_ids"]),
         deadline=tracker_state["deadline"],
+        start_date_time=tracker_state["start_date_time"],
+        end_date_time=tracker_state["end_date_time"],
         external_coordination=ExternalCoordination(tracker_state["external_coordination"]),
         uncertainty=Uncertainty(tracker_state["uncertainty"]),
         friction=Friction(tracker_state["friction"]),
         timeline_entries=[
             TimelineEntry.from_tracker_state(derived_timeline_log)
-            for derived_timeline_log in tracker_state.get("timeline_entries", [])
+            for derived_timeline_log in tracker_state["timeline_entries"]
         ],
         links=[
             external_link_from_tracker_state(link_state)
-            for link_state in tracker_state.get("links", [])
+            for link_state in tracker_state["links"]
         ],
-        notion_page_id=tracker_state.get("notion_page_id"),
+        notion_page_id=tracker_state["notion_page_id"],
     )

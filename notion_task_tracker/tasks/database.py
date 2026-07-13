@@ -37,6 +37,8 @@ TASK_DATABASE_PARENT_PROPERTY = "Parent"
 TASK_DATABASE_DEPENDENCIES_PROPERTY = "Dependencies"
 TASK_DATABASE_DEPENDANTS_PROPERTY = "Dependants"
 TASK_DATABASE_DEADLINE_PROPERTY = "Deadline"
+TASK_DATABASE_START_DATE_TIME_PROPERTY = "Start date & time"
+TASK_DATABASE_END_DATE_TIME_PROPERTY = "End date & time"
 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
 TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
 TASK_DATABASE_FRICTION_PROPERTY = "Friction"
@@ -88,6 +90,8 @@ class TaskDatabaseRow:
     dependency_notion_page_ids: list[str]
     dependant_notion_page_ids: list[str]
     deadline: str | None
+    start_date_time: str | None
+    end_date_time: str | None
     external_coordination: ExternalCoordination
     uncertainty: Uncertainty
     friction: Friction
@@ -212,6 +216,8 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
             for dependant_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
         ],
         deadline=_optional_text_property(query_result, TASK_DATABASE_DEADLINE_PROPERTY),
+        start_date_time=_optional_text_property(query_result, TASK_DATABASE_START_DATE_TIME_PROPERTY),
+        end_date_time=_optional_text_property(query_result, TASK_DATABASE_END_DATE_TIME_PROPERTY),
         external_coordination=_enum_property_or_default(
             query_result,
             TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
@@ -248,6 +254,8 @@ def _task_from_database_row(
         links=list(previous_task.links) if previous_task else [],
         notion_page_id=database_row.notion_page_id,
         deadline=database_row.deadline,
+        start_date_time=database_row.start_date_time,
+        end_date_time=database_row.end_date_time,
         external_coordination=database_row.external_coordination,
         uncertainty=database_row.uncertainty,
         friction=database_row.friction,

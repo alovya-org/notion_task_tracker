@@ -20,6 +20,8 @@ class TaskCreation:
     dependency_task_ids: list[str]
     dependant_task_ids: list[str]
     deadline: str | None
+    start_date_time: str | None
+    end_date_time: str | None
     external_coordination: ExternalCoordination
     uncertainty: Uncertainty
     friction: Friction
@@ -57,6 +59,8 @@ def add_created_task_to_tracker_state(
             dependency_task_ids=list(task_creation.dependency_task_ids),
             dependant_task_ids=list(task_creation.dependant_task_ids),
             deadline=task_creation.deadline,
+            start_date_time=task_creation.start_date_time,
+            end_date_time=task_creation.end_date_time,
             external_coordination=task_creation.external_coordination,
             uncertainty=task_creation.uncertainty,
             friction=task_creation.friction,
@@ -94,6 +98,8 @@ def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCr
         dependency_task_ids=list(task_command.get("dependency_task_ids", [])),
         dependant_task_ids=list(task_command.get("dependant_task_ids", [])),
         deadline=task_command.get("deadline"),
+        start_date_time=task_command.get("start_date_time"),
+        end_date_time=task_command.get("end_date_time"),
         external_coordination=ExternalCoordination(task_command["external_coordination"]),
         uncertainty=Uncertainty(task_command["uncertainty"]),
         friction=Friction(task_command["friction"]),
@@ -136,6 +142,8 @@ def _derive_split_child_task_creation(
         dependency_task_ids=list(dependency_task_ids),
         dependant_task_ids=list(dependant_task_ids),
         deadline=child_task_command.get("deadline"),
+        start_date_time=child_task_command.get("start_date_time"),
+        end_date_time=child_task_command.get("end_date_time"),
         external_coordination=ExternalCoordination(child_task_command["external_coordination"]),
         uncertainty=Uncertainty(child_task_command["uncertainty"]),
         friction=Friction(child_task_command["friction"]),
@@ -165,6 +173,8 @@ def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tre
         dependency_task_ids=split_relations["dependency_task_ids"],
         dependant_task_ids=split_relations["dependant_task_ids"],
         deadline=sibling_task_command.get("deadline"),
+        start_date_time=sibling_task_command.get("start_date_time"),
+        end_date_time=sibling_task_command.get("end_date_time"),
         external_coordination=ExternalCoordination(sibling_task_command["external_coordination"]),
         uncertainty=Uncertainty(sibling_task_command["uncertainty"]),
         friction=Friction(sibling_task_command["friction"]),

@@ -317,6 +317,8 @@ class TestTaskTreeBuildNotionWritePlan:
 
         assert title_refresh_intent.arguments["properties"] == {
             "Deadline": None,
+            "Start date & time": None,
+            "End date & time": None,
             "External coordination": "No",
             "Friction": "None",
             "Priority": "P3",
