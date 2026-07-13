@@ -12,6 +12,11 @@ from notion_task_tracker.notion_operations.notion_id import canonical_notion_pag
 from notion_task_tracker.tasks.task_tree import TaskTree
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
+    DEFAULT_TASK_EXTERNAL_COORDINATION,
+    DEFAULT_TASK_FRICTION,
+    DEFAULT_TASK_PRIORITY,
+    DEFAULT_TASK_STATUS,
+    DEFAULT_TASK_UNCERTAINTY,
     ExternalCoordination,
     Friction,
     PROPERTIES_BLOCK_PATTERN,
@@ -91,9 +96,7 @@ class TaskDatabaseRow:
 
 def task_database_query_for_tracker_state(tracker_state: dict[str, Any]) -> str:
     return (
-        f'SELECT * FROM "{task_database_data_source_url_from_tracker_state(tracker_state)}" '
-        f'WHERE "{TASK_DATABASE_PRIORITY_PROPERTY}" IS NOT NULL '
-        f'AND "{TASK_DATABASE_STATUS_PROPERTY}" IS NOT NULL'
+        f'SELECT * FROM "{task_database_data_source_url_from_tracker_state(tracker_state)}"'
     )
 
 
@@ -192,8 +195,8 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
     return TaskDatabaseRow(
         task_id=task_id,
         title=title,
-        configured_priority=Priority(_required_text_property(query_result, TASK_DATABASE_PRIORITY_PROPERTY)),
-        status=TaskStatus(_required_text_property(query_result, TASK_DATABASE_STATUS_PROPERTY)),
+        configured_priority=_priority_from_database_property(query_result),
+        status=_status_from_database_property(query_result),
         notion_page_id=notion_page_id,
         notion_page_url=notion_page_url,
         parent_notion_page_ids=[
@@ -209,20 +212,23 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
             for dependant_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
         ],
         deadline=_optional_text_property(query_result, TASK_DATABASE_DEADLINE_PROPERTY),
-        external_coordination=_required_enum_property(
+        external_coordination=_enum_property_or_default(
             query_result,
             TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
             ExternalCoordination,
+            DEFAULT_TASK_EXTERNAL_COORDINATION,
         ),
-        uncertainty=_required_enum_property(
+        uncertainty=_enum_property_or_default(
             query_result,
             TASK_DATABASE_UNCERTAINTY_PROPERTY,
             Uncertainty,
+            DEFAULT_TASK_UNCERTAINTY,
         ),
-        friction=_required_enum_property(
+        friction=_enum_property_or_default(
             query_result,
             TASK_DATABASE_FRICTION_PROPERTY,
             Friction,
+            DEFAULT_TASK_FRICTION,
         ),
         ticket_number=ticket_number,
     )
@@ -349,8 +355,6 @@ def _query_result_has_task_identity(query_result: dict[str, Any]) -> bool:
     return bool(
         query_result.get(TASK_DATABASE_TITLE_PROPERTY)
         and query_result.get(TASK_DATABASE_TICKET_ID_PROPERTY)
-        and query_result.get(TASK_DATABASE_PRIORITY_PROPERTY)
-        and query_result.get(TASK_DATABASE_STATUS_PROPERTY)
     )
 
 
@@ -418,12 +422,27 @@ def _optional_text_property(query_result: dict[str, Any], property_name: str) ->
     return str(value)
 
 
-def _required_enum_property(
+def _priority_from_database_property(query_result: dict[str, Any]) -> Priority:
+    return Priority(
+        _optional_text_property(query_result, TASK_DATABASE_PRIORITY_PROPERTY)
+        or DEFAULT_TASK_PRIORITY.value
+    )
+
+
+def _status_from_database_property(query_result: dict[str, Any]) -> TaskStatus:
+    return TaskStatus(
+        _optional_text_property(query_result, TASK_DATABASE_STATUS_PROPERTY)
+        or DEFAULT_TASK_STATUS.value
+    )
+
+
+def _enum_property_or_default(
     query_result: dict[str, Any],
     property_name: str,
     enum_type: type[ExternalCoordination] | type[Uncertainty] | type[Friction],
+    default_value: ExternalCoordination | Uncertainty | Friction,
 ) -> ExternalCoordination | Uncertainty | Friction:
-    return enum_type(_required_text_property(query_result, property_name))
+    return enum_type(_optional_text_property(query_result, property_name) or default_value.value)
 
 
 def _previous_tasks_by_task_id(previous_task_tree: TaskTree | None) -> dict[str, Task]:

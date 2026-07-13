@@ -8,6 +8,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from notion_task_tracker.tasks import (
+    DEFAULT_TASK_EXTERNAL_COORDINATION,
+    DEFAULT_TASK_FRICTION,
+    DEFAULT_TASK_STATUS,
+    DEFAULT_TASK_UNCERTAINTY,
+)
+
 
 WRITE_ACTIONS = {
     "log",
@@ -311,7 +318,7 @@ def _new_task_command(arguments: Namespace, title: str, ticket_prefix: str) -> d
     return {
         "title": title,
         "configured_priority": arguments.priority,
-        "status": "Active",
+        "status": DEFAULT_TASK_STATUS.value,
         **_new_task_database_fields_from_arguments(arguments, ticket_prefix),
     }
 
@@ -346,9 +353,9 @@ def _new_task_database_fields_from_arguments(arguments: Namespace, ticket_prefix
         "dependency_task_ids": dependency_task_ids,
         "dependant_task_ids": dependant_task_ids,
         "deadline": arguments.deadline,
-        "external_coordination": arguments.external_coordination or "No",
-        "uncertainty": arguments.uncertainty or "Low",
-        "friction": arguments.friction or "None",
+        "external_coordination": arguments.external_coordination or DEFAULT_TASK_EXTERNAL_COORDINATION.value,
+        "uncertainty": arguments.uncertainty or DEFAULT_TASK_UNCERTAINTY.value,
+        "friction": arguments.friction or DEFAULT_TASK_FRICTION.value,
     }
 
 

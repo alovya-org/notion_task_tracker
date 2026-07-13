@@ -232,23 +232,36 @@ class TestTaskTreeFromDatabaseQueryResults:
                 ),
             )
 
-    def test_rejects_task_metadata_rows_without_required_enum_fields(self):
+    def test_defaults_blank_task_metadata_to_the_least_alarming_values(self):
         row = _build_task_database_row(
             ticket_page="Incomplete task metadata",
             ticket_id="1",
             page_id="11111111111111111111111111111111",
+            priority="",
+            status="",
         )
+        del row["Priority"]
+        del row["Status"]
         del row["External coordination"]
+        del row["Uncertainty"]
+        del row["Friction"]
 
-        with pytest.raises(ValueError, match="Task database row has no External coordination"):
-            _build_task_tree(
-                query_results=[row],
-                landing_page=TrackedPage(
-                    local_page_key="ongoing_landing_page",
-                    title=ONGOING_LANDING_PAGE_TITLE,
-                    notion_page_id="landing-page-id",
-                ),
-            )
+        task_tree = _build_task_tree(
+            query_results=[row],
+            landing_page=TrackedPage(
+                local_page_key="ongoing_landing_page",
+                title=ONGOING_LANDING_PAGE_TITLE,
+                notion_page_id="landing-page-id",
+            ),
+        )
+
+        task = task_tree.tasks["ALOVYA-1"]
+        assert task.configured_priority == Priority.P3
+        assert task.status == TaskStatus.ACTIVE
+        assert task.deadline is None
+        assert task.external_coordination == ExternalCoordination.NO
+        assert task.uncertainty == Uncertainty.LOW
+        assert task.friction == Friction.NONE
 
     def test_skips_rows_that_point_to_unknown_parent_rows(self):
         task_tree = _build_task_tree(
@@ -330,8 +343,7 @@ class TestTaskDatabaseTrackerState:
             "collection://configured-data-source-id"
         )
         assert task_database_query_for_tracker_state({"task_database": tracker_state}) == (
-            'SELECT * FROM "collection://configured-data-source-id" '
-            'WHERE "Priority" IS NOT NULL AND "Status" IS NOT NULL'
+            'SELECT * FROM "collection://configured-data-source-id"'
         )
 
 

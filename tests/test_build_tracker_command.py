@@ -4,6 +4,7 @@ from argparse import Namespace
 import pytest
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action, ticket_ids_from_numbers
+from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
 
 
 def test_reconcile_action_builds_refresh_command():
@@ -202,7 +203,7 @@ def test_parent_action_builds_task_creation_command_with_dependencies():
 
     assert command["task"] == {
         "title": "Create dependent task",
-        "configured_priority": "P1",
+        "configured_priority": DEFAULT_TASK_PRIORITY.value,
         "status": "Active",
         "dependency_task_ids": ["ALOVYA-10", "ALOVYA-12"],
         "dependant_task_ids": [],
@@ -425,7 +426,7 @@ def _arguments(**overrides):
         "parent_ticket_number": None,
         "sibling_ticket_number": None,
         "title": None,
-        "priority": "P1",
+        "priority": DEFAULT_TASK_PRIORITY.value,
         "dependency_ticket_number": [],
         "dependant_ticket_number": [],
         "deadline": None,

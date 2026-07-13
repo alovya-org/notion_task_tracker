@@ -9,6 +9,7 @@ from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.notion_operations.rest_client import NotionWriteExecutionResult
 from tests.notion_operations.helpers import FakeNotionClient
 from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
+from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
 from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
@@ -51,6 +52,12 @@ def test_parse_args_collects_repeated_titles():
     args = parse_args(["--child", "--parent-ticket-number", "67", "--title", "One"])
 
     assert args.title == ["One"]
+
+
+def test_parse_args_uses_default_task_priority():
+    args = parse_args(["--parent", "--title", "Default priority task"])
+
+    assert args.priority == DEFAULT_TASK_PRIORITY.value
 
 
 def test_parse_args_reads_reparent_action():

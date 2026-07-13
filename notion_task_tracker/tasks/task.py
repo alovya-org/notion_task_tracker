@@ -65,6 +65,12 @@ class Friction(str, Enum):
     NONE = "None"
 
 
+DEFAULT_TASK_PRIORITY = Priority.P3
+DEFAULT_TASK_STATUS = TaskStatus.ACTIVE
+DEFAULT_TASK_EXTERNAL_COORDINATION = ExternalCoordination.NO
+DEFAULT_TASK_UNCERTAINTY = Uncertainty.LOW
+DEFAULT_TASK_FRICTION = Friction.NONE
+
 _PRIORITY_RANK_BY_VALUE = {
     Priority.P0: 0,
     Priority.P1: 1,
@@ -167,9 +173,9 @@ class Task:
     dependency_task_ids: list[str] = field(default_factory=list)
     dependant_task_ids: list[str] = field(default_factory=list)
     deadline: str | None = None
-    external_coordination: ExternalCoordination = ExternalCoordination.NO
-    uncertainty: Uncertainty = Uncertainty.LOW
-    friction: Friction = Friction.NONE
+    external_coordination: ExternalCoordination = DEFAULT_TASK_EXTERNAL_COORDINATION
+    uncertainty: Uncertainty = DEFAULT_TASK_UNCERTAINTY
+    friction: Friction = DEFAULT_TASK_FRICTION
     timeline_entries: list[TimelineEntry] = field(default_factory=list)
     links: list[ExternalLink] = field(default_factory=list)
     notion_page_id: str | None = None

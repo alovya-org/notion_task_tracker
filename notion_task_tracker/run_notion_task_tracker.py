@@ -32,7 +32,7 @@ from notion_task_tracker.notion_operations.reconcile_task_database import (
     refresh_tracker_state_from_notion_task_database,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.tasks import ExternalCoordination, Friction, TaskTree, Uncertainty
+from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY, ExternalCoordination, Friction, TaskTree, Uncertainty
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 
 
@@ -104,7 +104,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--parent-ticket-number", type=int)
     parser.add_argument("--sibling-ticket-number", type=int)
     parser.add_argument("--title", action="append", default=[])
-    parser.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default="P1")
+    parser.add_argument("--priority", choices=["P0", "P1", "P2", "P3"], default=DEFAULT_TASK_PRIORITY.value)
     parser.add_argument("--dependency-ticket-number", action="append", type=int, default=[])
     parser.add_argument("--dependant-ticket-number", action="append", type=int, default=[])
     parser.add_argument("--deadline")
