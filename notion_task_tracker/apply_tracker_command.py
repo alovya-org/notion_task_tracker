@@ -20,7 +20,9 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_task_external_coordination_update_intent,
     build_task_friction_update_intent,
     build_task_parent_update_intent,
+    build_task_start_date_time_update_intent,
     build_task_uncertainty_update_intent,
+    build_task_end_date_time_update_intent,
     build_timeline_log_write_intent,
     plan_completion_write_intents,
     plan_completed_landing_page_refresh_intents,
@@ -90,6 +92,18 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
 
     if command_name == "clear_task_deadline":
         return _clear_task_deadline(command, tracker_state)
+
+    if command_name == "set_task_start_date_time":
+        return _set_task_start_date_time(command, tracker_state)
+
+    if command_name == "clear_task_start_date_time":
+        return _clear_task_start_date_time(command, tracker_state)
+
+    if command_name == "set_task_end_date_time":
+        return _set_task_end_date_time(command, tracker_state)
+
+    if command_name == "clear_task_end_date_time":
+        return _clear_task_end_date_time(command, tracker_state)
 
     if command_name == "set_task_external_coordination":
         return _set_task_external_coordination(command, tracker_state)
@@ -322,6 +336,48 @@ def _clear_task_deadline(command: dict[str, Any], tracker_state: dict[str, Any])
         tracker_state=tracker_state,
         update_task=lambda task_tree: task_tree.clear_task_deadline(command["task_id"]),
         build_write_intent=build_task_deadline_update_intent,
+    )
+
+
+def _set_task_start_date_time(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda task_tree: task_tree.set_task_start_date_time(
+            command["task_id"],
+            command["start_date_time"],
+        ),
+        build_write_intent=build_task_start_date_time_update_intent,
+    )
+
+
+def _clear_task_start_date_time(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda task_tree: task_tree.clear_task_start_date_time(command["task_id"]),
+        build_write_intent=build_task_start_date_time_update_intent,
+    )
+
+
+def _set_task_end_date_time(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda task_tree: task_tree.set_task_end_date_time(
+            command["task_id"],
+            command["end_date_time"],
+        ),
+        build_write_intent=build_task_end_date_time_update_intent,
+    )
+
+
+def _clear_task_end_date_time(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+    return _apply_task_property_update(
+        command=command,
+        tracker_state=tracker_state,
+        update_task=lambda task_tree: task_tree.clear_task_end_date_time(command["task_id"]),
+        build_write_intent=build_task_end_date_time_update_intent,
     )
 
 

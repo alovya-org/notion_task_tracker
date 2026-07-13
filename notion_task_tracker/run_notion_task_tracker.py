@@ -84,6 +84,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--set-dependants", action="store_true")
     action_group.add_argument("--set-deadline", action="store_true")
     action_group.add_argument("--clear-deadline", action="store_true")
+    action_group.add_argument("--set-start-date-time", action="store_true")
+    action_group.add_argument("--clear-start-date-time", action="store_true")
+    action_group.add_argument("--set-end-date-time", action="store_true")
+    action_group.add_argument("--clear-end-date-time", action="store_true")
     action_group.add_argument("--set-external-coordination", action="store_true")
     action_group.add_argument("--set-uncertainty", action="store_true")
     action_group.add_argument("--set-friction", action="store_true")
@@ -108,6 +112,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dependency-ticket-number", action="append", type=int, default=[])
     parser.add_argument("--dependant-ticket-number", action="append", type=int, default=[])
     parser.add_argument("--deadline")
+    parser.add_argument("--start-date-time")
+    parser.add_argument("--end-date-time")
     parser.add_argument("--external-coordination", choices=_enum_values(ExternalCoordination))
     parser.add_argument("--uncertainty", choices=_enum_values(Uncertainty))
     parser.add_argument("--friction", choices=_enum_values(Friction))
@@ -570,6 +576,10 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "set_task_dependants": "set_dependants",
         "set_task_deadline": "set_deadline",
         "clear_task_deadline": "clear_deadline",
+        "set_task_start_date_time": "set_start_date_time",
+        "clear_task_start_date_time": "clear_start_date_time",
+        "set_task_end_date_time": "set_end_date_time",
+        "clear_task_end_date_time": "clear_end_date_time",
         "set_task_external_coordination": "set_external_coordination",
         "set_task_uncertainty": "set_uncertainty",
         "set_task_friction": "set_friction",

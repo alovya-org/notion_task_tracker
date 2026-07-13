@@ -202,6 +202,22 @@ def build_task_deadline_update_intent(task: Task) -> NotionWriteIntent:
     )
 
 
+def build_task_start_date_time_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_start_date_time:{task.local_page_key}",
+        properties={TASK_DATABASE_START_DATE_TIME_PROPERTY: task.start_date_time},
+    )
+
+
+def build_task_end_date_time_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_end_date_time:{task.local_page_key}",
+        properties={TASK_DATABASE_END_DATE_TIME_PROPERTY: task.end_date_time},
+    )
+
+
 def build_task_external_coordination_update_intent(task: Task) -> NotionWriteIntent:
     return _build_task_property_update_intent(
         task=task,

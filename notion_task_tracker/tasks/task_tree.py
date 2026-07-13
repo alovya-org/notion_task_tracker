@@ -255,6 +255,22 @@ class TaskTree:
         self.tasks[task_id].deadline = None
         self._validate_after_task_field_change()
 
+    def set_task_start_date_time(self, task_id: str, start_date_time: str) -> None:
+        self.tasks[task_id].start_date_time = start_date_time
+        self._validate_after_task_field_change()
+
+    def clear_task_start_date_time(self, task_id: str) -> None:
+        self.tasks[task_id].start_date_time = None
+        self._validate_after_task_field_change()
+
+    def set_task_end_date_time(self, task_id: str, end_date_time: str) -> None:
+        self.tasks[task_id].end_date_time = end_date_time
+        self._validate_after_task_field_change()
+
+    def clear_task_end_date_time(self, task_id: str) -> None:
+        self.tasks[task_id].end_date_time = None
+        self._validate_after_task_field_change()
+
     def set_task_external_coordination(self, task_id: str, external_coordination: str) -> None:
         self.tasks[task_id].external_coordination = ExternalCoordination(external_coordination)
         self._validate_after_task_field_change()
