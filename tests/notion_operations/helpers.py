@@ -1,3 +1,5 @@
+import json
+
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.rest_client import CreatedTaskDatabasePage, NotionWriteExecutionResult
@@ -46,7 +48,14 @@ class FakeNotionClient:
         self.queries.append({
             "data_source_id": task_database_data_source_id_from_tracker_state(tracker_state),
         })
-        return list(self.database_rows)
+        if self.database_rows:
+            return list(self.database_rows)
+
+        tasks = tracker_state.get("tasks", {})
+        return [
+            _database_row_from_tracker_task(task, tasks)
+            for task in tasks.values()
+        ]
 
     async def create_task_database_page(
         self,
@@ -305,3 +314,34 @@ def _write_result(
         result["captured_page_key"] = captured_page_key
         result["captured_page_id"] = captured_page_id
     return result
+
+
+def _database_row_from_tracker_task(task: dict, tasks: dict[str, dict]) -> dict:
+    return {
+        "Task page": task["title"],
+        "Task ID": task["task_id"].rsplit("-", 1)[1],
+        "Priority": task["configured_priority"],
+        "Status": task["status"],
+        "Parent": _relation_urls_from_task_ids([task["parent_task_id"]], tasks),
+        "Dependencies": _relation_urls_from_task_ids(task["dependency_task_ids"], tasks),
+        "Dependants": _relation_urls_from_task_ids(task["dependant_task_ids"], tasks),
+        "Deadline": task.get("deadline") or "",
+        "Start date & time": task.get("start_date_time") or "",
+        "End date & time": task.get("end_date_time") or "",
+        "External coordination": task.get("external_coordination", "No"),
+        "Uncertainty": task.get("uncertainty", "Low"),
+        "Friction": task.get("friction", "None"),
+        "url": f"https://www.notion.so/{task['notion_page_id']}",
+    }
+
+
+def _relation_urls_from_task_ids(task_ids: list[str | None], tasks: dict[str, dict]) -> str:
+    relation_urls = [
+        f"https://www.notion.so/{tasks[task_id]['notion_page_id']}"
+        for task_id in task_ids
+        if task_id is not None
+    ]
+    if not relation_urls:
+        return "[]"
+
+    return json.dumps(relation_urls)

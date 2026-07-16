@@ -10,6 +10,7 @@ from notion_task_tracker.notion_operations.markdown import bullet, heading, join
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import render_timeline_entry_content_markdown
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import prepare_command_result_from_current_task_page
+from notion_task_tracker.notion_operations.reconcile_task_database import refresh_tracker_state_from_notion_task_database
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.tasks import TaskTree
 from notion_task_tracker.tasks.create_task import (
@@ -181,12 +182,13 @@ async def _refresh_derived_task_landing_pages(
     tracker_state: dict[str, Any],
     notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
+    refreshed_result = await refresh_tracker_state_from_notion_task_database(tracker_state, notion_client)
     landing_refresh_result = apply_command_to_tracker_state(
         command={
             "command": "refresh_task_pages",
             "operation_keys": ["replace:ongoing_landing_page", "replace:completed_landing_page"],
         },
-        tracker_state=tracker_state,
+        tracker_state=refreshed_result.tracker_state,
     )
     return await execute_command_result_writes(landing_refresh_result, notion_client)
 

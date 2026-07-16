@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
+from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
 from notion_task_tracker.initialise_tracker import (
@@ -43,6 +44,10 @@ APP_HOME_PATH = Path.home() / ".notion-task-tracker"
 TRACKER_STATE_FILE_NAME = "notion_tasks_tree.json"
 DEFAULT_TRACKER_STATE_PATH = APP_HOME_PATH / TRACKER_STATE_FILE_NAME
 DEFAULT_OUTPUT_PATH = Path("/tmp/notion_task_refreshed_result.json")
+LANDING_PAGE_REPLACEMENT_OPERATION_KEYS = frozenset({
+    "replace:ongoing_landing_page",
+    "replace:completed_landing_page",
+})
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -401,8 +406,64 @@ async def _run_notion_writes_for_write_command(
         notion_client=notion_client,
     )
     command_result = merge_context_repairs_into_command_result(context_repair_result, command_result)
-    command_tracker_state, command_operation_keys = await execute_command_result_writes(command_result, notion_client)
+    command_tracker_state, command_operation_keys = await _execute_command_writes_with_fresh_landing_page_render(
+        command_result,
+        notion_client,
+    )
     return command_tracker_state, command_operation_keys, command_result.warnings or []
+
+
+async def _execute_command_writes_with_fresh_landing_page_render(
+    command_result: TrackerCommandResult,
+    notion_client: NotionRestClient,
+) -> tuple[dict[str, Any], list[str]]:
+    landing_operation_keys = _landing_page_replacement_keys_in_write_order(command_result)
+    if not landing_operation_keys:
+        return await execute_command_result_writes(command_result, notion_client)
+
+    command_result_without_landing_pages = _command_result_without_landing_page_replacements(command_result)
+    tracker_state_after_command_writes, command_operation_keys = await execute_command_result_writes(
+        command_result_without_landing_pages,
+        notion_client,
+    )
+    refreshed_result = await refresh_tracker_state_from_notion_task_database(
+        tracker_state_after_command_writes,
+        notion_client,
+    )
+    landing_refresh_result = apply_command_to_tracker_state(
+        command={
+            "command": "refresh_task_pages",
+            "operation_keys": landing_operation_keys,
+        },
+        tracker_state=refreshed_result.tracker_state,
+    )
+    tracker_state_after_landing_pages, landing_operation_keys = await execute_command_result_writes(
+        landing_refresh_result,
+        notion_client,
+    )
+    return tracker_state_after_landing_pages, command_operation_keys + landing_operation_keys
+
+
+def _landing_page_replacement_keys_in_write_order(command_result: TrackerCommandResult) -> list[str]:
+    return [
+        write_intent.operation_key
+        for write_intent in command_result.write_intents
+        if write_intent.operation_key in LANDING_PAGE_REPLACEMENT_OPERATION_KEYS
+    ]
+
+
+def _command_result_without_landing_page_replacements(command_result: TrackerCommandResult) -> TrackerCommandResult:
+    return TrackerCommandResult(
+        tracker_state=command_result.tracker_state,
+        write_intents=[
+            write_intent
+            for write_intent in command_result.write_intents
+            if write_intent.operation_key not in LANDING_PAGE_REPLACEMENT_OPERATION_KEYS
+        ],
+        page_registry=command_result.page_registry,
+        warnings=command_result.warnings,
+        refreshed_task_ids=command_result.refreshed_task_ids,
+    )
 
 
 async def _run_read_task_pages(

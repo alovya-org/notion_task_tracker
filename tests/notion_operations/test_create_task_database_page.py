@@ -150,6 +150,82 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
     assert notion_client.calls[-1].operation_name == "replace_page_markdown"
 
 
+def test_execute_create_task_database_page_command_renders_landing_from_full_fresh_database():
+    tracker_state = build_tracker_state_with_root_task()
+    tracker_state["task_database"] = _task_database_state()
+    notion_client = FakeNotionClient(
+        created_page_ids=["33333333333333333333333333333333"],
+        database_rows=[
+            {
+                "Task page": "Remote priority task",
+                "Task ID": "1",
+                "Priority": "P2",
+                "Status": "Active",
+                "Parent": "[]",
+                "Dependencies": "[]",
+                "Dependants": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
+                "url": "https://www.notion.so/22222222222222222222222222222222",
+            },
+            {
+                "Task page": "Created task",
+                "Task ID": "72",
+                "Priority": "P1",
+                "Status": "Active",
+                "Parent": "[]",
+                "Dependencies": "[]",
+                "Dependants": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
+                "url": "https://www.notion.so/33333333333333333333333333333333",
+            },
+        ],
+        fetched_page_content_by_id={
+            "33333333333333333333333333333333": "\n".join(
+                [
+                    "<page>",
+                    "<properties>",
+                    '{"Task ID":"72","Task page":"Created task"}',
+                    "</properties>",
+                    "</page>",
+                ]
+            )
+        },
+    )
+
+    updated_tracker_state, _completed_operation_keys = asyncio.run(
+        execute_create_task_database_page_command(
+            command={
+                "command": "create_top_level_task",
+                "task": {
+                    "title": "Created task",
+                    "configured_priority": "P1",
+                    "status": "Active",
+                    "deadline": None,
+                    "external_coordination": "No",
+                    "uncertainty": "Low",
+                    "friction": "None",
+                },
+            },
+            tracker_state=tracker_state,
+            notion_client=notion_client,
+        )
+    )
+
+    landing_markdown = notion_client.calls[-1].arguments["markdown"]
+    assert updated_tracker_state["tasks"]["ALOVYA-1"]["configured_priority"] == "P2"
+    assert updated_tracker_state["tasks"]["ALOVYA-72"]["title"] == "Created task"
+    assert "[P2]" in landing_markdown
+    assert "22222222222222222222222222222222" in landing_markdown
+    assert "[P1]" in landing_markdown
+    assert "33333333333333333333333333333333" in landing_markdown
+
+
 def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_task():
     tracker_state = build_tracker_state_with_root_and_child_task()
     tracker_state["task_database"] = _task_database_state()

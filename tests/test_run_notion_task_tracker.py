@@ -9,7 +9,7 @@ from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import ManagedPageUrls, TrackerConfig
 from notion_task_tracker.notion_operations.rest_client import NotionWriteExecutionResult
 from tests.notion_operations.helpers import FakeNotionClient
-from tests.tasks.build_task_command_fixtures import build_tracker_state_with_root_task
+from tests.tasks.build_task_command_fixtures import build_fetched_task_page, build_tracker_state_with_root_task
 from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
@@ -30,6 +30,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
     _run_reconcile_tracker_from_notion_command,
+    _run_write_tracker_command,
     _run_read_task_pages,
     main,
     parse_args,
@@ -233,6 +234,83 @@ def test_repair_and_write_refreshed_tracker_state_refreshes_landing_pages_when_n
     assert refresh_summary.to_json_summary()["repair_operation_count"] == 1
 
 
+def test_write_command_renders_landing_pages_from_full_fresh_database_projection(tmp_path: Path):
+    notion_client = FakeNotionClient(
+        database_rows=[
+            {
+                "Task page": "Remote priority task",
+                "Task ID": "1",
+                "Priority": "P2",
+                "Status": "Active",
+                "Parent": "[]",
+                "Dependencies": "[]",
+                "Dependants": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
+                "url": "https://www.notion.so/22222222222222222222222222222222",
+            },
+            {
+                "Task page": "Touched task",
+                "Task ID": "2",
+                "Priority": "P1",
+                "Status": "Complete",
+                "Parent": "[]",
+                "Dependencies": "[]",
+                "Dependants": "[]",
+                "Deadline": "",
+                "External coordination": "No",
+                "Uncertainty": "Low",
+                "Friction": "None",
+                "url": "https://www.notion.so/33333333333333333333333333333333",
+            },
+        ],
+        fetched_page_content_by_id={
+            "33333333333333333333333333333333": build_fetched_task_page(
+                ticket_id="2",
+                title="Touched task",
+                priority="P1",
+                status="Active",
+                parent_urls=[],
+            )
+        },
+    )
+    tracker_state = _tracker_state_with_stale_task_and_touched_task()
+    tracker_state_path = tmp_path / "tracker_state.json"
+    output_path = tmp_path / "output.json"
+    backup_path = tmp_path / "backup.json"
+    tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
+
+    asyncio.run(
+        _run_write_tracker_command(
+            command={
+                "command": "complete_task",
+                "task_id": "ALOVYA-2",
+                "timeline_entry": {
+                    "entry_date": "2026-07-16",
+                    "heading": '<mention-date start="2026-07-16"/>',
+                    "lines": ["Completed the touched task."],
+                },
+            },
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            backup_path=backup_path,
+            notion_client=notion_client,
+        )
+    )
+
+    refreshed_tracker_state = json.loads(tracker_state_path.read_text(encoding="utf-8"))
+    ongoing_landing_markdown = _markdown_for_call(notion_client, "replace:ongoing_landing_page")
+    completed_landing_markdown = _markdown_for_call(notion_client, "replace:completed_landing_page")
+    assert refreshed_tracker_state["tasks"]["ALOVYA-1"]["configured_priority"] == "P2"
+    assert refreshed_tracker_state["tasks"]["ALOVYA-2"]["status"] == "Complete"
+    assert "[P2]" in ongoing_landing_markdown
+    assert "22222222222222222222222222222222" in ongoing_landing_markdown
+    assert "[P1]" not in ongoing_landing_markdown
+    assert "33333333333333333333333333333333" in completed_landing_markdown
+
+
 def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(tmp_path: Path):
     notion_client = _ConfiguredTrackerReconcileClient()
     tracker_state_path = tmp_path / "notion_tasks_tree.json"
@@ -428,6 +506,28 @@ def _tracker_state(title: str, priority: str) -> dict:
             }
         },
     }
+
+
+def _tracker_state_with_stale_task_and_touched_task() -> dict:
+    tracker_state = _tracker_state(title="Stale priority task", priority="P1")
+    tracker_state["identity"] = {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
+    tracker_state["task_database"] = {"data_source_id": "configured-data-source-id"}
+    tracker_state["completed_landing_page"]["notion_page_id"] = "44444444444444444444444444444444"
+    tracker_state["tasks"]["ALOVYA-2"] = {
+        **tracker_state["tasks"]["ALOVYA-1"],
+        "task_id": "ALOVYA-2",
+        "title": "Touched task",
+        "notion_page_id": "33333333333333333333333333333333",
+    }
+    return tracker_state
+
+
+def _markdown_for_call(notion_client: FakeNotionClient, operation_key: str) -> str:
+    for notion_call in reversed(notion_client.calls):
+        if notion_call.operation_key == operation_key:
+            return notion_call.arguments["markdown"]
+
+    raise AssertionError(f"Expected Notion call {operation_key!r}")
 
 
 def _configured_tracker(
