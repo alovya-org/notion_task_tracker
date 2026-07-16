@@ -1,0 +1,49 @@
+name: Refresh Notion tracker
+
+on:
+  workflow_dispatch:
+    inputs:
+      tracker_user:
+        description: GitHub environment that owns the tracker secrets
+        required: true
+        type: string
+  repository_dispatch:
+    types:
+      - refresh-notion-tracker
+
+jobs:
+  refresh:
+    name: Refresh ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+
+    steps:
+      - name: Check tracker user
+        run: |
+          test -n "$TRACKER_USER"
+        env:
+          TRACKER_USER: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+
+      - name: Check out tracker
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tracker
+        run: python -m pip install .
+
+      - name: Write tracker config
+        run: |
+          mkdir -p "$RUNNER_TEMP/ntt"
+          printf '%s\n' "$NTT_CONFIG_TOML" > "$RUNNER_TEMP/ntt/config.toml"
+        env:
+          NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
+
+      - name: Reconcile tracker from Notion
+        run: ntt --reconcile-from-notion --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml

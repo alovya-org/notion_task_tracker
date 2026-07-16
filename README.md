@@ -221,6 +221,41 @@ Targeted preflight intentionally fails instead of guessing when the touched page
 
 Task ids are derived from Notion's `Task ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
 
+## Refresh From GitHub Actions
+
+`.github/workflows/refresh-notion-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --reconcile-from-notion` with a temporary tracker state path.
+
+Each tracker user is represented by one GitHub environment. The environment name is the `tracker_user` value passed to the workflow. Each environment must define:
+
+- `NTT_CONFIG_TOML`: the full `config.toml` created by that user's local `ntt --init`.
+- `NOTION_API_KEY`: the Notion integration token connected to that user's tracker parent page, task database, and managed pages.
+
+Provision a tracker environment with:
+
+```bash
+TRACKER_USER=al0vya
+
+gh api \
+  --method PUT \
+  "repos/:owner/:repo/environments/$TRACKER_USER"
+
+gh secret set NTT_CONFIG_TOML --env "$TRACKER_USER" < ~/.config/notion-task-tracker/config.toml
+gh secret set NOTION_API_KEY --env "$TRACKER_USER"
+```
+
+`gh secret set NOTION_API_KEY` prompts for the token. Manual refreshes run from the GitHub Actions page by entering the tracker user. External refreshes use `repository_dispatch`:
+
+```json
+{
+  "event_type": "refresh-notion-tracker",
+  "client_payload": {
+    "tracker_user": "al0vya"
+  }
+}
+```
+
+The GitHub token used to dispatch the workflow is separate from `NOTION_API_KEY`.
+
 ## Task Commands
 
 Append a timeline log. Timeline logs are user-owned in Notion and may contain handwritten edits, so this command must emit targeted Notion writes. It must never replace a whole task page or landing page just to add log lines once a timeline log exists. Before writing, the CLI fetches the target task page and records any existing date headings under `Timeline log`. If the page lacks a usable `Timeline log` section with at least one date heading, the CLI initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended directly under `Timeline log`; existing date sections get new lines inserted under their date heading:
