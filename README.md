@@ -1,4 +1,4 @@
-# Notion Task Tracker
+# Notion task tracker
 
 This package turns explicit CLI actions into Notion writes. Each user supplies one parent page and one fixed-schema task database. Initialisation creates the four tracker-owned pages beneath that parent:
 
@@ -34,7 +34,7 @@ python -m pip install -e .
 
 The package installs `ntt` and `notion-task-tracker` console commands. `python -m notion_task_tracker` remains supported.
 
-## Initialise A Tracker
+## Initialise a tracker
 
 Create these two objects in the Notion UI:
 
@@ -99,7 +99,7 @@ Run an explicit action after initialisation:
 ntt --log --ticket-number 67 --content-path /tmp/notion_task_log.json
 ```
 
-## Install The Agent Skill
+## Install the agent skill
 
 Install the task-tracker skill into Codex and Claude user-scope skill directories with:
 
@@ -119,7 +119,7 @@ Mutating action output contains:
 
 The live path uses the Notion REST client for task creation, logging, completion, reconciliation, and landing-page rendering.
 
-## Explicit CLI Actions
+## Explicit CLI actions
 
 Use these actions for normal CLI operation. The action flag freezes the accepted schema; `--content-path` carries the rich content.
 
@@ -182,7 +182,7 @@ Synthesis content files use this shape:
 }
 ```
 
-## Fetch And Reconcile From Notion
+## Fetch and reconcile from Notion
 
 Use this when the user edited task rows in the Notion UI:
 
@@ -204,7 +204,7 @@ synthesis_notes_url = "https://www.notion.so/..."
 
 Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
-### Targeted Preflight Footguns
+### Targeted preflight footguns
 
 Normal commands are fast because they only refresh the task pages they touch. They do not discover every remote database edit.
 
@@ -221,7 +221,7 @@ Targeted preflight intentionally fails instead of guessing when the touched page
 
 Task ids are derived from Notion's `Task ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
 
-## Refresh From GitHub Actions
+## Refresh from GitHub Actions
 
 `.github/workflows/refresh-notion-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --reconcile-from-notion` with a temporary tracker state path.
 
@@ -256,7 +256,7 @@ gh secret set NOTION_API_KEY --env "$TRACKER_USER"
 
 The GitHub token used to dispatch the workflow is separate from `NOTION_API_KEY`.
 
-## Task Commands
+## Task commands
 
 Append a timeline log. Timeline logs are user-owned in Notion and may contain handwritten edits, so this command must emit targeted Notion writes. It must never replace a whole task page or landing page just to add log lines once a timeline log exists. Before writing, the CLI fetches the target task page and records any existing date headings under `Timeline log`. If the page lacks a usable `Timeline log` section with at least one date heading, the CLI initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended directly under `Timeline log`; existing date sections get new lines inserted under their date heading:
 
@@ -383,7 +383,7 @@ Omit `operation_keys` to update every known task title/property and both task la
 
 The ongoing and completed landing pages are rendered task indexes. They are not the source of truth for task membership or hierarchy. The ongoing landing page starts entries only from incomplete top-level tasks, but still shows completed subtasks inside those trees. The completed landing page starts entries only from completed or cancelled top-level tasks.
 
-## Miscellaneous Commands
+## Miscellaneous commands
 
 Append context to a dated miscellaneous page:
 
@@ -403,7 +403,7 @@ Refresh miscellaneous pages:
 }
 ```
 
-## Synthesis Commands
+## Synthesis commands
 
 Create a synthesis page with explicit sources:
 
@@ -443,7 +443,7 @@ Reconcile the synthesis root after editing page mentions in Notion:
 
 This replaces the local existing-page mention list with exactly the page mentions or child pages present on the fetched synthesis root. It emits no Notion write calls.
 
-## Supported Commands
+## Supported commands
 
 - `append_task_timeline_log`: add a dated timeline entry to one task with targeted page content. New dates are prepended under `Timeline log`; existing dates are updated under their date heading. It must not replace the task page or landing pages.
 - `complete_task`: mark one task complete, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
@@ -460,7 +460,7 @@ This replaces the local existing-page mention list with exactly the page mention
 - `reconcile_synthesis_root_page_mentions`: update local synthesis-root references from fetched Notion page mentions without writing to Notion.
 - `refresh_synthesis_pages`: regenerate the synthesis root page and tracker-created synthesis pages.
 
-## Package Shape
+## Package shape
 
 The package is Python metadata and Notion write execution code. Live fetch/write execution uses the authenticated Notion REST client through `notion-client`.
 
