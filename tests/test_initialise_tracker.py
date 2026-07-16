@@ -56,7 +56,9 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
         }
         for created_page in notion_client.created_pages
     )
-    assert config.pages.ongoing_tasks_url == "https://www.notion.so/created-1"
+    assert config.pages.ongoing_tasks_url == (
+        "https://www.notion.so/created-00000000000000000000000000000001"
+    )
     assert tracker_state["identity"] == {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
     assert tracker_state["task_database"]["data_source_id"] == "cccccccccccccccccccccccccccccccc"
     assert tracker_state["ongoing_landing_page"]["notion_page_id"] == (
@@ -134,7 +136,7 @@ class _NotionInitialisationClient:
         )
         return {
             "id": f"0000000000000000000000000000000{page_number}",
-            "url": f"https://www.notion.so/created-{page_number}",
+            "url": f"https://www.notion.so/created-0000000000000000000000000000000{page_number}",
         }
 
 

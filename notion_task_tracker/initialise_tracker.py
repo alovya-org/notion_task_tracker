@@ -74,7 +74,7 @@ async def initialise_tracker(
     requested_config.validate()
     _refuse_to_replace_existing_tracker_files(config_path, tracker_state_path)
 
-    data_source_id = await _find_fixed_schema_data_source_id(task_database_url, notion_client)
+    data_source_id = await find_fixed_schema_data_source_id(task_database_url, notion_client)
     created_pages = await _create_managed_pages(display_name, parent_page_url, notion_client)
     configured_tracker = TrackerConfig(
         display_name=display_name,
@@ -84,18 +84,38 @@ async def initialise_tracker(
         pages=_managed_page_urls(created_pages),
     )
     written_config_path = write_config(configured_tracker, config_path)
-    _write_initial_tracker_state(
-        tracker_state_path=tracker_state_path,
+    tracker_state = _tracker_state_from_configured_pages(
         configured_tracker=configured_tracker,
         data_source_id=data_source_id,
-        created_pages=created_pages,
     )
+    _write_tracker_state(tracker_state_path, tracker_state)
     return TrackerInitialisationResult(
         config_path=written_config_path,
         tracker_state_path=tracker_state_path,
         data_source_id=data_source_id,
         created_page_urls=configured_tracker.pages,
     )
+
+
+async def create_tracker_state_from_configured_pages(
+    configured_tracker: TrackerConfig,
+    tracker_state_path: Path,
+    notion_client: NotionRestClient,
+) -> dict[str, Any]:
+    configured_tracker.validate()
+    if tracker_state_path.exists():
+        raise FileExistsError(f"Tracker state already exists at {tracker_state_path}")
+
+    data_source_id = await find_fixed_schema_data_source_id(
+        configured_tracker.task_database_url,
+        notion_client,
+    )
+    tracker_state = _tracker_state_from_configured_pages(
+        configured_tracker=configured_tracker,
+        data_source_id=data_source_id,
+    )
+    _write_tracker_state(tracker_state_path, tracker_state)
+    return tracker_state
 
 
 def _refuse_to_replace_existing_tracker_files(config_path: Path, tracker_state_path: Path) -> None:
@@ -105,7 +125,7 @@ def _refuse_to_replace_existing_tracker_files(config_path: Path, tracker_state_p
         raise FileExistsError(f"Tracker is already initialised at {joined_paths}")
 
 
-async def _find_fixed_schema_data_source_id(
+async def find_fixed_schema_data_source_id(
     task_database_url: str,
     notion_client: NotionRestClient,
 ) -> str:
@@ -190,14 +210,12 @@ def _managed_page_urls(created_pages: dict[str, dict[str, Any]]) -> ManagedPageU
     )
 
 
-def _write_initial_tracker_state(
-    tracker_state_path: Path,
+def _tracker_state_from_configured_pages(
     configured_tracker: TrackerConfig,
     data_source_id: str,
-    created_pages: dict[str, dict[str, Any]],
-) -> None:
+) -> dict[str, Any]:
     page_titles = _managed_page_titles(configured_tracker.display_name)
-    tracker_state = {
+    return {
         "identity": {
             "display_name": configured_tracker.display_name,
             "ticket_prefix": configured_tracker.ticket_prefix,
@@ -206,34 +224,68 @@ def _write_initial_tracker_state(
             data_source_id=data_source_id,
         ),
         "ongoing_landing_page": _created_page_state(
-            ONGOING_LANDING_PAGE_LOCAL_KEY, page_titles, created_pages
+            ONGOING_LANDING_PAGE_LOCAL_KEY,
+            page_titles,
+            _required_managed_page_url(
+                configured_tracker.pages.ongoing_tasks_url,
+                "ongoing_tasks_url",
+            ),
         ),
         "completed_landing_page": _created_page_state(
-            COMPLETED_LANDING_PAGE_LOCAL_KEY, page_titles, created_pages
+            COMPLETED_LANDING_PAGE_LOCAL_KEY,
+            page_titles,
+            _required_managed_page_url(
+                configured_tracker.pages.completed_tasks_url,
+                "completed_tasks_url",
+            ),
         ),
         "miscellaneous_notes": {
-            "page": _created_page_state(MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY, page_titles, created_pages),
+            "page": _created_page_state(
+                MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
+                page_titles,
+                _required_managed_page_url(
+                    configured_tracker.pages.miscellaneous_notes_url,
+                    "miscellaneous_notes_url",
+                ),
+            ),
             "dated_pages": {},
         },
         "synthesis_notes": {
-            "page": _created_page_state(SYNTHESIS_NOTES_PAGE_LOCAL_KEY, page_titles, created_pages),
+            "page": _created_page_state(
+                SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
+                page_titles,
+                _required_managed_page_url(
+                    configured_tracker.pages.synthesis_notes_url,
+                    "synthesis_notes_url",
+                ),
+            ),
             "existing_page_mentions": {},
             "pages": {},
         },
         "tasks": {},
     }
-    tracker_state_path.parent.mkdir(parents=True, exist_ok=True)
-    tracker_state_path.write_text(json.dumps(tracker_state, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def _created_page_state(
     local_page_key: str,
     page_titles: dict[str, str],
-    created_pages: dict[str, dict[str, Any]],
+    page_url: str,
 ) -> dict[str, str | None]:
     return {
         "local_page_key": local_page_key,
         "title": page_titles[local_page_key],
-        "notion_page_id": canonical_notion_page_id(created_pages[local_page_key]["id"]),
+        "notion_page_id": canonical_notion_page_id(notion_page_id_from_url(page_url)),
         "parent_page_key": None,
     }
+
+
+def _required_managed_page_url(page_url: str | None, field_name: str) -> str:
+    if not page_url:
+        raise ValueError(f"Configured tracker pages must include {field_name}")
+
+    return page_url
+
+
+def _write_tracker_state(tracker_state_path: Path, tracker_state: dict[str, Any]) -> None:
+    tracker_state_path.parent.mkdir(parents=True, exist_ok=True)
+    tracker_state_path.write_text(json.dumps(tracker_state, indent=2, sort_keys=True), encoding="utf-8")

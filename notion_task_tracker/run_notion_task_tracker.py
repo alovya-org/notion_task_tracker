@@ -13,8 +13,11 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.install_skill import install_skill
-from notion_task_tracker.config import load_config, resolve_config_path
-from notion_task_tracker.initialise_tracker import initialise_tracker
+from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
+from notion_task_tracker.initialise_tracker import (
+    create_tracker_state_from_configured_pages,
+    initialise_tracker,
+)
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.create_task_database_page import (
     should_create_task_database_page_for_command,
@@ -140,6 +143,7 @@ def _run_requested_cli_action(args: argparse.Namespace) -> None:
     command = build_tracker_command_from_cli_action(args, ticket_prefix=config.ticket_prefix)
     execution_summary = execute_tracker_command(
         command=command,
+        config=config,
         tracker_state_path=args.tracker_state_path,
         output_path=args.output_path,
     )
@@ -177,9 +181,11 @@ def execute_tracker_command(
     output_path: str | Path | None = None,
     backup_path: str | Path | None = None,
     notion_client: NotionRestClient | None = None,
+    config: TrackerConfig | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
+        config=config,
         tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
         backup_path=backup_path,
@@ -192,8 +198,10 @@ def refresh_task_tracker_from_notion(
     output_path: str | Path | None = None,
     backup_path: str | Path | None = None,
     notion_client: NotionRestClient | None = None,
+    config: TrackerConfig | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_reconcile_tracker_from_notion_command(
+        config=config,
         tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
         backup_path=backup_path,
@@ -232,6 +240,7 @@ def resolve_output_path(output_path: str | Path | None = None) -> Path:
 
 async def _run_tracker_command(
     command: dict[str, Any],
+    config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
@@ -239,6 +248,7 @@ async def _run_tracker_command(
 ) -> "TrackerActionExecutionSummary":
     if command["command"] == "reconcile_from_notion":
         return await _run_reconcile_tracker_from_notion_command(
+            config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
             backup_path=backup_path,
@@ -263,6 +273,7 @@ async def _run_tracker_command(
 
 
 async def _run_reconcile_tracker_from_notion_command(
+    config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
@@ -271,11 +282,15 @@ async def _run_reconcile_tracker_from_notion_command(
     source_tracker_state_path = Path(tracker_state_path)
     destination_output_path = Path(output_path)
     destination_backup_path = Path(backup_path) if backup_path else _timestamped_backup_path()
+    client = _notion_rest_client_from_optional_instance(notion_client)
 
-    tracker_state = _read_json(source_tracker_state_path)
+    tracker_state = await _read_or_create_reconcile_tracker_state(
+        source_tracker_state_path=source_tracker_state_path,
+        config=config,
+        notion_client=client,
+    )
     _write_json(destination_backup_path, tracker_state)
 
-    client = _notion_rest_client_from_optional_instance(notion_client)
     refreshed_result = await refresh_tracker_state_from_notion_task_database(tracker_state, client)
     return await repair_and_write_refreshed_tracker_state(
         source_tracker_state_path=source_tracker_state_path,
@@ -284,6 +299,22 @@ async def _run_reconcile_tracker_from_notion_command(
         before_tracker_state=tracker_state,
         refreshed_result=refreshed_result,
         notion_client=client,
+    )
+
+
+async def _read_or_create_reconcile_tracker_state(
+    source_tracker_state_path: Path,
+    config: TrackerConfig | None,
+    notion_client: NotionRestClient,
+) -> dict[str, Any]:
+    if source_tracker_state_path.exists():
+        return _read_json(source_tracker_state_path)
+
+    configured_tracker = config or load_config()
+    return await create_tracker_state_from_configured_pages(
+        configured_tracker=configured_tracker,
+        tracker_state_path=source_tracker_state_path,
+        notion_client=notion_client,
     )
 
 

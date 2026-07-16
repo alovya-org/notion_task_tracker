@@ -190,7 +190,17 @@ Use this when the user edited task rows in the Notion UI:
 ntt --reconcile-from-notion
 ```
 
-This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed.
+This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed. If the tracker state JSON is missing, the command first creates local state from `config.toml`: it resolves the task database data-source id, derives managed page ids from the configured page URLs, writes an empty task projection, and then continues reconciliation. This bootstrap step does not create Notion pages.
+
+The state bootstrap requires the `[pages]` URLs written by `ntt --init`:
+
+```toml
+[pages]
+ongoing_tasks_url = "https://www.notion.so/..."
+completed_tasks_url = "https://www.notion.so/..."
+miscellaneous_notes_url = "https://www.notion.so/..."
+synthesis_notes_url = "https://www.notion.so/..."
+```
 
 Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
