@@ -256,6 +256,47 @@ gh secret set NOTION_API_KEY --env "$TRACKER_USER"
 
 The GitHub token used to dispatch the workflow is separate from `NOTION_API_KEY`.
 
+## Refresh from a Notion webhook
+
+`cloudflare_worker/` contains a small Cloudflare Worker that turns two Notion webhook headers into the authenticated GitHub `repository_dispatch` request above. Notion sends a shared secret to the Worker, the Worker dispatches `refresh-notion-tracker`, and GitHub Actions refreshes the configured tracker user.
+
+Install the pinned Worker development dependencies and verify the Worker locally:
+
+```bash
+cd cloudflare_worker
+npm ci
+npm test
+npm run typecheck
+```
+
+`package.json` declares the Node.js tools and `package-lock.json` pins their complete dependency tree. Use `npm ci` for a reproducible clean install.
+
+Configure the Worker secrets with the pinned local Wrangler installation:
+
+```bash
+cd cloudflare_worker
+npx wrangler secret put GITHUB_DISPATCH_TOKEN
+npx wrangler secret put NOTION_WEBHOOK_SECRET
+```
+
+`GITHUB_DISPATCH_TOKEN` is a GitHub token that can create repository dispatch events for this repository. `NOTION_WEBHOOK_SECRET` is any strong shared value that Notion will send to the Worker.
+
+Deploy the Worker:
+
+```bash
+cd cloudflare_worker
+npm run deploy
+```
+
+Configure Notion's `Send webhook` action to call the deployed Worker URL with `POST`. Add these custom headers:
+
+```text
+notion_webhook_secret: the same value stored in Cloudflare
+tracker_user: al0vya
+```
+
+Both values are required as headers. The Worker deliberately rejects body fields, URL parameters, aliases, and other fallback formats. `tracker_user` is the GitHub environment name that owns `NTT_CONFIG_TOML` and `NOTION_API_KEY`.
+
 ## Task commands
 
 Append a timeline log. Timeline logs are user-owned in Notion and may contain handwritten edits, so this command must emit targeted Notion writes. It must never replace a whole task page or landing page just to add log lines once a timeline log exists. Before writing, the CLI fetches the target task page and records any existing date headings under `Timeline log`. If the page lacks a usable `Timeline log` section with at least one date heading, the CLI initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended directly under `Timeline log`; existing date sections get new lines inserted under their date heading:

@@ -1,0 +1,9 @@
+name = "refresh-notion-tracker-dispatcher"
+main = "src/index.ts"
+compatibility_date = "2026-07-17"
+
+[vars]
+GITHUB_OWNER = "alovya"
+GITHUB_REPOSITORY = "notion_task_tracker"
+GITHUB_API_VERSION = "2022-11-28"
+GITHUB_DISPATCH_EVENT_TYPE = "refresh-notion-tracker"

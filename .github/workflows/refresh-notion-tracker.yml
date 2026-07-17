@@ -11,6 +11,10 @@ on:
     types:
       - refresh-notion-tracker
 
+concurrency:
+  group: refresh-notion-tracker-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+  cancel-in-progress: true
+
 jobs:
   refresh:
     name: Refresh ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
