@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -105,13 +106,12 @@ LANDING_COLOR_BY_STATUS = {
 
 @dataclass
 class TimelineEntry:
-    """One date-grouped timeline section owned by a single task."""
+    """One date-grouped timeline section, including any legacy raw content."""
 
     entry_date: str
     heading: str
     lines: list[str] = field(default_factory=list)
     blocks: list[dict[str, str]] = field(default_factory=list)
-    subheading: str | None = None
 
     def to_tracker_state(self) -> dict[str, Any]:
         return {
@@ -129,15 +129,28 @@ class TimelineEntry:
             blocks=[],
         )
 
+
+@dataclass(frozen=True)
+class TimelineLog:
+    """One independently movable log written beneath a timeline date."""
+
+    log_id: str
+    title: str
+    entry_date: str
+    heading: str
+    lines: list[str] = field(default_factory=list)
+    blocks: list[dict[str, str]] = field(default_factory=list)
+
     @classmethod
-    def from_command(cls, command: dict[str, Any]) -> "TimelineEntry":
+    def from_command(cls, command: dict[str, Any]) -> "TimelineLog":
         entry_date = command["entry_date"]
         return cls(
+            log_id=_validated_timeline_log_id(command),
+            title=_required_timeline_log_text(command, "title"),
             entry_date=entry_date,
             heading=_date_only_timeline_heading(command.get("heading", ""), entry_date),
             lines=list(command.get("lines", [])),
             blocks=_timeline_blocks_from_command(command),
-            subheading=command.get("subheading"),
         )
 
 
@@ -147,7 +160,7 @@ class TimelineLogChange:
 
     task_id: str
     timeline_entry: TimelineEntry
-    appended_timeline_entry: TimelineEntry
+    appended_timeline_log: TimelineLog
     existing_timeline_entry: TimelineEntry | None = None
 
 
@@ -193,31 +206,35 @@ class Task:
     def render_page_title(self) -> str:
         return render_task_database_page_title(self.task_id, self.title)
 
-    def append_timeline_log(self, timeline_entry: TimelineEntry) -> TimelineLogChange:
+    def append_timeline_log(self, timeline_log: TimelineLog) -> TimelineLogChange:
         self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
-        existing_entry = _build_timeline_entry_for_date(self.timeline_entries, timeline_entry.entry_date)
+        existing_entry = _build_timeline_entry_for_date(self.timeline_entries, timeline_log.entry_date)
         existing_entry_before_append = _copy_timeline_entry(existing_entry) if existing_entry is not None else None
-        appended_entry = _copy_timeline_entry(timeline_entry)
-        timeline_entry_to_render = _upsert_timeline_entry(self, timeline_entry)
+        timeline_entry = existing_entry or TimelineEntry(
+            entry_date=timeline_log.entry_date,
+            heading=timeline_log.heading,
+        )
+        if existing_entry is None:
+            self.timeline_entries.append(timeline_entry)
         return TimelineLogChange(
             task_id=self.task_id,
             existing_timeline_entry=existing_entry_before_append,
-            appended_timeline_entry=appended_entry,
-            timeline_entry=timeline_entry_to_render,
+            appended_timeline_log=timeline_log,
+            timeline_entry=timeline_entry,
         )
 
-    def complete_with_timeline_log(self, timeline_entry: TimelineEntry) -> TaskCompletionChange:
+    def complete_with_timeline_log(self, timeline_log: TimelineLog) -> TaskCompletionChange:
         self.status = TaskStatus.COMPLETE
         return TaskCompletionChange(
             task_id=self.task_id,
-            timeline_log_change=self.append_timeline_log(timeline_entry),
+            timeline_log_change=self.append_timeline_log(timeline_log),
         )
 
-    def cancel_with_timeline_log(self, timeline_entry: TimelineEntry) -> TaskCompletionChange:
+    def cancel_with_timeline_log(self, timeline_log: TimelineLog) -> TaskCompletionChange:
         self.status = TaskStatus.CANCELLED
         return TaskCompletionChange(
             task_id=self.task_id,
-            timeline_log_change=self.append_timeline_log(timeline_entry),
+            timeline_log_change=self.append_timeline_log(timeline_log),
         )
 
     def normalise_timeline_entries(self) -> None:
@@ -233,29 +250,12 @@ def task_id_sort_key(task_id: str) -> tuple[str, int, str]:
     return task_id, -1, task_id
 
 
-def _upsert_timeline_entry(
-    task: Task,
-    timeline_entry: TimelineEntry,
-) -> TimelineEntry:
-    task.timeline_entries = _merged_timeline_entries_by_date(task.timeline_entries)
-    existing_entry = _build_timeline_entry_for_date(task.timeline_entries, timeline_entry.entry_date)
-
-    if existing_entry is None:
-        task.timeline_entries.append(timeline_entry)
-        return timeline_entry
-
-    existing_entry.lines.extend(timeline_entry.lines)
-    existing_entry.blocks.extend(timeline_entry.blocks)
-    return existing_entry
-
-
 def _copy_timeline_entry(timeline_entry: TimelineEntry) -> TimelineEntry:
     return TimelineEntry(
         entry_date=timeline_entry.entry_date,
         heading=timeline_entry.heading,
         lines=list(timeline_entry.lines),
         blocks=[dict(block) for block in timeline_entry.blocks],
-        subheading=timeline_entry.subheading,
     )
 
 
@@ -293,6 +293,31 @@ def _date_only_timeline_heading(raw_heading: str, entry_date: str) -> str:
         return f'<mention-date start="{date_match.group(1)}"/>'
 
     return f'<mention-date start="{entry_date}"/>'
+
+
+def generate_timeline_log_id(ticket_prefix: str) -> str:
+    return f"{ticket_prefix}-LOG-{uuid.uuid4()}"
+
+
+def _validated_timeline_log_id(command: dict[str, Any]) -> str:
+    log_id = _required_timeline_log_text(command, "log_id")
+    ticket_prefix, separator, uuid_text = log_id.partition("-LOG-")
+    if not separator or not ticket_prefix:
+        raise ValueError("timeline_entry.log_id must have the form {ticket prefix}-LOG-{UUID4}.")
+
+    uuid_value = uuid.UUID(uuid_text)
+    if uuid_value.version != 4:
+        raise ValueError("timeline_entry.log_id must contain a UUID4 value.")
+
+    return log_id
+
+
+def _required_timeline_log_text(command: dict[str, Any], field_name: str) -> str:
+    value = command.get(field_name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"timeline_entry.{field_name} must be a non-empty string.")
+
+    return value
 
 
 def _timeline_blocks_from_command(command: dict[str, Any]) -> list[dict[str, str]]:

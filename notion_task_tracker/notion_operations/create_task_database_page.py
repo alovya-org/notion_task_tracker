@@ -7,7 +7,7 @@ from typing import Any
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
 from notion_task_tracker.notion_operations.markdown import bullet, heading, join_markdown_blocks
-from notion_task_tracker.notion_operations.plan_task_page_write_intents import render_timeline_entry_content_markdown
+from notion_task_tracker.notion_operations.plan_task_page_write_intents import render_timeline_log_toggle_markdown
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import prepare_command_result_from_current_task_page
 from notion_task_tracker.notion_operations.reconcile_task_database import refresh_tracker_state_from_notion_task_database
@@ -37,7 +37,8 @@ from notion_task_tracker.tasks.database import (
 )
 from notion_task_tracker.tasks.task import (
     TASK_PAGE_TIMELINE_LOG_HEADING,
-    TimelineEntry,
+    TimelineLog,
+    generate_timeline_log_id,
     render_task_database_page_title,
 )
 
@@ -48,7 +49,8 @@ async def execute_create_task_database_page_command(
     notion_client: NotionRestClient,
 ) -> tuple[dict[str, Any], list[str]]:
     task_tree = TaskTree.from_tracker_state(tracker_state)
-    task_creations = derive_split_task_page_creations(command, task_tree)
+    ticket_prefix = tracker_state["identity"]["ticket_prefix"]
+    task_creations = derive_split_task_page_creations(command, task_tree, ticket_prefix)
     updated_tracker_state = tracker_state
     executed_operation_keys = []
     for task_creation in task_creations:
@@ -161,6 +163,7 @@ async def _write_task_creation_timeline_entry(
     timeline_command = _build_created_task_timeline_command(
         task_creation=task_creation,
         created_task_url=_build_task_notion_url_from_tracker_state(tracker_state, created_task_id),
+        ticket_prefix=tracker_state["identity"]["ticket_prefix"],
     )
     if timeline_command is None:
         return tracker_state, []
@@ -232,35 +235,37 @@ def _render_new_task_page_initial_content(
     if initial_timeline_entry is None:
         return f"## {TASK_PAGE_TIMELINE_LOG_HEADING}"
 
-    timeline_entry = TimelineEntry.from_command(initial_timeline_entry)
+    timeline_log = TimelineLog.from_command(initial_timeline_entry)
     return join_markdown_blocks(
         [
             heading(2, TASK_PAGE_TIMELINE_LOG_HEADING),
-            heading(3, timeline_entry.heading),
-            _render_new_task_initial_timeline_content(timeline_entry, parent_task_id, task_tree),
+            heading(3, timeline_log.heading),
+            _render_new_task_initial_timeline_log(timeline_log, parent_task_id, task_tree),
         ]
     )
 
 
-def _render_new_task_initial_timeline_content(
-    timeline_entry: TimelineEntry,
+def _render_new_task_initial_timeline_log(
+    timeline_log: TimelineLog,
     parent_task_id: str | None,
     task_tree: TaskTree,
 ) -> str:
-    timeline_content = render_timeline_entry_content_markdown(timeline_entry)
     if parent_task_id is None:
-        return timeline_content
+        return render_timeline_log_toggle_markdown(timeline_log)
 
     parent_page_url = _build_task_notion_url(task_tree, parent_task_id)
-    return join_markdown_blocks([
-        bullet(f'Spawned from parent task: <mention-page url="{parent_page_url}"/>.'),
-        timeline_content,
-    ])
+    return render_timeline_log_toggle_markdown(
+        timeline_log,
+        leading_content_markdown=bullet(
+            f'Spawned from parent task: <mention-page url="{parent_page_url}"/>.'
+        ),
+    )
 
 
 def _build_created_task_timeline_command(
     task_creation: TaskCreation,
     created_task_url: str,
+    ticket_prefix: str,
 ) -> dict[str, Any] | None:
     if task_creation.parent_timeline_entry is None:
         return None
@@ -269,6 +274,8 @@ def _build_created_task_timeline_command(
         return task_creation.parent_timeline_entry
 
     return {
+        "log_id": generate_timeline_log_id(ticket_prefix),
+        "title": "Created child task",
         "entry_date": task_creation.parent_timeline_entry["entry_date"],
         "heading": task_creation.parent_timeline_entry["heading"],
         "lines": [f'Spawned child task: <mention-page url="{created_task_url}"/>.'],

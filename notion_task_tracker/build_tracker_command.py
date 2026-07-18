@@ -15,6 +15,7 @@ from notion_task_tracker.tasks import (
     DEFAULT_TASK_STATUS,
     DEFAULT_TASK_UNCERTAINTY,
 )
+from notion_task_tracker.tasks.task import generate_timeline_log_id
 
 
 WRITE_ACTIONS = {
@@ -150,7 +151,11 @@ def _build_log_command(arguments: Namespace, ticket_prefix: str) -> dict[str, An
     return {
         "command": "append_task_timeline_log",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+        "timeline_entry": _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        ),
     }
 
 
@@ -158,7 +163,11 @@ def _build_complete_command(arguments: Namespace, ticket_prefix: str) -> dict[st
     return {
         "command": "complete_task",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+        "timeline_entry": _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        ),
     }
 
 
@@ -166,7 +175,11 @@ def _build_complete_with_all_children_command(arguments: Namespace, ticket_prefi
     return {
         "command": "complete_task_with_all_children",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+        "timeline_entry": _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        ),
     }
 
 
@@ -174,7 +187,11 @@ def _build_cancel_command(arguments: Namespace, ticket_prefix: str) -> dict[str,
     return {
         "command": "cancel_task",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "timeline_entry": _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date),
+        "timeline_entry": _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        ),
     }
 
 
@@ -305,7 +322,11 @@ def _build_parent_command(arguments: Namespace, ticket_prefix: str) -> dict[str,
         "task": _new_task_command(arguments, parse_one_title_arg(arguments, "parent"), ticket_prefix),
     }
     if arguments.content_path is not None:
-        command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
+        command["timeline_entry"] = _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        )
     return command
 
 
@@ -319,7 +340,11 @@ def _build_child_command(arguments: Namespace, ticket_prefix: str) -> dict[str, 
         ],
     }
     if arguments.content_path is not None:
-        command["parent_timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
+        command["parent_timeline_entry"] = _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        )
     return command
 
 
@@ -331,7 +356,11 @@ def _build_sibling_command(arguments: Namespace, ticket_prefix: str) -> dict[str
         "sibling_task": _new_task_command(arguments, parse_one_title_arg(arguments, "sibling"), ticket_prefix),
     }
     if arguments.content_path is not None:
-        command["timeline_entry"] = _timeline_entry_from_content_path(arguments.content_path, arguments.entry_date)
+        command["timeline_entry"] = _timeline_entry_from_content_path(
+            arguments.content_path,
+            arguments.entry_date,
+            ticket_prefix,
+        )
     return command
 
 
@@ -410,18 +439,22 @@ def _new_task_database_fields_from_arguments(arguments: Namespace, ticket_prefix
     }
 
 
-def _timeline_entry_from_content_path(content_path: str | None, entry_date: str | None) -> dict[str, Any]:
+def _timeline_entry_from_content_path(
+    content_path: str | None,
+    entry_date: str | None,
+    ticket_prefix: str,
+) -> dict[str, Any]:
     if content_path is None:
         raise ValueError("This action requires --content-path")
 
     content = _read_json_object(content_path)
     resolved_entry_date = _entry_date_from_arguments(entry_date)
     timeline_entry = {
+        "log_id": generate_timeline_log_id(ticket_prefix),
+        "title": _required_timeline_log_title(content),
         "entry_date": resolved_entry_date,
         "heading": f'<mention-date start="{resolved_entry_date}"/>',
     }
-    if content.get("subheading") is not None:
-        timeline_entry["subheading"] = content["subheading"]
     if content.get("blocks") is not None:
         timeline_entry["blocks"] = list(content["blocks"])
     if content.get("lines") is not None:
@@ -429,6 +462,14 @@ def _timeline_entry_from_content_path(content_path: str | None, entry_date: str 
     if "blocks" not in timeline_entry and "lines" not in timeline_entry:
         raise ValueError("Timeline content must include blocks or lines")
     return timeline_entry
+
+
+def _required_timeline_log_title(content: dict[str, Any]) -> str:
+    title = content.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError("Timeline content must include a non-empty title")
+
+    return title
 
 
 def _lines_from_content(content: dict[str, Any]) -> list[str]:

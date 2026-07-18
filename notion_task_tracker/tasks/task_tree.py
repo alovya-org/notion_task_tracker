@@ -26,6 +26,7 @@ from notion_task_tracker.tasks.task import (
     TaskCompletionChange,
     TaskStatus,
     TimelineEntry,
+    TimelineLog,
     TimelineLogChange,
     Uncertainty,
     _PRIORITY_RANK_BY_VALUE,
@@ -192,10 +193,10 @@ class TaskTree:
     def append_task_timeline_log(
         self,
         task_id: str,
-        timeline_entry: TimelineEntry,
+        timeline_log: TimelineLog,
     ) -> TimelineLogChange:
         task = self.tasks[task_id]
-        timeline_log_change = task.append_timeline_log(timeline_entry)
+        timeline_log_change = task.append_timeline_log(timeline_log)
         self.validate()
         self.recalculate_display_priorities()
         return timeline_log_change
@@ -203,10 +204,10 @@ class TaskTree:
     def complete_task(
         self,
         task_id: str,
-        timeline_entry: TimelineEntry,
+        timeline_log: TimelineLog,
     ) -> TaskCompletionChange:
         task = self.tasks[task_id]
-        completion_change = task.complete_with_timeline_log(timeline_entry)
+        completion_change = task.complete_with_timeline_log(timeline_log)
         self.validate()
         self.recalculate_display_priorities()
         return completion_change
@@ -214,10 +215,10 @@ class TaskTree:
     def cancel_task(
         self,
         task_id: str,
-        timeline_entry: TimelineEntry,
+        timeline_log: TimelineLog,
     ) -> TaskCompletionChange:
         task = self.tasks[task_id]
-        cancellation_change = task.cancel_with_timeline_log(timeline_entry)
+        cancellation_change = task.cancel_with_timeline_log(timeline_log)
         self.validate()
         self.recalculate_display_priorities()
         return cancellation_change

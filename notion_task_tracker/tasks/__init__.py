@@ -15,6 +15,7 @@ from notion_task_tracker.tasks.task import (
     TaskCompletionChange,
     TaskStatus,
     TimelineEntry,
+    TimelineLog,
     TimelineLogChange,
     Uncertainty,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "TaskTree",
     "TaskStatus",
     "TimelineEntry",
+    "TimelineLog",
     "TimelineLogChange",
     "Uncertainty",
 ]

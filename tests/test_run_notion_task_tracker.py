@@ -288,6 +288,8 @@ def test_write_command_renders_landing_pages_from_full_fresh_database_projection
                 "command": "complete_task",
                 "task_id": "ALOVYA-2",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000001",
+                    "title": "Completed touched task",
                     "entry_date": "2026-07-16",
                     "heading": '<mention-date start="2026-07-16"/>',
                     "lines": ["Completed the touched task."],

@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from notion_task_tracker.tasks import TaskTree, Task, TimelineEntry
-from notion_task_tracker.tasks.task import ExternalCoordination, Friction, Priority, TaskStatus, Uncertainty
+from notion_task_tracker.tasks.task import (
+    ExternalCoordination,
+    Friction,
+    Priority,
+    TaskStatus,
+    Uncertainty,
+    generate_timeline_log_id,
+)
 from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
 
 
@@ -29,13 +36,17 @@ class TaskCreation:
     parent_timeline_entry: dict[str, Any] | None
 
 
-def derive_split_task_page_creations(command: dict[str, Any], task_tree: TaskTree) -> list[TaskCreation]:
+def derive_split_task_page_creations(
+    command: dict[str, Any],
+    task_tree: TaskTree,
+    ticket_prefix: str,
+) -> list[TaskCreation]:
     command_name = command["command"]
     if command_name == "create_top_level_task":
         return [_derive_parent_task_creation_from_command(command)]
 
     if command_name == "split_task_into_children":
-        return _derive_child_task_creations_from_command(command, task_tree)
+        return _derive_child_task_creations_from_command(command, task_tree, ticket_prefix)
 
     if command_name == "split_task_with_sibling":
         return [_derive_sibling_task_creation_from_command(command, task_tree)]
@@ -108,7 +119,11 @@ def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCr
     )
 
 
-def _derive_child_task_creations_from_command(command: dict[str, Any], task_tree: TaskTree) -> list[TaskCreation]:
+def _derive_child_task_creations_from_command(
+    command: dict[str, Any],
+    task_tree: TaskTree,
+    ticket_prefix: str,
+) -> list[TaskCreation]:
     child_priority = _derive_child_priority_from_parent(task_tree, command["source_task_id"])
     split_relations = copy_source_task_relations_to_split_tasks(task_tree, command["source_task_id"])
     parent_timeline_entry = command.get("parent_timeline_entry")
@@ -119,10 +134,27 @@ def _derive_child_task_creations_from_command(command: dict[str, Any], task_tree
             child_priority=child_priority,
             dependency_task_ids=split_relations["dependency_task_ids"],
             dependant_task_ids=split_relations["dependant_task_ids"],
-            parent_timeline_entry=parent_timeline_entry,
+            parent_timeline_entry=_identified_timeline_log_for_split_child(
+                parent_timeline_entry,
+                child_index,
+                ticket_prefix,
+            ),
         )
-        for child_task_command in command["child_tasks"]
+        for child_index, child_task_command in enumerate(command["child_tasks"])
     ]
+
+
+def _identified_timeline_log_for_split_child(
+    timeline_log: dict[str, Any] | None,
+    child_index: int,
+    ticket_prefix: str,
+) -> dict[str, Any] | None:
+    if timeline_log is None or child_index == 0:
+        return timeline_log
+
+    identified_timeline_log = dict(timeline_log)
+    identified_timeline_log["log_id"] = generate_timeline_log_id(ticket_prefix)
+    return identified_timeline_log
 
 
 def _derive_split_child_task_creation(

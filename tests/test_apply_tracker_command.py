@@ -11,6 +11,8 @@ class TestApplyCommandToTrackerState:
                 "command": "append_task_timeline_log",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000001",
+                    "title": "Remaining blocker",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
                     "lines": ["Found the remaining blocker."],
@@ -27,12 +29,15 @@ class TestApplyCommandToTrackerState:
             }
         ]
         assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
-            "update_timeline_log:task:ALOVYA-1:2026-05-24"
+            "update_timeline_log:task:ALOVYA-1:2026-05-24:ALOVYA-LOG-00000000-0000-4000-8000-000000000001"
         ]
         assert command_result.write_intents[0].operation_name == "update_timeline_log"
         assert command_result.write_intents[0].arguments["timeline_section_markdown"] == "\n".join([
             '### <mention-date start="2026-05-24"/>',
-            "- Found the remaining blocker.",
+            "<details>",
+            "<summary>Remaining blocker · ALOVYA-LOG-00000000-0000-4000-8000-000000000001</summary>",
+            "\t- Found the remaining blocker.",
+            "</details>",
         ])
 
     def test_append_task_timeline_log_inserts_after_existing_date_heading(self):
@@ -50,6 +55,8 @@ class TestApplyCommandToTrackerState:
                 "command": "append_task_timeline_log",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000002",
+                    "title": "Agent investigation",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
                     "lines": ["New agent line."],
@@ -61,7 +68,12 @@ class TestApplyCommandToTrackerState:
         assert command_result.write_intents[0].arguments["existing_timeline_heading"] == (
             '<mention-date start="2026-05-24"/>'
         )
-        assert command_result.write_intents[0].arguments["appended_markdown"] == "- New agent line."
+        assert command_result.write_intents[0].arguments["appended_markdown"] == "\n".join([
+            "<details>",
+            "<summary>Agent investigation · ALOVYA-LOG-00000000-0000-4000-8000-000000000002</summary>",
+            "\t- New agent line.",
+            "</details>",
+        ])
 
     def test_append_task_timeline_log_preserves_manual_existing_date_heading(self):
         tracker_state = _combined_tracker_state()
@@ -78,6 +90,8 @@ class TestApplyCommandToTrackerState:
                 "command": "append_task_timeline_log",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000003",
+                    "title": "Agent investigation",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
                     "lines": ["New agent line."],
@@ -89,7 +103,7 @@ class TestApplyCommandToTrackerState:
         assert command_result.tracker_state["tasks"]["ALOVYA-1"]["timeline_entries"][0]["heading"] == "2026-05-24"
         assert command_result.write_intents[0].arguments["existing_timeline_heading"] == "2026-05-24"
 
-    def test_append_task_timeline_log_with_subheading_inserts_toggle(self):
+    def test_append_task_timeline_log_uses_title_and_identifier_for_toggle(self):
         tracker_state = _combined_tracker_state()
         tracker_state["tasks"]["ALOVYA-1"]["timeline_entries"] = [
             {
@@ -104,9 +118,10 @@ class TestApplyCommandToTrackerState:
                 "command": "append_task_timeline_log",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000004",
+                    "title": "Design notes",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
-                    "subheading": "Design notes",
                     "lines": ["Moved task metadata into the database."],
                 },
             },
@@ -115,7 +130,7 @@ class TestApplyCommandToTrackerState:
 
         assert command_result.write_intents[0].arguments["appended_markdown"] == "\n".join([
             "<details>",
-            "<summary>Design notes</summary>",
+            "<summary>Design notes · ALOVYA-LOG-00000000-0000-4000-8000-000000000004</summary>",
             "\t- Moved task metadata into the database.",
             "</details>",
         ])
@@ -126,6 +141,8 @@ class TestApplyCommandToTrackerState:
                 "command": "append_task_timeline_log",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000005",
+                    "title": "Target write investigation",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
                     "blocks": [
@@ -146,10 +163,13 @@ class TestApplyCommandToTrackerState:
 
         assert command_result.write_intents[0].arguments["timeline_section_markdown"] == "\n".join([
             '### <mention-date start="2026-05-24"/>',
-            "Investigated the target-side file creation failure.",
-            "```bash",
-            "ssh root@target '/mnt/bin/touch /var/cache/qnn_sdk/test_write'",
-            "```",
+            "<details>",
+            "<summary>Target write investigation · ALOVYA-LOG-00000000-0000-4000-8000-000000000005</summary>",
+            "\tInvestigated the target-side file creation failure.",
+            "\t```bash",
+            "\tssh root@target '/mnt/bin/touch /var/cache/qnn_sdk/test_write'",
+            "\t```",
+            "</details>",
         ])
 
     def test_complete_task_updates_status_and_produces_write_intents(self):
@@ -160,6 +180,8 @@ class TestApplyCommandToTrackerState:
                 "command": "complete_task",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000006",
+                    "title": "Completed task",
                     "entry_date": "2026-05-24",
                     "heading": '<mention-date start="2026-05-24"/>',
                     "lines": ["Completed the task."],
@@ -180,7 +202,7 @@ class TestApplyCommandToTrackerState:
             "update_properties:task:ALOVYA-1",
             "replace:ongoing_landing_page",
             "replace:completed_landing_page",
-            "update_timeline_log:task:ALOVYA-1:2026-05-24",
+            "update_timeline_log:task:ALOVYA-1:2026-05-24:ALOVYA-LOG-00000000-0000-4000-8000-000000000006",
         ]
         write_intents_by_key = {
             write_intent.operation_key: write_intent
@@ -190,9 +212,12 @@ class TestApplyCommandToTrackerState:
         assert write_intents_by_key["update_properties:task:ALOVYA-1"].arguments["properties"]["Status"] == "Complete"
         assert write_intents_by_key["replace:ongoing_landing_page"].operation_name == "replace_page_markdown"
         assert write_intents_by_key["replace:completed_landing_page"].arguments["markdown"].startswith("## Completed")
-        assert write_intents_by_key["update_timeline_log:task:ALOVYA-1:2026-05-24"].operation_name == (
-            "update_timeline_log"
+        timeline_write_intent = next(
+            write_intent
+            for write_intent in command_result.write_intents
+            if write_intent.operation_name == "update_timeline_log"
         )
+        assert timeline_write_intent.operation_name == "update_timeline_log"
 
     def test_append_miscellaneous_note_command_updates_combined_tracker_state(self):
         command_result = apply_command_to_tracker_state(
@@ -371,6 +396,8 @@ class TestApplyCommandToTrackerState:
                 "command": "complete_task_with_all_children",
                 "task_id": "ALOVYA-1",
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000007",
+                    "title": "Completed task tree",
                     "entry_date": "2026-06-23",
                     "heading": '<mention-date start="2026-06-23"/>',
                     "lines": ["Finished the task and all children."],
@@ -381,11 +408,14 @@ class TestApplyCommandToTrackerState:
 
         assert command_result.tracker_state["tasks"]["ALOVYA-1"]["status"] == "Complete"
         assert command_result.tracker_state["tasks"]["ALOVYA-2"]["status"] == "Complete"
-        assert [write_intent.operation_key for write_intent in command_result.write_intents] == [
-            "update_properties:task:ALOVYA-2",
-            "update_timeline_log:task:ALOVYA-2:2026-06-23",
+        operation_keys = [write_intent.operation_key for write_intent in command_result.write_intents]
+        assert operation_keys[0] == "update_properties:task:ALOVYA-2"
+        assert operation_keys[1].startswith(
+            "update_timeline_log:task:ALOVYA-2:2026-06-23:ALOVYA-LOG-"
+        )
+        assert operation_keys[2:] == [
             "update_properties:task:ALOVYA-1",
-            "update_timeline_log:task:ALOVYA-1:2026-06-23",
+            "update_timeline_log:task:ALOVYA-1:2026-06-23:ALOVYA-LOG-00000000-0000-4000-8000-000000000007",
             "replace:ongoing_landing_page",
         ]
 
@@ -451,6 +481,8 @@ def test_cancel_task_updates_status_and_produces_write_intents():
             "command": "cancel_task",
             "task_id": "ALOVYA-1",
             "timeline_entry": {
+                "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000008",
+                "title": "Cancelled task",
                 "entry_date": "2026-05-24",
                 "heading": '<mention-date start="2026-05-24"/>',
                 "blocks": [
@@ -474,16 +506,22 @@ def test_cancel_task_updates_status_and_produces_write_intents():
         "update_properties:task:ALOVYA-1",
         "replace:ongoing_landing_page",
         "replace:completed_landing_page",
-        "update_timeline_log:task:ALOVYA-1:2026-05-24",
+        "update_timeline_log:task:ALOVYA-1:2026-05-24:ALOVYA-LOG-00000000-0000-4000-8000-000000000008",
     ]
     assert write_intents_by_key["update_properties:task:ALOVYA-1"].arguments["properties"]["Status"] == "Cancelled"
     assert "## Cancelled" in write_intents_by_key["replace:completed_landing_page"].arguments["markdown"]
     assert "[N/A]" in write_intents_by_key["replace:completed_landing_page"].arguments["markdown"]
-    assert write_intents_by_key["update_timeline_log:task:ALOVYA-1:2026-05-24"].arguments[
-        "timeline_section_markdown"
-    ] == "\n".join([
+    timeline_write_intent = next(
+        write_intent
+        for write_intent in command_result.write_intents
+        if write_intent.operation_name == "update_timeline_log"
+    )
+    assert timeline_write_intent.arguments["timeline_section_markdown"] == "\n".join([
         '### <mention-date start="2026-05-24"/>',
-        "Cancelled because the task is no longer needed.",
+        "<details>",
+        "<summary>Cancelled task · ALOVYA-LOG-00000000-0000-4000-8000-000000000008</summary>",
+        "\tCancelled because the task is no longer needed.",
+        "</details>",
     ])
 
 
@@ -546,6 +584,10 @@ def test_delete_task_promotes_children_removes_dependencies_and_refreshes_views(
 
 def _combined_tracker_state():
     tracker_state = _task_tracker_state()
+    tracker_state["identity"] = {
+        "display_name": "Alovya",
+        "ticket_prefix": "ALOVYA",
+    }
     tracker_state["miscellaneous_notes"] = {
         "page": {
             "local_page_key": "miscellaneous_notes",

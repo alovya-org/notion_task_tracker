@@ -77,6 +77,7 @@ async def prepare_command_result_from_current_task_page(
         command_result=command_result,
         task_id=task_id,
         entry_date=command["timeline_entry"]["entry_date"],
+        log_id=command["timeline_entry"]["log_id"],
         fetched_page_content=derived_timeline_log.fetched_page_content,
     )
 
@@ -85,11 +86,13 @@ def _replace_timeline_write_with_initialised_page_write(
     command_result: TrackerCommandResult,
     task_id: str,
     entry_date: str,
+    log_id: str,
     fetched_page_content: str,
 ) -> TrackerCommandResult:
     replacement_write_intent = _build_initialised_task_timeline_write_intent(
         task_id,
         entry_date,
+        log_id,
         fetched_page_content,
         command_result,
     )
@@ -109,10 +112,11 @@ def _replace_timeline_write_with_initialised_page_write(
 def _build_initialised_task_timeline_write_intent(
     task_id: str,
     entry_date: str,
+    log_id: str,
     fetched_page_content: str,
     command_result: TrackerCommandResult,
 ) -> NotionWriteIntent:
-    timeline_write_intent = _find_task_timeline_write_intent(command_result, task_id, entry_date)
+    timeline_write_intent = _find_task_timeline_write_intent(command_result, task_id, entry_date, log_id)
     return NotionWriteIntent(
         operation_key=timeline_write_intent.operation_key,
         operation_name="replace_page_markdown",
@@ -131,8 +135,9 @@ def _find_task_timeline_write_intent(
     command_result: TrackerCommandResult,
     task_id: str,
     entry_date: str,
+    log_id: str,
 ) -> NotionWriteIntent:
-    operation_key = f"{UPDATE_TIMELINE_LOG_OPERATION_NAME}:task:{task_id}:{entry_date}"
+    operation_key = f"{UPDATE_TIMELINE_LOG_OPERATION_NAME}:task:{task_id}:{entry_date}:{log_id}"
     for write_intent in command_result.write_intents:
         if write_intent.operation_key == operation_key:
             return write_intent

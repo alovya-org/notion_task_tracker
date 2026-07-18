@@ -1,5 +1,6 @@
 import json
 from argparse import Namespace
+from uuid import UUID
 
 import pytest
 
@@ -57,7 +58,7 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
         json.dumps({
-            "subheading": "Implementation notes",
+            "title": "Implementation notes",
             "blocks": [
                 {
                     "type": "paragraph",
@@ -77,13 +78,15 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
         )
     )
 
+    generated_log_id = command["timeline_entry"].pop("log_id")
+    _assert_uuid4_log_id(generated_log_id)
     assert command == {
         "command": "append_task_timeline_log",
         "task_id": "ALOVYA-67",
         "timeline_entry": {
+            "title": "Implementation notes",
             "entry_date": "2026-05-30",
             "heading": '<mention-date start="2026-05-30"/>',
-            "subheading": "Implementation notes",
             "blocks": [
                 {
                     "type": "paragraph",
@@ -94,10 +97,30 @@ def test_log_action_builds_timeline_command_from_content_path(tmp_path):
     }
 
 
+def test_log_action_uses_configured_ticket_prefix_in_generated_log_id(tmp_path):
+    content_path = tmp_path / "content.json"
+    content_path.write_text(
+        json.dumps({
+            "title": "Personal tracker log",
+            "lines": ["Verified configured identifier namespace."],
+        }),
+        encoding="utf-8",
+    )
+
+    command = _build_tracker_command(
+        _arguments(log=True, ticket_number=[67], content_path=str(content_path)),
+        ticket_prefix="PERSONAL",
+    )
+
+    assert command["task_id"] == "PERSONAL-67"
+    _assert_uuid4_log_id(command["timeline_entry"]["log_id"], ticket_prefix="PERSONAL")
+
+
 def test_child_action_builds_split_command_from_one_title(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
         json.dumps({
+            "title": "Child task creation",
             "blocks": [
                 {
                     "type": "paragraph",
@@ -119,6 +142,8 @@ def test_child_action_builds_split_command_from_one_title(tmp_path):
         )
     )
 
+    generated_log_id = command["parent_timeline_entry"].pop("log_id")
+    _assert_uuid4_log_id(generated_log_id)
     assert command == {
         "command": "split_task_into_children",
         "source_task_id": "ALOVYA-67",
@@ -138,6 +163,7 @@ def test_child_action_builds_split_command_from_one_title(tmp_path):
             },
         ],
         "parent_timeline_entry": {
+            "title": "Child task creation",
             "entry_date": "2026-05-30",
             "heading": '<mention-date start="2026-05-30"/>',
             "blocks": [
@@ -292,7 +318,10 @@ def test_reparent_action_requires_parent_ticket_number():
 def test_complete_with_all_children_action_builds_completion_with_all_children_command(tmp_path):
     content_path = tmp_path / "content.json"
     content_path.write_text(
-        json.dumps({"lines": ["Finished the task and all children."]}),
+        json.dumps({
+            "title": "Completed task tree",
+            "lines": ["Finished the task and all children."],
+        }),
         encoding="utf-8",
     )
 
@@ -305,15 +334,31 @@ def test_complete_with_all_children_action_builds_completion_with_all_children_c
         )
     )
 
+    generated_log_id = command["timeline_entry"].pop("log_id")
+    _assert_uuid4_log_id(generated_log_id)
     assert command == {
         "command": "complete_task_with_all_children",
         "task_id": "ALOVYA-67",
         "timeline_entry": {
+            "title": "Completed task tree",
             "entry_date": "2026-06-23",
             "heading": '<mention-date start="2026-06-23"/>',
             "lines": ["Finished the task and all children."],
         },
     }
+
+
+def test_log_action_requires_a_non_empty_timeline_log_title(tmp_path):
+    content_path = tmp_path / "content.json"
+    content_path.write_text(
+        json.dumps({"lines": ["Untitled log content."]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Timeline content must include a non-empty title"):
+        _build_tracker_command(
+            _arguments(log=True, ticket_number=[67], content_path=str(content_path))
+        )
 
 
 def test_set_deadline_actions_build_field_specific_commands():
@@ -448,6 +493,13 @@ def test_ticket_ids_from_numbers_rejects_invalid_ticket_numbers():
 
 def _build_tracker_command(arguments: Namespace, ticket_prefix: str = "ALOVYA") -> dict:
     return build_tracker_command_from_cli_action(arguments, ticket_prefix=ticket_prefix)
+
+
+def _assert_uuid4_log_id(log_id: str, ticket_prefix: str = "ALOVYA") -> None:
+    expected_log_id_prefix = f"{ticket_prefix}-LOG-"
+    assert log_id.startswith(expected_log_id_prefix)
+    uuid_value = UUID(log_id.removeprefix(expected_log_id_prefix))
+    assert uuid_value.version == 4
 
 
 def _arguments(**overrides):

@@ -44,9 +44,10 @@ from notion_task_tracker.tasks import (
     TaskCompletionChange,
     TaskStatus,
     TaskTree,
-    TimelineEntry,
+    TimelineLog,
     TimelineLogChange,
 )
+from notion_task_tracker.tasks.task import generate_timeline_log_id
 
 
 @dataclass(frozen=True)
@@ -204,7 +205,7 @@ def _append_task_timeline_log(
 ):
     return task_tree.append_task_timeline_log(
         task_id=command["task_id"],
-        timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+        timeline_log=TimelineLog.from_command(command["timeline_entry"]),
     )
 
 
@@ -214,7 +215,7 @@ def _complete_task(
 ):
     return task_tree.complete_task(
         task_id=command["task_id"],
-        timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+        timeline_log=TimelineLog.from_command(command["timeline_entry"]),
     )
 
 
@@ -224,7 +225,7 @@ def _cancel_task(
 ):
     return task_tree.cancel_task(
         task_id=command["task_id"],
-        timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+        timeline_log=TimelineLog.from_command(command["timeline_entry"]),
     )
 
 
@@ -259,13 +260,17 @@ def _delete_task(command: dict[str, Any], tracker_state: dict[str, Any]) -> Trac
 def _complete_task_with_all_children(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
     task_tree = TaskTree.from_tracker_state(tracker_state)
     completion_changes = []
+    ticket_prefix = tracker_state["identity"]["ticket_prefix"]
     for task_id in _collect_task_ids_in_subtree_postorder(task_tree, command["task_id"]):
         if task_tree.tasks[task_id].status in {TaskStatus.COMPLETE, TaskStatus.CANCELLED}:
             continue
+        timeline_log_command = dict(command["timeline_entry"])
+        if task_id != command["task_id"]:
+            timeline_log_command["log_id"] = generate_timeline_log_id(ticket_prefix)
         completion_changes.append(
             task_tree.complete_task(
                 task_id=task_id,
-                timeline_entry=TimelineEntry.from_command(command["timeline_entry"]),
+                timeline_log=TimelineLog.from_command(timeline_log_command),
             )
         )
 

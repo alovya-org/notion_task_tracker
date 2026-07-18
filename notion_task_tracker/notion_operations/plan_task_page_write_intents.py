@@ -41,6 +41,7 @@ from notion_task_tracker.tasks.task import (
     TaskCompletionChange,
     TaskStatus,
     TimelineEntry,
+    TimelineLog,
     TimelineLogChange,
     task_id_sort_key,
 )
@@ -78,26 +79,32 @@ def plan_notion_writes_for_task_tree(task_tree: TaskTree) -> list[NotionWriteInt
 
 def build_timeline_log_write_intent(timeline_log_change: TimelineLogChange) -> NotionWriteIntent:
     timeline_entry = timeline_log_change.timeline_entry
+    appended_timeline_log = timeline_log_change.appended_timeline_log
+    appended_timeline_log_markdown = render_timeline_log_toggle_markdown(appended_timeline_log)
     arguments = {
         "task_id": timeline_log_change.task_id,
         "timeline_log_heading": TASK_PAGE_TIMELINE_LOG_HEADING,
         "timeline_entry": timeline_entry.to_tracker_state(),
-        "timeline_section_markdown": render_timeline_entry_section_markdown(timeline_entry),
+        "timeline_section_markdown": join_markdown_blocks([
+            render_timeline_entry_section_markdown(timeline_entry),
+            appended_timeline_log_markdown,
+        ]),
     }
     if timeline_log_change.existing_timeline_entry is not None:
         arguments["existing_timeline_heading"] = timeline_log_change.existing_timeline_entry.heading
         arguments["old_timeline_section_markdown"] = render_timeline_entry_section_markdown(
             timeline_log_change.existing_timeline_entry
         )
-        arguments["new_timeline_section_markdown"] = render_timeline_entry_section_markdown(timeline_entry)
-        arguments["appended_markdown"] = render_timeline_entry_content_markdown(
-            timeline_log_change.appended_timeline_entry
-        )
+        arguments["new_timeline_section_markdown"] = join_markdown_blocks([
+            arguments["old_timeline_section_markdown"],
+            appended_timeline_log_markdown,
+        ])
+        arguments["appended_markdown"] = appended_timeline_log_markdown
 
     return NotionWriteIntent(
         operation_key=(
             f"{UPDATE_TIMELINE_LOG_OPERATION_NAME}:task:{timeline_log_change.task_id}:"
-            f"{timeline_entry.entry_date}"
+            f"{timeline_entry.entry_date}:{appended_timeline_log.log_id}"
         ),
         operation_name=UPDATE_TIMELINE_LOG_OPERATION_NAME,
         target_page_key=f"task:{timeline_log_change.task_id}",
@@ -315,25 +322,27 @@ def render_completed_landing_page_markdown(
     return join_markdown_blocks(markdown_blocks) or "No completed tasks yet."
 
 
-def render_timeline_entry_content_markdown(timeline_entry: TimelineEntry) -> str:
+def render_timeline_log_toggle_markdown(
+    timeline_log: TimelineLog,
+    leading_content_markdown: str = "",
+) -> str:
     content_markdown = join_markdown_blocks([
-        *[_render_timeline_entry_block_markdown(block) for block in timeline_entry.blocks],
-        *[bullet(line) for line in timeline_entry.lines],
+        leading_content_markdown,
+        *[_render_timeline_log_block_markdown(block) for block in timeline_log.blocks],
+        *[bullet(line) for line in timeline_log.lines],
     ])
-    if timeline_entry.subheading:
-        return toggle(timeline_entry.subheading, content_markdown)
-
-    return content_markdown
+    return toggle(f"{timeline_log.title} · {timeline_log.log_id}", content_markdown)
 
 
 def render_timeline_entry_section_markdown(timeline_entry: TimelineEntry) -> str:
     return join_markdown_blocks([
         heading(3, timeline_entry.heading),
-        render_timeline_entry_content_markdown(timeline_entry),
+        *[_render_timeline_log_block_markdown(block) for block in timeline_entry.blocks],
+        *[bullet(line) for line in timeline_entry.lines],
     ])
 
 
-def _render_timeline_entry_block_markdown(block: dict[str, str]) -> str:
+def _render_timeline_log_block_markdown(block: dict[str, str]) -> str:
     if block["type"] == "paragraph":
         return block["text"]
     if block["type"] == "code":

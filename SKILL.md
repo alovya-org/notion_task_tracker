@@ -21,6 +21,7 @@ Use the installed `ntt` CLI for all tracker reads and writes. The README owns ex
 Logs should preserve the facts needed to resume work without rereading the chat.
 
 - Prefer rich blocks for normal logs: paragraphs for conclusions and decisions, code blocks for commands, outputs, diffs, stack traces, paths, JSON/YAML, and structured observations.
+- Give every task timeline log a concise title that identifies the behaviour, decision, or result recorded by that log.
 - Include exact commands, files, errors, outputs, and test results when they matter.
 - In paragraph text, wrap inline technical names such as file paths, commands, environment variables, functions, class names, field names, tickets, and literal values in backticks.
 - Keep observation, inference, decision, and follow-up distinct.

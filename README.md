@@ -143,7 +143,7 @@ Timeline content files for `--log`, `--complete`, `--cancel`, `--parent`, `--chi
 
 ```json
 {
-  "subheading": "Optional toggle title",
+  "title": "REST migration investigation",
   "blocks": [
     {
       "type": "paragraph",
@@ -157,6 +157,8 @@ Timeline content files for `--log`, `--complete`, `--cancel`, `--parent`, `--chi
   ]
 }
 ```
+
+Every timeline write creates one Notion toggle beneath its date heading. The CLI combines the configured ticket prefix with a UUID4 logical identifier and appends it to the supplied title, producing a toggle title such as `REST migration investigation · ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0` when `ticket_prefix` is `ALOVYA`. The identifier remains part of that log when it is later copied or moved. Existing raw timeline content is left unchanged.
 
 Miscellaneous content files use `lines` or paragraph `blocks`:
 
@@ -299,13 +301,15 @@ Both values are required as headers. The Worker deliberately rejects body fields
 
 ## Task commands
 
-Append a timeline log. Timeline logs are user-owned in Notion and may contain handwritten edits, so this command must emit targeted Notion writes. It must never replace a whole task page or landing page just to add log lines once a timeline log exists. Before writing, the CLI fetches the target task page and records any existing date headings under `Timeline log`. If the page lacks a usable `Timeline log` section with at least one date heading, the CLI initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended directly under `Timeline log`; existing date sections get new lines inserted under their date heading:
+Append a timeline log. Timeline logs are user-owned in Notion and may contain handwritten edits, so this command must emit targeted Notion writes. It must never replace a whole task page or landing page just to add log lines once a timeline log exists. Before writing, the CLI fetches the target task page and records any existing date headings under `Timeline log`. If the page lacks a usable `Timeline log` section with at least one date heading, the CLI initialises the body as `Timeline log`, today's date, then any existing body content underneath. New date sections are prepended directly under `Timeline log`; existing dates receive another toggle without changing legacy raw content:
 
 ```json
 {
   "command": "append_task_timeline_log",
   "task_id": "EXAMPLE-5",
   "timeline_entry": {
+    "log_id": "ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0",
+    "title": "Remaining blocker",
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
     "lines": ["Investigated the current blocker."]
@@ -313,28 +317,15 @@ Append a timeline log. Timeline logs are user-owned in Notion and may contain ha
 }
 ```
 
-Add `subheading` to put the new log lines under a Notion toggle for that date:
-
-```json
-{
-  "command": "append_task_timeline_log",
-  "task_id": "EXAMPLE-5",
-  "timeline_entry": {
-    "entry_date": "2026-05-24",
-    "heading": "<mention-date start=\"2026-05-24\"/>",
-    "subheading": "Design notes",
-    "lines": ["Moved task metadata into the database."]
-  }
-}
-```
-
-Complete a task. The tracker marks the task `Complete`, appends or merges the timeline entry by `entry_date`, updates database properties, and refreshes the ongoing and completed landing pages:
+Complete a task. The tracker marks the task `Complete`, appends an identified timeline toggle beneath `entry_date`, updates database properties, and refreshes the ongoing and completed landing pages:
 
 ```json
 {
   "command": "complete_task",
   "task_id": "EXAMPLE-5",
   "timeline_entry": {
+    "log_id": "ALOVYA-LOG-7a741bb7-6946-47e0-a749-fb57f9608e44",
+    "title": "Completed task",
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
     "lines": ["Completed the task."]
@@ -342,13 +333,15 @@ Complete a task. The tracker marks the task `Complete`, appends or merges the ti
 }
 ```
 
-Cancel a task. The tracker marks the task `Cancelled`, appends or merges the timeline entry by `entry_date`, updates database properties, and refreshes the ongoing and completed landing pages:
+Cancel a task. The tracker marks the task `Cancelled`, appends an identified timeline toggle beneath `entry_date`, updates database properties, and refreshes the ongoing and completed landing pages:
 
 ```json
 {
   "command": "cancel_task",
   "task_id": "EXAMPLE-5",
   "timeline_entry": {
+    "log_id": "ALOVYA-LOG-850cabed-c36f-424d-89c5-6bc02fa6e65a",
+    "title": "Cancelled task",
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
     "lines": ["Cancelled the task."]
@@ -373,6 +366,8 @@ Create a top-level task. In database-backed mode, the tracker creates a database
     "status": "Active"
   },
   "timeline_entry": {
+    "log_id": "ALOVYA-LOG-a4f10b8d-928e-49f5-aa42-d8bf86b02631",
+    "title": "Started activation measurement",
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
     "lines": ["Started task: measure activation mismatch after QNN export."]
@@ -394,6 +389,8 @@ Add one child task under an existing parent task. The command does not include a
     }
   ],
   "parent_timeline_entry": {
+    "log_id": "ALOVYA-LOG-9cad02f6-f3a8-4586-9c66-7fb7f5514db6",
+    "title": "Created activation measurement child",
     "entry_date": "2026-05-24",
     "heading": "<mention-date start=\"2026-05-24\"/>",
     "lines": ["Spawned child task: measure activation mismatch after QNN export."]
@@ -486,9 +483,9 @@ This replaces the local existing-page mention list with exactly the page mention
 
 ## Supported commands
 
-- `append_task_timeline_log`: add a dated timeline entry to one task with targeted page content. New dates are prepended under `Timeline log`; existing dates are updated under their date heading. It must not replace the task page or landing pages.
-- `complete_task`: mark one task complete, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
-- `cancel_task`: mark one task cancelled, append or merge a dated timeline entry, update database properties, and refresh the ongoing and completed landing pages.
+- `append_task_timeline_log`: add one UUID4-identified toggle beneath a task's date heading with targeted page content. New dates are prepended under `Timeline log`; existing dates receive another toggle. It must not replace the task page or landing pages.
+- `complete_task`: mark one task complete, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
+- `cancel_task`: mark one task cancelled, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
 - `delete_task`: move one task page to trash, remove its local state and relationships, promote its children, and refresh both landing pages.
 - `create_top_level_task`: create a top-level task database row and use Notion's assigned `Task ID`.
 - `split_task_into_children`: create one child task database row under an existing source task, copy the source task's dependencies and dependants onto the child, clear the source task's own relation fields, initialise the child Timeline log with a parent link, and append a source timeline entry linking to the child.

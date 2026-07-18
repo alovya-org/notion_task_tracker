@@ -70,6 +70,8 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
                     },
                 ],
                 "parent_timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000001",
+                    "title": "Child task creation",
                     "entry_date": "2026-05-25",
                     "heading": '<mention-date start="2026-05-25"/>',
                     "lines": ["Spawned child task."],
@@ -97,13 +99,21 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
             "lines": [],
         }
     ]
-    assert completed_operation_keys == [
+    assert completed_operation_keys[:2] == [
         "create_database_task:split_task_into_children",
         "update_properties:task:ALOVYA-72",
-        "update_timeline_log:task:ALOVYA-1:2026-05-25",
+    ]
+    assert completed_operation_keys[2].startswith(
+        "update_timeline_log:task:ALOVYA-1:2026-05-25:ALOVYA-LOG-"
+    )
+    assert completed_operation_keys[3:5] == [
         "create_database_task:split_task_into_children",
         "update_properties:task:ALOVYA-73",
-        "update_timeline_log:task:ALOVYA-1:2026-05-25",
+    ]
+    assert completed_operation_keys[5].startswith(
+        "update_timeline_log:task:ALOVYA-1:2026-05-25:ALOVYA-LOG-"
+    )
+    assert completed_operation_keys[6:] == [
         "update_dependencies:task:ALOVYA-1",
         "update_dependants:task:ALOVYA-1",
         "replace:ongoing_landing_page",
@@ -128,20 +138,28 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
         [
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
-            '- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
-            "- Spawned child task.",
+            "<details>",
+            "<summary>Child task creation · ALOVYA-LOG-00000000-0000-4000-8000-000000000001</summary>",
+            '\t- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
+            "\t- Spawned child task.",
+            "</details>",
         ]
     )
     assert notion_client.calls[1].arguments["properties"] == {
         "Task page": "[72] Child task",
     }
     assert notion_client.calls[2].operation_name == "replace_page_markdown"
-    assert notion_client.calls[2].arguments["markdown"] == "\n".join(
-        [
+    assert notion_client.calls[2].arguments["markdown"].startswith(
+        "\n".join([
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
-            '- Spawned child task: <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>.',
-        ]
+            "<details>",
+            "<summary>Created child task · ALOVYA-LOG-",
+        ])
+    )
+    assert (
+        '\t- Spawned child task: <mention-page url="https://www.notion.so/33333333333333333333333333333333"/>.'
+        in notion_client.calls[2].arguments["markdown"]
     )
     assert notion_client.calls[6].operation_name == "update_page_properties"
     assert notion_client.calls[6].arguments["properties"] == {"Dependencies": []}
@@ -261,6 +279,8 @@ def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_t
                     "friction": "None",
                 },
                 "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-00000000-0000-4000-8000-000000000002",
+                    "title": "Sibling implementation",
                     "entry_date": "2026-05-25",
                     "heading": '<mention-date start="2026-05-25"/>',
                     "blocks": [
@@ -282,29 +302,41 @@ def test_execute_create_task_database_page_command_keeps_sibling_detail_on_new_t
     )
 
     assert updated_tracker_state["tasks"]["ALOVYA-73"]["parent_task_id"] == "ALOVYA-1"
-    assert completed_operation_keys == [
+    assert completed_operation_keys[:2] == [
         "create_database_task:split_task_with_sibling",
         "update_properties:task:ALOVYA-73",
-        "update_timeline_log:task:ALOVYA-1:2026-05-25",
+    ]
+    assert completed_operation_keys[2].startswith(
+        "update_timeline_log:task:ALOVYA-1:2026-05-25:ALOVYA-LOG-"
+    )
+    assert completed_operation_keys[3:] == [
         "replace:ongoing_landing_page",
     ]
     assert notion_client.calls[0].arguments["content"] == "\n".join(
         [
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
-            '- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
-            "Detailed implementation notes belong on the new sibling.",
-            "```text",
-            "pytest result: passed",
-            "```",
+            "<details>",
+            "<summary>Sibling implementation · ALOVYA-LOG-00000000-0000-4000-8000-000000000002</summary>",
+            '\t- Spawned from parent task: <mention-page url="https://www.notion.so/22222222222222222222222222222222"/>.',
+            "\tDetailed implementation notes belong on the new sibling.",
+            "\t```text",
+            "\tpytest result: passed",
+            "\t```",
+            "</details>",
         ]
     )
-    assert notion_client.calls[2].arguments["markdown"] == "\n".join(
-        [
+    assert notion_client.calls[2].arguments["markdown"].startswith(
+        "\n".join([
             "## Timeline log",
             '### <mention-date start="2026-05-25"/>',
-            '- Spawned child task: <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>.',
-        ]
+            "<details>",
+            "<summary>Created child task · ALOVYA-LOG-",
+        ])
+    )
+    assert (
+        '\t- Spawned child task: <mention-page url="https://www.notion.so/44444444444444444444444444444444"/>.'
+        in notion_client.calls[2].arguments["markdown"]
     )
 
 

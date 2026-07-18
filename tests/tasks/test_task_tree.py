@@ -14,6 +14,7 @@ from notion_task_tracker.tasks import (
     Task,
     TaskStatus,
     TimelineEntry,
+    TimelineLog,
 )
 from tests.tasks.helpers import (
     _build_recursive_task_tree,
@@ -399,7 +400,9 @@ class TestTaskTreeRepairOperationKeysForChanges:
 class TestTaskTreeAppendTaskTimelineLog:
     def test_returns_single_timeline_update_intent(self):
         task_tree = _build_recursive_task_tree()
-        timeline_entry = TimelineEntry(
+        timeline_log = TimelineLog(
+            log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000001",
+            title="Mismatch test result",
             entry_date="2026-05-25",
             heading='<mention-date start="2026-05-25"/>',
             lines=["Tested the mismatch fix and found one remaining failing node."],
@@ -407,11 +410,14 @@ class TestTaskTreeAppendTaskTimelineLog:
 
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
-            timeline_entry=timeline_entry,
+            timeline_log=timeline_log,
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == TimelineEntry(
+            entry_date="2026-05-25",
+            heading='<mention-date start="2026-05-25"/>',
+        )
         assert write_intent.operation_name == "update_timeline_log"
         assert write_intent.target_page_key == "task:ALOVYA-5"
         assert write_intent.arguments["task_id"] == "ALOVYA-5"
@@ -420,7 +426,7 @@ class TestTaskTreeAppendTaskTimelineLog:
         assert '### <mention-date start="2026-05-25"/>' in write_intent.arguments["timeline_section_markdown"]
         assert "old_timeline_section_markdown" not in write_intent.arguments
 
-    def test_appends_lines_to_existing_timeline_entry_for_same_date(self):
+    def test_appends_identified_toggle_after_legacy_content_for_same_date(self):
         task_tree = _build_recursive_task_tree()
         task_tree.tasks["ALOVYA-5"].timeline_entries.append(
             TimelineEntry(
@@ -432,7 +438,9 @@ class TestTaskTreeAppendTaskTimelineLog:
 
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
-            timeline_entry=TimelineEntry(
+            timeline_log=TimelineLog(
+                log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000002",
+                title="REST investigation",
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Found the stale REST request."],
@@ -444,21 +452,26 @@ class TestTaskTreeAppendTaskTimelineLog:
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
-                lines=[
-                    "Started debugging the repair path.",
-                    "Found the stale REST request.",
-                ],
+                lines=["Started debugging the repair path."],
             )
         ]
         assert write_intent.arguments["timeline_entry"]["lines"] == []
-        assert write_intent.arguments["appended_markdown"] == "- Found the stale REST request."
+        assert write_intent.arguments["appended_markdown"] == "\n".join([
+            "<details>",
+            "<summary>REST investigation · ALOVYA-LOG-00000000-0000-4000-8000-000000000002</summary>",
+            "\t- Found the stale REST request.",
+            "</details>",
+        ])
         assert write_intent.arguments["new_timeline_section_markdown"] == "\n".join([
             '### <mention-date start="2026-05-25"/>',
             "- Started debugging the repair path.",
-            "- Found the stale REST request.",
+            "<details>",
+            "<summary>REST investigation · ALOVYA-LOG-00000000-0000-4000-8000-000000000002</summary>",
+            "\t- Found the stale REST request.",
+            "</details>",
         ])
 
-    def test_appends_subheaded_lines_as_toggle_content(self):
+    def test_appends_log_title_and_identifier_as_toggle_title(self):
         task_tree = _build_recursive_task_tree()
         task_tree.tasks["ALOVYA-5"].timeline_entries.append(
             TimelineEntry(
@@ -469,10 +482,11 @@ class TestTaskTreeAppendTaskTimelineLog:
 
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
-            timeline_entry=TimelineEntry(
+            timeline_log=TimelineLog(
+                log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000003",
+                title="Design notes",
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
-                subheading="Design notes",
                 lines=["Moved task metadata into the database."],
             ),
         )
@@ -480,7 +494,7 @@ class TestTaskTreeAppendTaskTimelineLog:
 
         assert write_intent.arguments["appended_markdown"] == "\n".join([
             "<details>",
-            "<summary>Design notes</summary>",
+            "<summary>Design notes · ALOVYA-LOG-00000000-0000-4000-8000-000000000003</summary>",
             "\t- Moved task metadata into the database.",
             "</details>",
         ])
@@ -504,7 +518,9 @@ class TestTaskTreeAppendTaskTimelineLog:
 
         task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
-            timeline_entry=TimelineEntry(
+            timeline_log=TimelineLog(
+                log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000004",
+                title="Call generator patch",
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Patched the call generator."],
@@ -518,7 +534,6 @@ class TestTaskTreeAppendTaskTimelineLog:
                 lines=[
                     "Started debugging the repair path.",
                     "Found the stale REST request.",
-                    "Patched the call generator.",
                 ],
             )
         ]
@@ -527,7 +542,9 @@ class TestTaskTreeAppendTaskTimelineLog:
 class TestTaskTreeCompleteTask:
     def test_marks_task_complete_and_updates_database_properties_plus_derived_views(self):
         task_tree = _build_recursive_task_tree()
-        timeline_entry = TimelineEntry(
+        timeline_log = TimelineLog(
+            log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000005",
+            title="Completed investigation",
             entry_date="2026-05-25",
             heading='<mention-date start="2026-05-25"/>',
             lines=["Completed the mismatch investigation."],
@@ -535,16 +552,19 @@ class TestTaskTreeCompleteTask:
 
         completion_change = task_tree.complete_task(
             task_id="ALOVYA-5",
-            timeline_entry=timeline_entry,
+            timeline_log=timeline_log,
         )
         write_intents = plan_completion_write_intents(task_tree, completion_change)
 
         assert task_tree.tasks["ALOVYA-5"].status == TaskStatus.COMPLETE
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == timeline_entry
+        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == TimelineEntry(
+            entry_date="2026-05-25",
+            heading='<mention-date start="2026-05-25"/>',
+        )
         assert [write_intent.operation_key for write_intent in write_intents] == [
             "update_properties:task:ALOVYA-5",
             "replace:ongoing_landing_page",
-            "update_timeline_log:task:ALOVYA-5:2026-05-25",
+            "update_timeline_log:task:ALOVYA-5:2026-05-25:ALOVYA-LOG-00000000-0000-4000-8000-000000000005",
         ]
 
 
