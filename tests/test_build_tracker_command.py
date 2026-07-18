@@ -491,6 +491,22 @@ def test_ticket_ids_from_numbers_rejects_invalid_ticket_numbers():
     assert str(error.value) == "Ticket numbers must be positive"
 
 
+def test_build_move_logs_command_keeps_log_selection_optional():
+    command = _build_tracker_command(_arguments(
+        move_logs=True,
+        ticket_number=[21],
+        destination_ticket_number=25,
+        log_id="ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0",
+    ))
+
+    assert command == {
+        "command": "move_task_timeline_log",
+        "source_task_id": "ALOVYA-21",
+        "destination_task_id": "ALOVYA-25",
+        "log_id": "ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0",
+    }
+
+
 def _build_tracker_command(arguments: Namespace, ticket_prefix: str = "ALOVYA") -> dict:
     return build_tracker_command_from_cli_action(arguments, ticket_prefix=ticket_prefix)
 
@@ -529,6 +545,7 @@ def _arguments(**overrides):
         "sibling": False,
         "misc": False,
         "synth": False,
+        "move_logs": False,
         "ticket_number": [],
         "parent_ticket_number": None,
         "sibling_ticket_number": None,
@@ -545,6 +562,8 @@ def _arguments(**overrides):
         "content_path": None,
         "synthesis_key": None,
         "entry_date": "2026-05-30",
+        "destination_ticket_number": None,
+        "log_id": None,
     }
     values.update(overrides)
     return Namespace(**values)

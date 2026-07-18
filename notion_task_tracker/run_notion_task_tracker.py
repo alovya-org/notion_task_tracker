@@ -20,6 +20,7 @@ from notion_task_tracker.initialise_tracker import (
     initialise_tracker,
 )
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
+from notion_task_tracker.notion_operations.move_task_timeline_log import move_task_timeline_log
 from notion_task_tracker.notion_operations.create_task_database_page import (
     should_create_task_database_page_for_command,
     execute_create_task_database_page_command,
@@ -105,6 +106,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--sibling", action="store_true")
     action_group.add_argument("--misc", action="store_true")
     action_group.add_argument("--synth", action="store_true")
+    action_group.add_argument("--move-logs", action="store_true")
     parser.add_argument("--tracker-state-path")
     parser.add_argument("--config-path")
     parser.add_argument("--output-path")
@@ -128,6 +130,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--content-path")
     parser.add_argument("--synthesis-key")
     parser.add_argument("--entry-date")
+    parser.add_argument("--destination-ticket-number", type=int)
+    parser.add_argument("--log-id")
     return parser
 
 
@@ -268,6 +272,14 @@ async def _run_tracker_command(
             notion_client=notion_client,
         )
 
+    if command["command"] == "move_task_timeline_log":
+        return await _run_move_task_timeline_log_command(
+            command=command,
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            notion_client=notion_client,
+        )
+
     return await _run_write_tracker_command(
         command=command,
         tracker_state_path=tracker_state_path,
@@ -275,6 +287,49 @@ async def _run_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
     )
+
+
+async def _run_move_task_timeline_log_command(
+    command: dict[str, Any],
+    tracker_state_path: str | Path,
+    output_path: str | Path,
+    notion_client: NotionRestClient | None,
+) -> "TrackerActionExecutionSummary":
+    source_tracker_state_path = Path(tracker_state_path)
+    destination_output_path = Path(output_path)
+    tracker_state = _read_json(source_tracker_state_path)
+    client = _notion_rest_client_from_optional_instance(notion_client)
+
+    refreshed_result = await refresh_tracker_state_for_task_ids(
+        task_ids=[command["source_task_id"], command["destination_task_id"]],
+        tracker_state=tracker_state,
+        notion_client=client,
+    )
+    refreshed_tracker_state = refreshed_result.tracker_state
+    movement_result = await move_task_timeline_log(
+        source_page_id=_task_notion_page_id(refreshed_tracker_state, command["source_task_id"]),
+        destination_page_id=_task_notion_page_id(refreshed_tracker_state, command["destination_task_id"]),
+        requested_log_id=command["log_id"],
+        notion_client=client,
+    )
+
+    _write_json(source_tracker_state_path, refreshed_tracker_state)
+    execution_summary = TrackerActionExecutionSummary(
+        action_name="move_logs",
+        output_path=destination_output_path,
+        tracker_state_path=source_tracker_state_path,
+        warnings=list(refreshed_result.warnings or []),
+        movement=movement_result,
+    )
+    _write_json(destination_output_path, execution_summary.to_json_summary())
+    return execution_summary
+
+
+def _task_notion_page_id(tracker_state: dict[str, Any], task_id: str) -> str:
+    notion_page_id = tracker_state["tasks"][task_id].get("notion_page_id")
+    if notion_page_id is None:
+        raise ValueError(f"Task {task_id} has no Notion page id; run notion_task update")
+    return notion_page_id
 
 
 async def _run_reconcile_tracker_from_notion_command(
@@ -631,6 +686,7 @@ class TrackerActionExecutionSummary:
     task_tree_changes: list[dict[str, Any]] | None = None
     task_count: int | None = None
     repair_operation_count: int | None = None
+    movement: dict[str, Any] | None = None
 
     def to_json_summary(self) -> dict[str, Any]:
         summary = {
@@ -651,6 +707,8 @@ class TrackerActionExecutionSummary:
             summary["task_count"] = self.task_count
         if self.repair_operation_count is not None:
             summary["repair_operation_count"] = self.repair_operation_count
+        if self.movement is not None:
+            summary["movement"] = self.movement
         return summary
 
 
@@ -682,6 +740,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "split_task_with_sibling": "sibling",
         "append_miscellaneous_note": "misc",
         "create_synthesis_page": "synth",
+        "move_task_timeline_log": "move_logs",
     }[command["command"]]
 
 

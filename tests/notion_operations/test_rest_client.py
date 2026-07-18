@@ -52,6 +52,33 @@ def test_fetch_page_goes_through_notion_sdk_page_endpoint():
     ]
 
 
+def test_append_block_children_uses_current_position_object():
+    notion_client = NotionRestClient(
+        access_token="ntn_test",
+        base_url="https://api.notion.test",
+        notion_version="2026-03-11",
+    )
+    notion_client.client = _FakeNotionSdkClient(page_result={})
+    children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
+
+    asyncio.run(notion_client.append_block_children(
+        parent_block_id="page-a",
+        children=children,
+        after_block_id="heading-a",
+    ))
+
+    assert notion_client.client.blocks.children.requests == [
+        {
+            "block_id": "page-a",
+            "children": children,
+            "position": {
+                "type": "after_block",
+                "after_block": {"id": "heading-a"},
+            },
+        }
+    ]
+
+
 def test_from_environment_uses_notion_api_key(monkeypatch):
     monkeypatch.setenv("NOTION_API_KEY", "ntn_test")
 
@@ -409,6 +436,7 @@ class _FakeNotionRestClient(NotionRestClient):
 class _FakeNotionSdkClient:
     def __init__(self, page_result: dict):
         self.pages = _FakePagesEndpoint(page_result)
+        self.blocks = _FakeBlocksEndpoint()
 
 
 class _FakePagesEndpoint:
@@ -419,6 +447,19 @@ class _FakePagesEndpoint:
     async def retrieve(self, page_id: str):
         self.requests.append(("retrieve", page_id))
         return self.page_result
+
+
+class _FakeBlocksEndpoint:
+    def __init__(self):
+        self.children = _FakeBlockChildrenEndpoint()
+
+
+class _FakeBlockChildrenEndpoint:
+    def __init__(self):
+        self.requests = []
+
+    async def append(self, **arguments):
+        self.requests.append(arguments)
 
 
 def _page_registry() -> NotionPageRegistry:

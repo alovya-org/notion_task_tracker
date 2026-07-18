@@ -41,6 +41,7 @@ WRITE_ACTIONS = {
     "sibling",
     "misc",
     "synth",
+    "move_logs",
 }
 
 READ_ACTIONS = {
@@ -115,8 +116,22 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return _build_miscellaneous_command(arguments)
     if action_name == "synth":
         return _build_synthesis_command(arguments)
+    if action_name == "move_logs":
+        return _build_move_logs_command(arguments, ticket_prefix)
 
     raise ValueError(f"CLI action {action_name!r} does not produce a tracker command")
+
+
+def _build_move_logs_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    if arguments.destination_ticket_number is None:
+        raise ValueError("--move-logs requires --destination-ticket-number")
+
+    return {
+        "command": "move_task_timeline_log",
+        "source_task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "destination_task_id": ticket_id_from_number(arguments.destination_ticket_number, ticket_prefix),
+        "log_id": arguments.log_id,
+    }
 
 
 def ticket_id_from_number(ticket_number: int, ticket_prefix: str) -> str:

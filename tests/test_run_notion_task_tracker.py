@@ -100,6 +100,19 @@ def test_parse_args_reads_delete_action():
     assert args.ticket_number == [67]
 
 
+def test_parse_args_reads_move_logs_action_and_selection():
+    args = parse_args([
+        "--move-logs",
+        "--ticket-number", "21",
+        "--destination-ticket-number", "25",
+        "--log-id", "ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0",
+    ])
+
+    assert args.move_logs is True
+    assert args.ticket_number == [21]
+    assert args.destination_ticket_number == 25
+
+
 def test_delete_command_reports_delete_action_name():
     assert _action_name_from_tracker_command({"command": "delete_task"}) == "delete"
 

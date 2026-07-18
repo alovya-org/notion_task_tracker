@@ -135,6 +135,7 @@ python -m notion_task_tracker --child --parent-ticket-number 67 --title "Add exp
 python -m notion_task_tracker --sibling --sibling-ticket-number 67 --title "Document explicit CLI actions" --priority P2 --content-path /tmp/initial.json
 python -m notion_task_tracker --misc --content-path /tmp/misc.json
 python -m notion_task_tracker --synth --synthesis-key explicit_tracker_cli --title "Explicit tracker CLI" --content-path /tmp/synth.json
+python -m notion_task_tracker --move-logs --ticket-number 67 --destination-ticket-number 68 --log-id ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0
 ```
 
 `--read` and `--work` are read-only with respect to Notion. They fetch live task pages, refresh local task metadata, write a JSON summary to `--output-path`, and perform no Notion writes.
@@ -159,6 +160,8 @@ Timeline content files for `--log`, `--complete`, `--cancel`, `--parent`, `--chi
 ```
 
 Every timeline write creates one Notion toggle beneath its date heading. The CLI combines the configured ticket prefix with a UUID4 logical identifier and appends it to the supplied title, producing a toggle title such as `REST migration investigation · ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0` when `ticket_prefix` is `ALOVYA`. The identifier remains part of that log when it is later copied or moved. Existing raw timeline content is left unchanged.
+
+Move one identified timeline log by giving its source task, destination task, and logical identifier. The CLI reads both pages, copies the complete toggle to the same date on the destination, verifies the copy, removes the physical source block, then verifies its removal. A retry after an interrupted copy detects the logical identifier at the destination and continues with source removal. If `--log-id` is omitted and the source does not contain exactly one movable log, the CLI performs no writes and returns compact candidates containing only the date, title, and logical identifier. Raw legacy logs and toggles without an identifier are not candidates.
 
 Miscellaneous content files use `lines` or paragraph `blocks`:
 
@@ -484,6 +487,7 @@ This replaces the local existing-page mention list with exactly the page mention
 ## Supported commands
 
 - `append_task_timeline_log`: add one UUID4-identified toggle beneath a task's date heading with targeted page content. New dates are prepended under `Timeline log`; existing dates receive another toggle. It must not replace the task page or landing pages.
+- `move_task_timeline_log`: copy one identified toggle to another task page, verify the destination, delete its physical source block, then verify the source. Existing destination copies are reconciled by logical identifier.
 - `complete_task`: mark one task complete, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
 - `cancel_task`: mark one task cancelled, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
 - `delete_task`: move one task page to trash, remove its local state and relationships, promote its children, and refresh both landing pages.

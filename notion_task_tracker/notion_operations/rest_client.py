@@ -94,6 +94,41 @@ class NotionRestClient:
         response = await self._send_json("GET", f"/v1/pages/{page_id}/markdown", None)
         return _markdown_from_sdk_response(response)
 
+    async def fetch_block_children(self, parent_block_id: str) -> list[dict[str, Any]]:
+        blocks = []
+        next_cursor = None
+        while True:
+            arguments = {"page_size": 100}
+            if next_cursor is not None:
+                arguments["start_cursor"] = next_cursor
+            response = await self.client.blocks.children.list(block_id=parent_block_id, **arguments)
+            for block in response.get("results", []):
+                copied_block = dict(block)
+                if block.get("has_children"):
+                    copied_block["children"] = await self.fetch_block_children(block["id"])
+                blocks.append(copied_block)
+            if not response.get("has_more"):
+                return blocks
+            next_cursor = response.get("next_cursor")
+
+    async def append_block_children(
+        self,
+        parent_block_id: str,
+        children: list[dict[str, Any]],
+        after_block_id: str,
+    ) -> None:
+        await self.client.blocks.children.append(
+            block_id=parent_block_id,
+            children=children,
+            position={
+                "type": "after_block",
+                "after_block": {"id": after_block_id},
+            },
+        )
+
+    async def delete_block(self, block_id: str) -> None:
+        await self.client.blocks.delete(block_id=block_id)
+
     async def query_data_source(self, data_source_url: str, query: str) -> list[dict[str, Any]]:
         return await self.query_data_source_id(_data_source_id_from_url(data_source_url))
 
