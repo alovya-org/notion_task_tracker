@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
@@ -13,6 +14,12 @@ from notion_task_tracker.google_calendar.authenticate_with_google import (
 
 
 GOOGLE_CALENDAR_API_URL = "https://www.googleapis.com/calendar/v3"
+
+
+@dataclass(frozen=True)
+class CalendarEventChanges:
+    events: list[dict[str, Any]]
+    next_sync_token: str
 
 
 class GoogleCalendarClient:
@@ -52,6 +59,28 @@ class GoogleCalendarClient:
             if next_page_token is None:
                 return events
             next_query["pageToken"] = next_page_token
+
+    async def fetch_calendar_event_changes(
+        self,
+        sync_token: str | None = None,
+    ) -> CalendarEventChanges:
+        query = {"showDeleted": "true"}
+        if sync_token is not None:
+            query["syncToken"] = sync_token
+
+        events = []
+        while True:
+            response = await self.list_calendar_events(query)
+            events.extend(response.get("items", []))
+            next_page_token = response.get("nextPageToken")
+            if next_page_token is not None:
+                query["pageToken"] = next_page_token
+                continue
+
+            next_sync_token = response.get("nextSyncToken")
+            if not isinstance(next_sync_token, str) or not next_sync_token:
+                raise ValueError("Final Google Calendar event page has no nextSyncToken")
+            return CalendarEventChanges(events=events, next_sync_token=next_sync_token)
 
     async def create_calendar_event(self, event: dict[str, Any]) -> dict[str, Any]:
         return await self._send_calendar_request("POST", self._events_path(), body=event)

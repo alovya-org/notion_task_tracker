@@ -86,3 +86,53 @@ def test_lists_every_calendar_event_page_without_changing_the_original_query():
     assert events == [{"id": "one"}, {"id": "two"}]
     assert query == {"privateExtendedProperty": "ntt_tracker=ALOVYA"}
     assert requests[1].url.params["pageToken"] == "second-page"
+
+
+def test_fetches_every_incremental_change_and_returns_the_final_sync_token():
+    requests = []
+
+    def respond(request: Request) -> Response:
+        requests.append(request)
+        if request.url.params.get("pageToken") == "second-page":
+            return Response(200, json={
+                "items": [{"id": "changed-two"}],
+                "nextSyncToken": "next-sync-token",
+            })
+        return Response(200, json={
+            "items": [{"id": "changed-one"}],
+            "nextPageToken": "second-page",
+        })
+
+    client = GoogleCalendarClient(
+        calendar_id="primary",
+        access_token_provider=FixedAccessTokenProvider(),
+        http_client=AsyncClient(transport=MockTransport(respond)),
+    )
+
+    changes = asyncio.run(client.fetch_calendar_event_changes("previous-sync-token"))
+
+    assert changes.events == [{"id": "changed-one"}, {"id": "changed-two"}]
+    assert changes.next_sync_token == "next-sync-token"
+    assert requests[0].url.params["syncToken"] == "previous-sync-token"
+    assert requests[0].url.params["showDeleted"] == "true"
+    assert requests[1].url.params["syncToken"] == "previous-sync-token"
+    assert requests[1].url.params["pageToken"] == "second-page"
+
+
+def test_initial_calendar_sync_uses_the_same_unfiltered_query_shape():
+    requests = []
+
+    def respond(request: Request) -> Response:
+        requests.append(request)
+        return Response(200, json={"items": [], "nextSyncToken": "initial-sync-token"})
+
+    client = GoogleCalendarClient(
+        calendar_id="primary",
+        access_token_provider=FixedAccessTokenProvider(),
+        http_client=AsyncClient(transport=MockTransport(respond)),
+    )
+
+    changes = asyncio.run(client.fetch_calendar_event_changes())
+
+    assert changes.next_sync_token == "initial-sync-token"
+    assert dict(requests[0].url.params) == {"showDeleted": "true"}
