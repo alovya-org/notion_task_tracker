@@ -13,6 +13,7 @@ from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import TrackerConfig, load_config
 from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
     CloudflareGoogleCalendarStateClient,
+    GoogleCalendarEventLedgerEntry,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     CalendarEventChanges,
@@ -55,6 +56,14 @@ class AppliedGoogleCalendarChanges:
     warnings: list[dict[str, str]]
 
 
+@dataclass(frozen=True)
+class SelectedGoogleCalendarChanges:
+    events_to_apply: list[dict[str, Any]]
+    active_event_identities: list[tuple[str, str]]
+    acknowledged_cancellation_identities: list[tuple[str, str]]
+    warnings: list[dict[str, str]]
+
+
 async def apply_google_calendar_changes_to_tasks(
     tracker_user: str,
     google_change_cursor: str,
@@ -72,25 +81,38 @@ async def apply_google_calendar_changes_to_tasks(
     calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
         configured_tracker.calendar.calendar_id,
     )
+    state_client = (
+        google_calendar_state_client
+        or CloudflareGoogleCalendarStateClient.from_environment()
+    )
+    synchronisation_state = await state_client.read_google_calendar_synchronisation_state(
+        tracker_user,
+        configured_tracker.calendar.calendar_id,
+    )
     changed_calendar_events, recovered_expired_google_change_cursor = (
         await _fetch_calendar_changes_with_expired_cursor_recovery(
             calendar_client,
             google_change_cursor,
         )
     )
-    owned_calendar_events = _select_changed_events_owned_by_tracker(
+    selected_changes = _select_changed_events_owned_by_tracker(
         changed_calendar_events.events,
         configured_tracker.ticket_prefix,
+        synchronisation_state.event_ledger,
+        recovered_expired_google_change_cursor,
     )
     applied_changes = await _apply_changed_google_calendar_events_to_tasks(
-        changed_events=owned_calendar_events,
+        changed_events=selected_changes.events_to_apply,
         config=configured_tracker,
         tracker_state_path=tracker_state_path,
         notion_client=notion_client or NotionRestClient.from_environment(),
     )
-    state_client = (
-        google_calendar_state_client
-        or CloudflareGoogleCalendarStateClient.from_environment()
+    await _persist_processed_google_calendar_event_identities(
+        state_client=state_client,
+        tracker_user=tracker_user,
+        calendar_id=configured_tracker.calendar.calendar_id,
+        selected_changes=selected_changes,
+        rebuilt_event_ledger=recovered_expired_google_change_cursor,
     )
     await state_client.advance_google_calendar_change_cursor(
         tracker_user=tracker_user,
@@ -103,7 +125,7 @@ async def apply_google_calendar_changes_to_tasks(
         action_name="apply_google_calendar_changes_to_tasks",
         output_path=Path(output_path),
         tracker_state_path=Path(tracker_state_path),
-        warnings=applied_changes.warnings,
+        warnings=[*applied_changes.warnings, *selected_changes.warnings],
         completed_operation_keys=applied_changes.completed_operation_keys,
         recovered_expired_google_change_cursor=recovered_expired_google_change_cursor,
     )
@@ -124,14 +146,125 @@ async def _fetch_calendar_changes_with_expired_cursor_recovery(
 def _select_changed_events_owned_by_tracker(
     changed_events: list[dict[str, Any]],
     tracker_id: str,
-) -> list[dict[str, Any]]:
-    owned_events = []
+    event_ledger: list[GoogleCalendarEventLedgerEntry] | None = None,
+    rebuilt_event_ledger: bool = False,
+) -> SelectedGoogleCalendarChanges:
+    ledger_by_event_id = {
+        entry.google_event_id: entry
+        for entry in event_ledger or []
+    }
+    events_to_apply = []
+    active_event_identities = []
+    acknowledged_cancellation_identities = []
+    warnings = []
     for event in changed_events:
+        event_id = _required_event_id(event)
         private_properties = event.get("extendedProperties", {}).get("private", {})
+        ledger_entry = ledger_by_event_id.get(event_id)
+        if event.get("status") == "cancelled":
+            if ledger_entry is not None:
+                acknowledged_cancellation_identities.append(
+                    (ledger_entry.google_event_id, ledger_entry.ntt_task_id)
+                )
+                if ledger_entry.lifecycle_state == "deleted_by_ntt":
+                    continue
+                events_to_apply.append(_identify_cancelled_event_from_ledger(
+                    event,
+                    tracker_id,
+                    ledger_entry.ntt_task_id,
+                ))
+                continue
+            if private_properties.get("ntt_tracker") == tracker_id:
+                task_id = private_properties.get("ntt_task_id")
+                if isinstance(task_id, str) and task_id:
+                    events_to_apply.append(event)
+                    continue
+            warnings.append({
+                "kind": "unidentified_cancelled_calendar_event",
+                "message": f"Ignored cancelled Google event {event_id} because ownership is unknown",
+            })
+            continue
         if private_properties.get("ntt_tracker") != tracker_id:
             continue
-        owned_events.append(event)
-    return owned_events
+        task_id = private_properties.get("ntt_task_id")
+        if not isinstance(task_id, str) or not task_id:
+            continue
+        if ledger_entry is not None and ledger_entry.ntt_task_id != task_id:
+            raise ValueError(
+                f"Google event {event_id} identifies {task_id} but the durable ledger identifies "
+                f"{ledger_entry.ntt_task_id}"
+            )
+        events_to_apply.append(event)
+        active_event_identities.append((event_id, task_id))
+
+    if rebuilt_event_ledger:
+        current_event_ids = {event_id for event_id, _task_id in active_event_identities}
+        for ledger_entry in ledger_by_event_id.values():
+            if ledger_entry.lifecycle_state != "active":
+                continue
+            if ledger_entry.google_event_id in current_event_ids:
+                continue
+            events_to_apply.append(_identify_cancelled_event_from_ledger(
+                {"id": ledger_entry.google_event_id, "status": "cancelled"},
+                tracker_id,
+                ledger_entry.ntt_task_id,
+            ))
+
+    return SelectedGoogleCalendarChanges(
+        events_to_apply=events_to_apply,
+        active_event_identities=active_event_identities,
+        acknowledged_cancellation_identities=acknowledged_cancellation_identities,
+        warnings=warnings,
+    )
+
+
+def _identify_cancelled_event_from_ledger(
+    event: dict[str, Any],
+    tracker_id: str,
+    task_id: str,
+) -> dict[str, Any]:
+    identified_event = dict(event)
+    identified_event["extendedProperties"] = {
+        "private": {
+            "ntt_tracker": tracker_id,
+            "ntt_task_id": task_id,
+        }
+    }
+    return identified_event
+
+
+async def _persist_processed_google_calendar_event_identities(
+    state_client: CloudflareGoogleCalendarStateClient,
+    tracker_user: str,
+    calendar_id: str,
+    selected_changes: SelectedGoogleCalendarChanges,
+    rebuilt_event_ledger: bool,
+) -> None:
+    if rebuilt_event_ledger:
+        await state_client.replace_google_calendar_event_ledger_snapshot(
+            tracker_user,
+            calendar_id,
+            [
+                {"google_event_id": event_id, "ntt_task_id": task_id}
+                for event_id, task_id in selected_changes.active_event_identities
+            ],
+        )
+        return
+
+    for event_id, task_id in selected_changes.active_event_identities:
+        await state_client.record_active_google_calendar_event(
+            tracker_user,
+            calendar_id,
+            event_id,
+            task_id,
+        )
+    for event_id, task_id in selected_changes.acknowledged_cancellation_identities:
+        await state_client.delete_google_calendar_event_mapping(
+            tracker_user,
+            calendar_id,
+            event_id,
+            task_id,
+        )
 
 
 async def _apply_changed_google_calendar_events_to_tasks(

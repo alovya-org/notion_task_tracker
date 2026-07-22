@@ -122,6 +122,60 @@ def test_reads_the_latest_notification_channel_and_google_change_cursor():
     assert channel.google_change_cursor == "current-sync-token"
 
 
+def test_reads_the_cursor_and_event_ledger_as_synchronisation_state():
+    async def return_state(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={
+            "google_change_cursor": "current-sync-token",
+            "event_ledger": [{
+                "google_event_id": "event-one",
+                "ntt_task_id": "ALOVYA-42",
+                "lifecycle_state": "active",
+            }],
+        })
+
+    state_client = _state_client(return_state)
+
+    state = asyncio.run(state_client.read_google_calendar_synchronisation_state(
+        tracker_user="al0vya",
+        calendar_id="calendar@example.com",
+    ))
+
+    assert state.google_change_cursor == "current-sync-token"
+    assert state.event_ledger[0].google_event_id == "event-one"
+    assert state.event_ledger[0].ntt_task_id == "ALOVYA-42"
+    assert state.event_ledger[0].lifecycle_state == "active"
+
+
+def test_removes_acknowledged_event_identity_and_replaces_a_recovered_snapshot():
+    requests = []
+
+    async def record_request(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"updated": True})
+
+    state_client = _state_client(record_request)
+
+    asyncio.run(state_client.delete_google_calendar_event_mapping(
+        "al0vya",
+        "calendar@example.com",
+        "deleted-event",
+        "ALOVYA-42",
+    ))
+    asyncio.run(state_client.replace_google_calendar_event_ledger_snapshot(
+        "al0vya",
+        "calendar@example.com",
+        [{"google_event_id": "current-event", "ntt_task_id": "ALOVYA-43"}],
+    ))
+
+    assert [(request.method, str(request.url)) for request in requests] == [
+        ("DELETE", "https://worker.example/google-calendar/event-ledger/events"),
+        ("PUT", "https://worker.example/google-calendar/event-ledger/snapshot"),
+    ]
+    assert json.loads(requests[1].read())["active_events"] == [
+        {"google_event_id": "current-event", "ntt_task_id": "ALOVYA-43"}
+    ]
+
+
 def test_requires_google_calendar_state_api_environment(monkeypatch):
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_URL", raising=False)
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_TOKEN", raising=False)

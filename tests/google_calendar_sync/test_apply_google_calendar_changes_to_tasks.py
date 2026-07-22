@@ -10,10 +10,15 @@ from notion_task_tracker.google_calendar_sync.apply_google_calendar_changes_to_t
     _plan_task_schedule_updates_from_google_events,
     _read_task_ids_from_owned_calendar_events,
     _select_changed_events_owned_by_tracker,
+    apply_google_calendar_changes_to_tasks,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     CalendarEventChanges,
     GoogleCalendarSyncTokenExpiredError,
+)
+from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
+    GoogleCalendarEventLedgerEntry,
+    GoogleCalendarSynchronisationState,
 )
 from notion_task_tracker.tasks import DurationUnit, Priority, Task, TaskStatus, TaskTree
 from tests.notion_operations.helpers import FakeNotionClient
@@ -29,12 +34,13 @@ def test_ignores_native_calendar_events_when_selecting_tracker_changes():
     }
     native_event = {"id": "native-event", "summary": "Lunch"}
 
-    selected_events = _select_changed_events_owned_by_tracker(
+    selected_changes = _select_changed_events_owned_by_tracker(
         [native_event, owned_event],
         "ALOVYA",
     )
 
-    assert selected_events == [owned_event]
+    assert selected_changes.events_to_apply == [owned_event]
+    assert selected_changes.active_event_identities == [("owned-event", "ALOVYA-1")]
 
 
 def test_includes_deleted_tracker_event_when_selecting_changes():
@@ -46,7 +52,68 @@ def test_includes_deleted_tracker_event_when_selecting_changes():
         },
     }
 
-    assert _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA") == [deleted_event]
+    selected_changes = _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA")
+
+    assert selected_changes.events_to_apply == [deleted_event]
+
+
+def test_resolves_an_id_only_user_cancellation_through_the_durable_ledger():
+    selected_changes = _select_changed_events_owned_by_tracker(
+        [{"id": "deleted-event", "status": "cancelled"}],
+        "ALOVYA",
+        [_ledger_entry("deleted-event", "ALOVYA-1", "active")],
+    )
+
+    assert selected_changes.events_to_apply == [{
+        "id": "deleted-event",
+        "status": "cancelled",
+        "extendedProperties": {
+            "private": {"ntt_tracker": "ALOVYA", "ntt_task_id": "ALOVYA-1"},
+        },
+    }]
+    assert selected_changes.acknowledged_cancellation_identities == [
+        ("deleted-event", "ALOVYA-1")
+    ]
+
+
+def test_acknowledges_an_ntt_originated_cancellation_without_changing_the_task():
+    selected_changes = _select_changed_events_owned_by_tracker(
+        [{"id": "deleted-event", "status": "cancelled"}],
+        "ALOVYA",
+        [_ledger_entry("deleted-event", "ALOVYA-1", "deleted_by_ntt")],
+    )
+
+    assert selected_changes.events_to_apply == []
+    assert selected_changes.acknowledged_cancellation_identities == [
+        ("deleted-event", "ALOVYA-1")
+    ]
+
+
+def test_expired_cursor_recovery_treats_a_missing_active_event_as_user_deletion():
+    selected_changes = _select_changed_events_owned_by_tracker(
+        [],
+        "ALOVYA",
+        [_ledger_entry("missing-event", "ALOVYA-1", "active")],
+        rebuilt_event_ledger=True,
+    )
+
+    assert selected_changes.events_to_apply[0]["id"] == "missing-event"
+    assert selected_changes.events_to_apply[0]["status"] == "cancelled"
+    assert selected_changes.events_to_apply[0]["extendedProperties"]["private"] == {
+        "ntt_tracker": "ALOVYA",
+        "ntt_task_id": "ALOVYA-1",
+    }
+
+
+def test_expired_cursor_recovery_ignores_an_ntt_originated_missing_event():
+    selected_changes = _select_changed_events_owned_by_tracker(
+        [],
+        "ALOVYA",
+        [_ledger_entry("missing-event", "ALOVYA-1", "deleted_by_ntt")],
+        rebuilt_event_ledger=True,
+    )
+
+    assert selected_changes.events_to_apply == []
 
 
 def test_rebuilds_google_change_cursor_after_google_expires_it():
@@ -230,6 +297,167 @@ def test_worker_refreshes_notion_then_writes_and_persists_the_calendar_schedule(
     assert summary.warnings == []
 
 
+def test_id_only_user_cancellation_clears_notion_before_acknowledging_the_cursor(tmp_path):
+    tracker_state_path = tmp_path / "tracker_state.json"
+    output_path = tmp_path / "output.json"
+    tracker_state_path.write_text(
+        json.dumps(_tracker_state(_scheduled_task(DurationUnit.HOURS))),
+        encoding="utf-8",
+    )
+    notion_client = FakeNotionClient(fetched_page_content_by_id={
+        "11111111111111111111111111111111": build_fetched_task_page(
+            ticket_id="1",
+            title="Scheduled task",
+            priority="P2",
+            status="Active",
+            parent_urls=[],
+        )
+    })
+
+    class CalendarReturningIdOnlyCancellation:
+        async def fetch_calendar_event_changes(self, sync_token=None):
+            assert sync_token == "current-sync-token"
+            return CalendarEventChanges(
+                events=[{"id": "event-1", "status": "cancelled"}],
+                next_sync_token="next-sync-token",
+            )
+
+    state_operations = []
+
+    class RecordingStateClient:
+        async def read_google_calendar_synchronisation_state(self, tracker_user, calendar_id):
+            return GoogleCalendarSynchronisationState(
+                google_change_cursor="current-sync-token",
+                event_ledger=[_ledger_entry("event-1", "ALOVYA-1", "active")],
+            )
+
+        async def delete_google_calendar_event_mapping(
+            self,
+            tracker_user,
+            calendar_id,
+            google_event_id,
+            ntt_task_id,
+        ):
+            state_operations.append(("forget_event", google_event_id, ntt_task_id))
+
+        async def advance_google_calendar_change_cursor(
+            self,
+            tracker_user,
+            calendar_id,
+            previous_google_change_cursor,
+            next_google_change_cursor,
+        ):
+            state_operations.append((
+                "advance_cursor",
+                previous_google_change_cursor,
+                next_google_change_cursor,
+            ))
+
+    asyncio.run(apply_google_calendar_changes_to_tasks(
+        tracker_user="al0vya",
+        google_change_cursor="current-sync-token",
+        config=TrackerConfig(
+            display_name="Alovya",
+            ticket_prefix="ALOVYA",
+            parent_page_url="https://www.notion.so/parent",
+            task_database_url="https://www.notion.so/database",
+            calendar=CalendarConfig(calendar_id="test", timezone_name="Europe/London"),
+        ),
+        tracker_state_path=tracker_state_path,
+        output_path=output_path,
+        notion_client=notion_client,
+        google_calendar_client=CalendarReturningIdOnlyCancellation(),
+        google_calendar_state_client=RecordingStateClient(),
+    ))
+
+    persisted_task = json.loads(tracker_state_path.read_text(encoding="utf-8"))["tasks"]["ALOVYA-1"]
+    assert persisted_task["start"] is None
+    assert persisted_task["duration"] is None
+    assert state_operations == [
+        ("forget_event", "event-1", "ALOVYA-1"),
+        ("advance_cursor", "current-sync-token", "next-sync-token"),
+    ]
+
+
+def test_expired_cursor_rebuild_unschedules_a_task_whose_owned_event_disappeared(tmp_path):
+    tracker_state_path = tmp_path / "tracker_state.json"
+    output_path = tmp_path / "output.json"
+    tracker_state_path.write_text(
+        json.dumps(_tracker_state(_scheduled_task(DurationUnit.HOURS))),
+        encoding="utf-8",
+    )
+    notion_client = FakeNotionClient(fetched_page_content_by_id={
+        "11111111111111111111111111111111": build_fetched_task_page(
+            ticket_id="1",
+            title="Scheduled task",
+            priority="P2",
+            status="Active",
+            parent_urls=[],
+        )
+    })
+
+    class CalendarReturningRebuiltEmptySnapshot:
+        async def fetch_calendar_event_changes(self, sync_token=None):
+            if sync_token is not None:
+                raise GoogleCalendarSyncTokenExpiredError
+            return CalendarEventChanges(events=[], next_sync_token="rebuilt-sync-token")
+
+    state_operations = []
+
+    class RecordingStateClient:
+        async def read_google_calendar_synchronisation_state(self, tracker_user, calendar_id):
+            return GoogleCalendarSynchronisationState(
+                google_change_cursor="expired-sync-token",
+                event_ledger=[_ledger_entry("missing-event", "ALOVYA-1", "active")],
+            )
+
+        async def replace_google_calendar_event_ledger_snapshot(
+            self,
+            tracker_user,
+            calendar_id,
+            active_events,
+        ):
+            state_operations.append(("replace_snapshot", active_events))
+
+        async def advance_google_calendar_change_cursor(
+            self,
+            tracker_user,
+            calendar_id,
+            previous_google_change_cursor,
+            next_google_change_cursor,
+        ):
+            state_operations.append((
+                "advance_cursor",
+                previous_google_change_cursor,
+                next_google_change_cursor,
+            ))
+
+    asyncio.run(apply_google_calendar_changes_to_tasks(
+        tracker_user="al0vya",
+        google_change_cursor="expired-sync-token",
+        config=TrackerConfig(
+            display_name="Alovya",
+            ticket_prefix="ALOVYA",
+            parent_page_url="https://www.notion.so/parent",
+            task_database_url="https://www.notion.so/database",
+            calendar=CalendarConfig(calendar_id="test", timezone_name="Europe/London"),
+        ),
+        tracker_state_path=tracker_state_path,
+        output_path=output_path,
+        notion_client=notion_client,
+        google_calendar_client=CalendarReturningRebuiltEmptySnapshot(),
+        google_calendar_state_client=RecordingStateClient(),
+    ))
+
+    persisted_task = json.loads(tracker_state_path.read_text(encoding="utf-8"))["tasks"]["ALOVYA-1"]
+    assert persisted_task["start"] is None
+    assert persisted_task["duration"] is None
+    assert state_operations == [
+        ("replace_snapshot", []),
+        ("advance_cursor", "expired-sync-token", "rebuilt-sync-token"),
+    ]
+
+
 def _owned_event(
     event_id="event-1",
     task_id="ALOVYA-1",
@@ -248,6 +476,14 @@ def _owned_event(
             }
         },
     }
+
+
+def _ledger_entry(event_id: str, task_id: str, lifecycle_state: str):
+    return GoogleCalendarEventLedgerEntry(
+        google_event_id=event_id,
+        ntt_task_id=task_id,
+        lifecycle_state=lifecycle_state,
+    )
 
 
 def _scheduled_task(duration_unit: DurationUnit) -> Task:

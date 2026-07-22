@@ -473,6 +473,60 @@ describe("Cloudflare Worker Google Calendar state API", () => {
       error: "Google Calendar event mapping not found.",
     });
   });
+
+  it("removes an acknowledged cancellation from the event ledger", async () => {
+    const recordedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _googleCalendarStateDatabaseRecordingRuns(recordedStatements, 1);
+    const response = await worker.fetch(
+      new Request("https://example.com/google-calendar/event-ledger/events", {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer calendar-state-api-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(_eventIdentity()),
+      }),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: true, google_event_id: "event-one" });
+    expect(recordedStatements[0].query).toContain("DELETE FROM google_calendar_event_ledger");
+  });
+
+  it("replaces the event ledger from a complete Google snapshot", async () => {
+    const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _googleCalendarStateDatabaseRecording(preparedStatements);
+    const response = await worker.fetch(
+      new Request("https://example.com/google-calendar/event-ledger/snapshot", {
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer calendar-state-api-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tracker_user: "al0vya",
+          calendar_id: "calendar@example.com",
+          active_events: [
+            { google_event_id: "event-one", ntt_task_id: "ALOVYA-42" },
+            { google_event_id: "event-two", ntt_task_id: "ALOVYA-43" },
+          ],
+        }),
+      }),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ replaced: true, active_event_count: 2 });
+    expect(preparedStatements).toHaveLength(3);
+    expect(preparedStatements[0].query).toContain("DELETE FROM google_calendar_event_ledger");
+    expect(preparedStatements[1].values.slice(0, 4)).toEqual([
+      "al0vya",
+      "calendar@example.com",
+      "event-one",
+      "ALOVYA-42",
+    ]);
+  });
 });
 
 describe("Cloudflare Worker daily Calendar recovery", () => {
@@ -612,13 +666,17 @@ function _eventLedgerRequest(resourceName: "active-events" | "ntt-deletions") {
       Authorization: "Bearer calendar-state-api-token",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      tracker_user: "al0vya",
-      calendar_id: "calendar@example.com",
-      google_event_id: "event-one",
-      ntt_task_id: "ALOVYA-42",
-    }),
+    body: JSON.stringify(_eventIdentity()),
   });
+}
+
+function _eventIdentity() {
+  return {
+    tracker_user: "al0vya",
+    calendar_id: "calendar@example.com",
+    google_event_id: "event-one",
+    ntt_task_id: "ALOVYA-42",
+  };
 }
 
 function _googleCalendarNotificationRequest(

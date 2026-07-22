@@ -21,6 +21,19 @@ class GoogleCalendarNotificationChannelState:
     google_change_cursor: str
 
 
+@dataclass(frozen=True)
+class GoogleCalendarEventLedgerEntry:
+    google_event_id: str
+    ntt_task_id: str
+    lifecycle_state: str
+
+
+@dataclass(frozen=True)
+class GoogleCalendarSynchronisationState:
+    google_change_cursor: str
+    event_ledger: list[GoogleCalendarEventLedgerEntry]
+
+
 class CloudflareGoogleCalendarStateClient:
     def __init__(
         self,
@@ -96,6 +109,30 @@ class CloudflareGoogleCalendarStateClient:
             },
         )
 
+    async def read_google_calendar_synchronisation_state(
+        self,
+        tracker_user: str,
+        calendar_id: str,
+    ) -> GoogleCalendarSynchronisationState:
+        response = await self.http_client.get(
+            f"{self.google_calendar_state_api_url}/synchronisation-state",
+            headers=self._authorisation_headers(),
+            params={"tracker_user": tracker_user, "calendar_id": calendar_id},
+        )
+        response.raise_for_status()
+        state = response.json()
+        return GoogleCalendarSynchronisationState(
+            google_change_cursor=state["google_change_cursor"],
+            event_ledger=[
+                GoogleCalendarEventLedgerEntry(
+                    google_event_id=entry["google_event_id"],
+                    ntt_task_id=entry["ntt_task_id"],
+                    lifecycle_state=entry["lifecycle_state"],
+                )
+                for entry in state["event_ledger"]
+            ],
+        )
+
     async def record_active_google_calendar_event(
         self,
         tracker_user: str,
@@ -129,6 +166,40 @@ class CloudflareGoogleCalendarStateClient:
                 "calendar_id": calendar_id,
                 "google_event_id": google_event_id,
                 "ntt_task_id": ntt_task_id,
+            },
+        )
+
+    async def delete_google_calendar_event_mapping(
+        self,
+        tracker_user: str,
+        calendar_id: str,
+        google_event_id: str,
+        ntt_task_id: str,
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "DELETE",
+            "event-ledger/events",
+            {
+                "tracker_user": tracker_user,
+                "calendar_id": calendar_id,
+                "google_event_id": google_event_id,
+                "ntt_task_id": ntt_task_id,
+            },
+        )
+
+    async def replace_google_calendar_event_ledger_snapshot(
+        self,
+        tracker_user: str,
+        calendar_id: str,
+        active_events: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "PUT",
+            "event-ledger/snapshot",
+            {
+                "tracker_user": tracker_user,
+                "calendar_id": calendar_id,
+                "active_events": active_events,
             },
         )
 
