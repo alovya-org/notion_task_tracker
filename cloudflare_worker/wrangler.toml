@@ -6,7 +6,7 @@ compatibility_date = "2026-07-17"
 crons = ["0 0 * * *"]
 
 [vars]
-GITHUB_OWNER = "alovya"
+GITHUB_OWNER = "alovya-org"
 GITHUB_REPOSITORY = "notion_task_tracker"
 GITHUB_API_VERSION = "2022-11-28"
 GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE = "refresh-notion-task-tracker"
