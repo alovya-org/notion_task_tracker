@@ -24,6 +24,34 @@ def test_project_calendar_action_builds_projection_command():
     assert command == {"command": "project_calendar"}
 
 
+def test_ensure_calendar_watch_action_preserves_renewal_identity():
+    command = _build_tracker_command(_arguments(
+        ensure_calendar_watch=True,
+        tracker_user="al0vya",
+        calendar_notification_url="https://worker.example/google-calendar-notifications",
+    ))
+
+    assert command == {
+        "command": "ensure_calendar_watch",
+        "tracker_user": "al0vya",
+        "notification_url": "https://worker.example/google-calendar-notifications",
+    }
+
+
+def test_reconcile_calendar_changes_action_preserves_dispatch_identity():
+    command = _build_tracker_command(_arguments(
+        reconcile_calendar_changes=True,
+        sync_token="current-sync-token",
+        tracker_user="al0vya",
+    ))
+
+    assert command == {
+        "command": "reconcile_calendar_changes",
+        "sync_token": "current-sync-token",
+        "tracker_user": "al0vya",
+    }
+
+
 def test_read_action_builds_read_command_for_all_ticket_numbers():
     command = _build_tracker_command(_arguments(read=True, ticket_number=[67, 68]))
 
@@ -543,7 +571,9 @@ def _assert_uuid4_log_id(log_id: str, ticket_prefix: str = "ALOVYA") -> None:
 
 def _arguments(**overrides):
     values = {
+        "ensure_calendar_watch": False,
         "project_calendar": False,
+        "reconcile_calendar_changes": False,
         "reconcile_from_notion": False,
         "read": False,
         "read_all": False,
@@ -568,6 +598,9 @@ def _arguments(**overrides):
         "synth": False,
         "move_logs": False,
         "ticket_number": [],
+        "sync_token": None,
+        "tracker_user": None,
+        "calendar_notification_url": None,
         "parent_ticket_number": None,
         "sibling_ticket_number": None,
         "title": None,

@@ -53,8 +53,11 @@ async function _registerGoogleCalendarChannel(
   request: Request,
   environment: Environment,
 ): Promise<Response> {
+  if (request.method === "GET") {
+    return await _readLatestGoogleCalendarChannel(request, environment);
+  }
   if (request.method !== "POST") {
-    return _createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
+    return _createJsonResponse({ error: "Use GET or POST." }, 405, { Allow: "GET, POST" });
   }
   const authorisationFailure = _authoriseCalendarSyncStateAdministration(request, environment);
   if (authorisationFailure !== null) {
@@ -94,6 +97,39 @@ async function _registerGoogleCalendarChannel(
   ]);
 
   return _createJsonResponse({ registered: true, channel_id: channelId }, 201);
+}
+
+async function _readLatestGoogleCalendarChannel(
+  request: Request,
+  environment: Environment,
+): Promise<Response> {
+  const authorisationFailure = _authoriseCalendarSyncStateAdministration(request, environment);
+  if (authorisationFailure !== null) {
+    return authorisationFailure;
+  }
+  const query = new URL(request.url).searchParams;
+  const trackerUser = query.get("tracker_user");
+  const calendarId = query.get("calendar_id");
+  if (!trackerUser || !calendarId) {
+    return _createJsonResponse({ error: "tracker_user and calendar_id are required." }, 400);
+  }
+  const channel = await environment.CALENDAR_SYNC_STATE.prepare(
+    `SELECT channels.channel_id,
+            channels.resource_id,
+            channels.expires_at,
+            cursors.sync_token
+     FROM calendar_channels AS channels
+     JOIN calendar_sync_cursors AS cursors
+       ON cursors.tracker_user = channels.tracker_user
+      AND cursors.calendar_id = channels.calendar_id
+     WHERE channels.tracker_user = ? AND channels.calendar_id = ?
+     ORDER BY channels.expires_at DESC
+     LIMIT 1`,
+  ).bind(trackerUser, calendarId).first();
+  if (channel === null) {
+    return new Response(null, { status: 204 });
+  }
+  return _createJsonResponse(channel, 200);
 }
 
 async function _advanceGoogleCalendarSyncCursor(

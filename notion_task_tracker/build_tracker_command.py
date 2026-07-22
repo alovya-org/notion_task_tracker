@@ -51,7 +51,9 @@ READ_ACTIONS = {
 }
 
 MAINTENANCE_ACTIONS = {
+    "ensure_calendar_watch",
     "project_calendar",
+    "reconcile_calendar_changes",
     "reconcile_from_notion",
 }
 
@@ -70,6 +72,26 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         raise ValueError("Choose one tracker action")
     if action_name == "project_calendar":
         return {"command": "project_calendar"}
+    if action_name == "ensure_calendar_watch":
+        if not arguments.tracker_user:
+            raise ValueError("--ensure-calendar-watch requires --tracker-user")
+        if not arguments.calendar_notification_url:
+            raise ValueError("--ensure-calendar-watch requires --calendar-notification-url")
+        return {
+            "command": "ensure_calendar_watch",
+            "tracker_user": arguments.tracker_user,
+            "notification_url": arguments.calendar_notification_url,
+        }
+    if action_name == "reconcile_calendar_changes":
+        if not arguments.sync_token:
+            raise ValueError("--reconcile-calendar-changes requires --sync-token")
+        if not arguments.tracker_user:
+            raise ValueError("--reconcile-calendar-changes requires --tracker-user")
+        return {
+            "command": "reconcile_calendar_changes",
+            "sync_token": arguments.sync_token,
+            "tracker_user": arguments.tracker_user,
+        }
     if action_name == "reconcile_from_notion":
         return {"command": "reconcile_from_notion"}
     if action_name == "read":

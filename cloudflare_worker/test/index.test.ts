@@ -275,6 +275,23 @@ function _environmentWithCalendarChannel() {
 }
 
 describe("Cloudflare Worker calendar sync state administration", () => {
+  it("returns the latest channel and current sync token for renewal decisions", async () => {
+    const environment = _environmentWithCalendarChannel();
+    const response = await worker.fetch(
+      new Request(
+        "https://example.com/calendar-sync-state/channels?tracker_user=al0vya&calendar_id=calendar%40example.com",
+        { headers: { Authorization: "Bearer calendar-admin-token" } },
+      ),
+      environment,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({
+      channel_id: "channel-one",
+      sync_token: "current-sync-token",
+    }));
+  });
+
   it("registers a channel while preserving an existing cursor", async () => {
     const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
     const database = _calendarSyncDatabaseRecording(preparedStatements);

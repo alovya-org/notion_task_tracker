@@ -1,0 +1,51 @@
+name: Renew Google Calendar watch
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: renew-google-calendar-watch-al0vya
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    name: Renew al0vya Google Calendar watch when required
+    runs-on: ubuntu-latest
+    environment: al0vya
+
+    steps:
+      - name: Check out tracker
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tracker
+        run: python -m pip install .
+
+      - name: Write tracker config
+        run: |
+          mkdir -p "$RUNNER_TEMP/ntt"
+          printf '%s\n' "$NTT_CONFIG_TOML" > "$RUNNER_TEMP/ntt/config.toml"
+        env:
+          NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
+
+      - name: Ensure the Google Calendar watch remains active
+        run: >-
+          ntt --ensure-calendar-watch
+          --tracker-user al0vya
+          --calendar-notification-url "$NTT_CALENDAR_NOTIFICATION_URL"
+          --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+        env:
+          GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
+          GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
+          GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NTT_CALENDAR_NOTIFICATION_URL: ${{ vars.NTT_CALENDAR_NOTIFICATION_URL }}
+          NTT_CALENDAR_SYNC_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_ADMIN_TOKEN }}
+          NTT_CALENDAR_SYNC_STATE_URL: ${{ vars.NTT_CALENDAR_SYNC_STATE_URL }}
+          NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml

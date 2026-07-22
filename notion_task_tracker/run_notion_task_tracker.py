@@ -13,6 +13,7 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
+from notion_task_tracker.calendar_sync_state import CalendarSyncStateClient
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
 from notion_task_tracker.derive_calendar_events import derive_desired_calendar_events
@@ -47,6 +48,8 @@ from notion_task_tracker.reconcile_calendar_events import (
     CalendarReconciliationPlan,
     plan_calendar_event_reconciliation,
 )
+from notion_task_tracker.reconcile_calendar_edits import reconcile_changed_google_calendar_events
+from notion_task_tracker.register_google_calendar_watch import ensure_google_calendar_watch_is_active
 from notion_task_tracker.tasks import (
     DEFAULT_TASK_PRIORITY,
     DurationUnit,
@@ -100,6 +103,8 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
     action_group.add_argument("--project-calendar", action="store_true")
+    action_group.add_argument("--ensure-calendar-watch", action="store_true")
+    action_group.add_argument("--reconcile-calendar-changes", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--read-all", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -152,6 +157,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--entry-date")
     parser.add_argument("--destination-ticket-number", type=int)
     parser.add_argument("--log-id")
+    parser.add_argument("--sync-token")
+    parser.add_argument("--tracker-user")
+    parser.add_argument("--calendar-notification-url")
     return parser
 
 
@@ -212,6 +220,7 @@ def execute_tracker_command(
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
+    calendar_sync_state_client: CalendarSyncStateClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
@@ -221,6 +230,7 @@ def execute_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
         google_calendar_client=google_calendar_client,
+        calendar_sync_state_client=calendar_sync_state_client,
     ))
 
 
@@ -277,7 +287,20 @@ async def _run_tracker_command(
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
+    calendar_sync_state_client: CalendarSyncStateClient | None,
 ) -> "TrackerActionExecutionSummary":
+    if command["command"] == "ensure_calendar_watch":
+        return await _run_ensure_google_calendar_watch_is_active(
+            command=command,
+            config=config,
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            backup_path=backup_path,
+            notion_client=notion_client,
+            google_calendar_client=google_calendar_client,
+            calendar_sync_state_client=calendar_sync_state_client,
+        )
+
     if command["command"] == "project_calendar":
         return await _run_project_tasks_into_google_calendar(
             config=config,
@@ -286,6 +309,17 @@ async def _run_tracker_command(
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
+        )
+
+    if command["command"] == "reconcile_calendar_changes":
+        return await _run_reconcile_google_calendar_changes(
+            command=command,
+            config=config,
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            notion_client=notion_client,
+            google_calendar_client=google_calendar_client,
+            calendar_sync_state_client=calendar_sync_state_client,
         )
 
     if command["command"] == "reconcile_from_notion":
@@ -320,6 +354,133 @@ async def _run_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
     )
+
+
+async def _run_ensure_google_calendar_watch_is_active(
+    command: dict[str, Any],
+    config: TrackerConfig | None,
+    tracker_state_path: str | Path,
+    output_path: str | Path,
+    backup_path: str | Path | None,
+    notion_client: NotionRestClient | None,
+    google_calendar_client: GoogleCalendarClient | None,
+    calendar_sync_state_client: CalendarSyncStateClient | None,
+) -> "TrackerActionExecutionSummary":
+    configured_tracker = config or load_config()
+    if configured_tracker.calendar is None:
+        raise ValueError("Configure [calendar] before maintaining a Google Calendar watch")
+    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
+        configured_tracker.calendar.calendar_id,
+    )
+    state_client = calendar_sync_state_client or CalendarSyncStateClient.from_environment()
+    maintenance = await ensure_google_calendar_watch_is_active(
+        tracker_user=command["tracker_user"],
+        notification_url=command["notification_url"],
+        current_time_milliseconds=int(time.time() * 1000),
+        renew_within_milliseconds=2 * 24 * 60 * 60 * 1000,
+        config=configured_tracker,
+        google_calendar_client=calendar_client,
+        calendar_sync_state_client=state_client,
+    )
+    if maintenance.catch_up_sync_token is not None:
+        await _run_reconcile_tracker_from_notion_command(
+            config=configured_tracker,
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            backup_path=backup_path,
+            notion_client=notion_client,
+        )
+        await _run_reconcile_google_calendar_changes(
+            command={
+                "tracker_user": command["tracker_user"],
+                "sync_token": maintenance.catch_up_sync_token,
+            },
+            config=configured_tracker,
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            notion_client=notion_client,
+            google_calendar_client=calendar_client,
+            calendar_sync_state_client=state_client,
+        )
+
+    execution_summary = TrackerActionExecutionSummary(
+        action_name="ensure_calendar_watch",
+        output_path=Path(output_path),
+        tracker_state_path=Path(tracker_state_path),
+        warnings=[],
+        calendar_watch={
+            "channel_id": maintenance.channel_id,
+            "expires_at": maintenance.expires_at,
+            "registered_replacement": maintenance.registered_replacement,
+            "caught_up_after_expiration": maintenance.catch_up_sync_token is not None,
+        },
+    )
+    _write_json(Path(output_path), execution_summary.to_json_summary())
+    return execution_summary
+
+
+async def _run_reconcile_google_calendar_changes(
+    command: dict[str, Any],
+    config: TrackerConfig | None,
+    tracker_state_path: str | Path,
+    output_path: str | Path,
+    notion_client: NotionRestClient | None,
+    google_calendar_client: GoogleCalendarClient | None,
+    calendar_sync_state_client: CalendarSyncStateClient | None,
+) -> "TrackerActionExecutionSummary":
+    configured_tracker = config or load_config()
+    if configured_tracker.calendar is None:
+        raise ValueError("Configure [calendar] before reconciling Google Calendar changes")
+
+    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
+        configured_tracker.calendar.calendar_id,
+    )
+    changed_calendar_events = await calendar_client.fetch_calendar_event_changes(
+        command["sync_token"],
+    )
+    owned_calendar_events = _select_changed_events_owned_by_tracker(
+        changed_calendar_events.events,
+        configured_tracker.ticket_prefix,
+    )
+    reconciliation = await reconcile_changed_google_calendar_events(
+        changed_events=owned_calendar_events,
+        config=configured_tracker,
+        tracker_state_path=tracker_state_path,
+        notion_client=_notion_rest_client_from_optional_instance(notion_client),
+    )
+    state_client = calendar_sync_state_client or CalendarSyncStateClient.from_environment()
+    await state_client.advance_calendar_sync_token(
+        tracker_user=command["tracker_user"],
+        calendar_id=configured_tracker.calendar.calendar_id,
+        previous_sync_token=command["sync_token"],
+        next_sync_token=changed_calendar_events.next_sync_token,
+    )
+
+    execution_summary = TrackerActionExecutionSummary(
+        action_name="reconcile_calendar_changes",
+        output_path=Path(output_path),
+        tracker_state_path=Path(tracker_state_path),
+        warnings=reconciliation.warnings,
+        completed_operation_keys=reconciliation.completed_operation_keys,
+    )
+    _write_json(Path(output_path), execution_summary.to_json_summary())
+    return execution_summary
+
+
+def _select_changed_events_owned_by_tracker(
+    changed_events: list[dict[str, Any]],
+    tracker_id: str,
+) -> list[dict[str, Any]]:
+    owned_events = []
+    for event in changed_events:
+        private_properties = event.get("extendedProperties", {}).get("private", {})
+        if private_properties.get("ntt_tracker") != tracker_id:
+            continue
+        if event.get("status") == "cancelled":
+            event_id = event.get("id", "without an id")
+            raise ValueError(f"NTT Google event {event_id} was deleted; recovery is required")
+        owned_events.append(event)
+    return owned_events
 
 
 async def _run_project_tasks_into_google_calendar(
@@ -837,6 +998,7 @@ class TrackerActionExecutionSummary:
     movement: dict[str, Any] | None = None
     calendar_operation_keys: list[str] | None = None
     desired_calendar_event_count: int | None = None
+    calendar_watch: dict[str, Any] | None = None
 
     def to_json_summary(self) -> dict[str, Any]:
         summary = {
@@ -863,12 +1025,16 @@ class TrackerActionExecutionSummary:
             summary["calendar_operations"] = list(self.calendar_operation_keys)
         if self.desired_calendar_event_count is not None:
             summary["desired_calendar_event_count"] = self.desired_calendar_event_count
+        if self.calendar_watch is not None:
+            summary["calendar_watch"] = dict(self.calendar_watch)
         return summary
 
 
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
         "project_calendar": "project_calendar",
+        "ensure_calendar_watch": "ensure_calendar_watch",
+        "reconcile_calendar_changes": "reconcile_calendar_changes",
         "reconcile_from_notion": "reconcile_from_notion",
         "read_tasks": "read",
         "read_all_tasks": "read_all",

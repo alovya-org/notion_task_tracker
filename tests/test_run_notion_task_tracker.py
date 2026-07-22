@@ -37,6 +37,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     _command_changes_task_relations,
     _run_reconcile_tracker_from_notion_command,
     _run_project_tasks_into_google_calendar,
+    _select_changed_events_owned_by_tracker,
     _run_write_tracker_command,
     _run_read_task_pages,
     main,
@@ -44,6 +45,36 @@ from notion_task_tracker.run_notion_task_tracker import (
     resolve_tracker_state_path,
     repair_and_write_refreshed_tracker_state,
 )
+
+
+def test_automatic_calendar_reconciliation_ignores_native_calendar_events():
+    owned_event = {
+        "id": "owned-event",
+        "extendedProperties": {
+            "private": {"ntt_tracker": "ALOVYA", "ntt_task_id": "ALOVYA-1"},
+        },
+    }
+    native_event = {"id": "native-event", "summary": "Lunch"}
+
+    selected_events = _select_changed_events_owned_by_tracker(
+        [native_event, owned_event],
+        "ALOVYA",
+    )
+
+    assert selected_events == [owned_event]
+
+
+def test_automatic_calendar_reconciliation_does_not_acknowledge_deleted_ntt_event():
+    deleted_event = {
+        "id": "deleted-event",
+        "status": "cancelled",
+        "extendedProperties": {
+            "private": {"ntt_tracker": "ALOVYA", "ntt_task_id": "ALOVYA-1"},
+        },
+    }
+
+    with pytest.raises(ValueError, match="recovery is required"):
+        _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA")
 
 
 def test_parse_args_reads_explicit_read_action():
@@ -70,6 +101,34 @@ def test_parse_args_reads_project_calendar_action():
     args = parse_args(["--project-calendar"])
 
     assert args.project_calendar is True
+
+
+def test_parse_args_reads_calendar_watch_maintenance_identity():
+    args = parse_args([
+        "--ensure-calendar-watch",
+        "--tracker-user",
+        "al0vya",
+        "--calendar-notification-url",
+        "https://worker.example/google-calendar-notifications",
+    ])
+
+    assert args.ensure_calendar_watch is True
+    assert args.tracker_user == "al0vya"
+    assert args.calendar_notification_url.endswith("/google-calendar-notifications")
+
+
+def test_parse_args_reads_automatic_calendar_reconciliation_identity():
+    args = parse_args([
+        "--reconcile-calendar-changes",
+        "--sync-token",
+        "current-sync-token",
+        "--tracker-user",
+        "al0vya",
+    ])
+
+    assert args.reconcile_calendar_changes is True
+    assert args.sync_token == "current-sync-token"
+    assert args.tracker_user == "al0vya"
 
 
 def test_parse_args_reads_initialise_action_and_configuration():
