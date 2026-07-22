@@ -13,7 +13,7 @@ GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE = "refresh-notion-task-tracker"
 GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE = "apply-google-calendar-changes-to-notion-task-tracker"
 
 [[d1_databases]]
-binding = "CALENDAR_SYNC_STATE"
-database_name = "ntt-calendar-sync"
+binding = "GOOGLE_CALENDAR_STATE_DATABASE"
+database_name = "ntt-google-calendar-state"
 database_id = "5c483632-603c-4517-97eb-47c0b6159e17"
 migrations_dir = "migrations"

@@ -16,14 +16,14 @@ export async function recordGoogleCalendarNotificationChannel(
   const channel = await request.json<Record<string, unknown>>();
   const channelId = readRequiredString(channel, "channel_id");
   await saveGoogleCalendarNotificationChannel(
-    environment.CALENDAR_SYNC_STATE,
+    environment.GOOGLE_CALENDAR_STATE_DATABASE,
     {
       channelId,
       trackerUser: readRequiredString(channel, "tracker_user"),
       calendarId: readRequiredString(channel, "calendar_id"),
       resourceId: readRequiredString(channel, "resource_id"),
       channelToken: readRequiredString(channel, "channel_token"),
-      syncToken: readRequiredString(channel, "google_change_cursor"),
+      googleChangeCursor: readRequiredString(channel, "google_change_cursor"),
       expiresAt: readRequiredNumber(channel, "expires_at"),
     },
   );

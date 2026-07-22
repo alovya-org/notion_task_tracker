@@ -1,0 +1,23 @@
+PRAGMA foreign_keys = ON;
+
+ALTER TABLE calendar_sync_cursors
+RENAME TO google_calendar_change_cursors;
+
+ALTER TABLE google_calendar_change_cursors
+RENAME COLUMN sync_token TO google_change_cursor;
+
+ALTER TABLE calendar_channels
+RENAME TO google_calendar_notification_channels;
+
+ALTER TABLE google_calendar_notification_channels
+RENAME COLUMN channel_token_sha256 TO notification_channel_token_sha256;
+
+DROP INDEX calendar_channels_by_tracker_calendar;
+
+DROP INDEX calendar_channels_by_expiration;
+
+CREATE INDEX google_calendar_notification_channels_by_tracker_calendar
+ON google_calendar_notification_channels (tracker_user, calendar_id);
+
+CREATE INDEX google_calendar_notification_channels_by_expiration
+ON google_calendar_notification_channels (expires_at);

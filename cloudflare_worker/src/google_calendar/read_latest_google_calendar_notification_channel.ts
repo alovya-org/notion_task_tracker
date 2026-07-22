@@ -20,7 +20,7 @@ export async function readLatestGoogleCalendarNotificationChannel(
   }
 
   const channel = await findLatestGoogleCalendarNotificationChannel(
-    environment.CALENDAR_SYNC_STATE,
+    environment.GOOGLE_CALENDAR_STATE_DATABASE,
     trackerUser,
     calendarId,
   );

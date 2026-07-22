@@ -18,7 +18,7 @@ export async function advanceGoogleCalendarChangeCursor(
 
   const cursorChange = await request.json<Record<string, unknown>>();
   const cursorAdvanced = await advanceGoogleCalendarChangeCursorInDatabase(
-    environment.CALENDAR_SYNC_STATE,
+    environment.GOOGLE_CALENDAR_STATE_DATABASE,
     readRequiredString(cursorChange, "tracker_user"),
     readRequiredString(cursorChange, "calendar_id"),
     readRequiredString(cursorChange, "previous_google_change_cursor"),

@@ -41,7 +41,7 @@ export async function receiveGoogleCalendarNotification(
   const resourceId = request.headers.get("X-Goog-Resource-ID")!;
   const resourceState = request.headers.get("X-Goog-Resource-State")!;
   const channelState = await findGoogleCalendarNotificationChannelById(
-    environment.CALENDAR_SYNC_STATE,
+    environment.GOOGLE_CALENDAR_STATE_DATABASE,
     channelId,
   );
   if (channelState === null) {
@@ -52,7 +52,7 @@ export async function receiveGoogleCalendarNotification(
     channelToken,
   );
   if (
-    channelState.channel_token_sha256 !== suppliedChannelTokenSha256
+    channelState.notification_channel_token_sha256 !== suppliedChannelTokenSha256
     || channelState.resource_id !== resourceId
   ) {
     return createJsonResponse({ error: "Google Calendar channel identity rejected." }, 401);

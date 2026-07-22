@@ -7,7 +7,7 @@ export interface WorkerEnvironment {
   GITHUB_REPOSITORY_DISPATCH_TOKEN: string;
   NOTION_WEBHOOK_SECRET: string;
   NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: string;
-  CALENDAR_SYNC_STATE: D1Database;
+  GOOGLE_CALENDAR_STATE_DATABASE: D1Database;
 }
 
 export function requireEnvironmentVariables(

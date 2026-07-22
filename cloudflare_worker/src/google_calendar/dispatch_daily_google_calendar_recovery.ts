@@ -10,7 +10,9 @@ export async function dispatchDailyGoogleCalendarRecovery(
   environment: WorkerEnvironment,
 ): Promise<void> {
   requireGoogleCalendarEnvironment(environment);
-  const cursors = await listGoogleCalendarChangeCursors(environment.CALENDAR_SYNC_STATE);
+  const cursors = await listGoogleCalendarChangeCursors(
+    environment.GOOGLE_CALENDAR_STATE_DATABASE,
+  );
 
   for (const cursor of cursors) {
     const dispatchPayload = createGitHubDispatchPayload(

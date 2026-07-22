@@ -10,7 +10,7 @@ const workerEnvironment = {
   GITHUB_REPOSITORY_DISPATCH_TOKEN: "github-token",
   NOTION_WEBHOOK_SECRET: "notion-secret",
   NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: "calendar-state-api-token",
-  CALENDAR_SYNC_STATE: _calendarSyncDatabaseReturning(null),
+  GOOGLE_CALENDAR_STATE_DATABASE: _googleCalendarStateDatabaseReturning(null),
 };
 
 describe("Cloudflare Worker refresh dispatcher", () => {
@@ -273,10 +273,10 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
 function _environmentWithCalendarChannel() {
   return {
     ...workerEnvironment,
-    CALENDAR_SYNC_STATE: _calendarSyncDatabaseReturning({
+    GOOGLE_CALENDAR_STATE_DATABASE: _googleCalendarStateDatabaseReturning({
       channel_id: "channel-one",
       resource_id: "resource-one",
-      channel_token_sha256: "07aae475f67f53e5cef11ebee8a133038a448d23615ec60808577872155db76e",
+      notification_channel_token_sha256: "07aae475f67f53e5cef11ebee8a133038a448d23615ec60808577872155db76e",
       tracker_user: "al0vya",
       calendar_id: "calendar@example.com",
       expiration: 1785000000000,
@@ -305,7 +305,7 @@ describe("Cloudflare Worker Google Calendar state API", () => {
 
   it("registers a channel while preserving an existing cursor", async () => {
     const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
-    const database = _calendarSyncDatabaseRecording(preparedStatements);
+    const database = _googleCalendarStateDatabaseRecording(preparedStatements);
     const response = await worker.fetch(
       new Request("https://example.com/google-calendar/notification-channels", {
         method: "POST",
@@ -323,7 +323,7 @@ describe("Cloudflare Worker Google Calendar state API", () => {
           expires_at: 1786000000000,
         }),
       }),
-      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
     );
 
     expect(response.status).toBe(201);
@@ -360,10 +360,10 @@ describe("Cloudflare Worker Google Calendar state API", () => {
 
   it("advances the cursor only from the token consumed by the caller", async () => {
     const runMock = vi.fn(() => Promise.resolve({ meta: { changes: 1 } }));
-    const database = _calendarSyncDatabaseRunning(runMock);
+    const database = _googleCalendarStateDatabaseRunning(runMock);
     const response = await worker.fetch(
       _calendarCursorAdvancementRequest(),
-      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
     );
 
     expect(response.status).toBe(200);
@@ -372,12 +372,12 @@ describe("Cloudflare Worker Google Calendar state API", () => {
   });
 
   it("rejects a stale cursor advancement", async () => {
-    const database = _calendarSyncDatabaseRunning(
+    const database = _googleCalendarStateDatabaseRunning(
       vi.fn(() => Promise.resolve({ meta: { changes: 0 } })),
     );
     const response = await worker.fetch(
       _calendarCursorAdvancementRequest(),
-      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
     );
 
     expect(response.status).toBe(409);
@@ -407,7 +407,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
 
     await worker.scheduled(
       {} as ScheduledController,
-      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
     );
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -426,7 +426,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
   });
 });
 
-function _calendarSyncDatabaseReturning(channelState: object | null) {
+function _googleCalendarStateDatabaseReturning(channelState: object | null) {
   return {
     prepare: vi.fn(() => ({
       bind: vi.fn(() => ({
@@ -436,7 +436,7 @@ function _calendarSyncDatabaseReturning(channelState: object | null) {
   } as unknown as D1Database;
 }
 
-function _calendarSyncDatabaseRecording(
+function _googleCalendarStateDatabaseRecording(
   preparedStatements: Array<{ query: string; values: unknown[] }>,
 ) {
   return {
@@ -451,7 +451,7 @@ function _calendarSyncDatabaseRecording(
   } as unknown as D1Database;
 }
 
-function _calendarSyncDatabaseRunning(runMock: ReturnType<typeof vi.fn>) {
+function _googleCalendarStateDatabaseRunning(runMock: ReturnType<typeof vi.fn>) {
   return {
     prepare: vi.fn(() => ({
       bind: vi.fn(() => ({ run: runMock })),

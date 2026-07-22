@@ -9,8 +9,8 @@ export function requireGoogleCalendarEnvironment(environment: WorkerEnvironment)
     "GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE",
     "GITHUB_REPOSITORY_DISPATCH_TOKEN",
   ]);
-  if (!environment.CALENDAR_SYNC_STATE) {
-    throw new Error("Missing Worker environment binding: CALENDAR_SYNC_STATE");
+  if (!environment.GOOGLE_CALENDAR_STATE_DATABASE) {
+    throw new Error("Missing Worker environment binding: GOOGLE_CALENDAR_STATE_DATABASE");
   }
 }
 

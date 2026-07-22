@@ -1,7 +1,7 @@
 export interface GoogleCalendarNotificationChannelState {
   channel_id: string;
   resource_id: string;
-  channel_token_sha256: string;
+  notification_channel_token_sha256: string;
   tracker_user: string;
   calendar_id: string;
   expiration: number;
@@ -19,7 +19,7 @@ export interface GoogleCalendarNotificationChannelRegistration {
   calendarId: string;
   resourceId: string;
   channelToken: string;
-  syncToken: string;
+  googleChangeCursor: string;
   expiresAt: number;
 }
 
@@ -27,8 +27,8 @@ export async function listGoogleCalendarChangeCursors(
   database: D1Database,
 ): Promise<GoogleCalendarChangeCursorState[]> {
   const cursors = await database.prepare(
-    `SELECT tracker_user, sync_token AS google_change_cursor
-     FROM calendar_sync_cursors
+    `SELECT tracker_user, google_change_cursor
+     FROM google_calendar_change_cursors
      ORDER BY tracker_user, calendar_id`,
   ).all<GoogleCalendarChangeCursorState>();
   return cursors.results;
@@ -41,19 +41,19 @@ export async function saveGoogleCalendarNotificationChannel(
   const recordedAt = new Date().toISOString();
   await database.batch([
     database.prepare(
-      `INSERT INTO calendar_sync_cursors
-         (tracker_user, calendar_id, sync_token, revision, updated_at)
+      `INSERT INTO google_calendar_change_cursors
+         (tracker_user, calendar_id, google_change_cursor, revision, updated_at)
        VALUES (?, ?, ?, 0, ?)
        ON CONFLICT (tracker_user, calendar_id) DO NOTHING`,
     ).bind(
       registration.trackerUser,
       registration.calendarId,
-      registration.syncToken,
+      registration.googleChangeCursor,
       recordedAt,
     ),
     database.prepare(
-      `INSERT INTO calendar_channels
-         (channel_id, tracker_user, calendar_id, resource_id, channel_token_sha256, expires_at, created_at)
+      `INSERT INTO google_calendar_notification_channels
+         (channel_id, tracker_user, calendar_id, resource_id, notification_channel_token_sha256, expires_at, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       registration.channelId,
@@ -76,9 +76,9 @@ export async function findLatestGoogleCalendarNotificationChannel(
     `SELECT channels.channel_id,
             channels.resource_id,
             channels.expires_at,
-            cursors.sync_token AS google_change_cursor
-     FROM calendar_channels AS channels
-     JOIN calendar_sync_cursors AS cursors
+            cursors.google_change_cursor
+     FROM google_calendar_notification_channels AS channels
+     JOIN google_calendar_change_cursors AS cursors
        ON cursors.tracker_user = channels.tracker_user
       AND cursors.calendar_id = channels.calendar_id
      WHERE channels.tracker_user = ? AND channels.calendar_id = ?
@@ -94,13 +94,13 @@ export async function findGoogleCalendarNotificationChannelById(
   return await database.prepare(
     `SELECT channels.channel_id,
             channels.resource_id,
-            channels.channel_token_sha256,
+            channels.notification_channel_token_sha256,
             channels.tracker_user,
             channels.calendar_id,
             channels.expires_at AS expiration,
-            cursors.sync_token AS google_change_cursor
-     FROM calendar_channels AS channels
-     JOIN calendar_sync_cursors AS cursors
+            cursors.google_change_cursor
+     FROM google_calendar_notification_channels AS channels
+     JOIN google_calendar_change_cursors AS cursors
        ON cursors.tracker_user = channels.tracker_user
       AND cursors.calendar_id = channels.calendar_id
      WHERE channels.channel_id = ?`,
@@ -111,15 +111,21 @@ export async function advanceGoogleCalendarChangeCursorInDatabase(
   database: D1Database,
   trackerUser: string,
   calendarId: string,
-  previousSyncToken: string,
-  nextSyncToken: string,
+  previousGoogleChangeCursor: string,
+  nextGoogleChangeCursor: string,
 ): Promise<boolean> {
   const updateResult = await database.prepare(
-    `UPDATE calendar_sync_cursors
-     SET sync_token = ?, revision = revision + 1, updated_at = ?
-     WHERE tracker_user = ? AND calendar_id = ? AND sync_token = ?`,
+    `UPDATE google_calendar_change_cursors
+     SET google_change_cursor = ?, revision = revision + 1, updated_at = ?
+     WHERE tracker_user = ? AND calendar_id = ? AND google_change_cursor = ?`,
   )
-    .bind(nextSyncToken, new Date().toISOString(), trackerUser, calendarId, previousSyncToken)
+    .bind(
+      nextGoogleChangeCursor,
+      new Date().toISOString(),
+      trackerUser,
+      calendarId,
+      previousGoogleChangeCursor,
+    )
     .run();
   return updateResult.meta.changes === 1;
 }
