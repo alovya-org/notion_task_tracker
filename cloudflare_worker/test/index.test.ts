@@ -5,7 +5,7 @@ const workerEnvironment = {
   GITHUB_OWNER: "alovya",
   GITHUB_REPOSITORY: "notion_task_tracker",
   GITHUB_API_VERSION: "2022-11-28",
-  GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE: "refresh-notion-task-tracker",
+  GITHUB_NOTION_TASK_TRACKER_CHANGE_EVENT_TYPE: "refresh-notion-task-tracker",
   GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE: "apply-google-calendar-changes-to-notion-task-tracker",
   GITHUB_REPOSITORY_DISPATCH_TOKEN: "github-token",
   NOTION_WEBHOOK_SECRET: "notion-secret",
@@ -33,7 +33,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await worker.fetch(
-      new Request("https://example.com/notion-task-changes", { method: "GET" }),
+      new Request("https://example.com/notion-task-tracker-changes", { method: "GET" }),
       workerEnvironment,
     );
 
@@ -45,7 +45,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
   it("fails fast when the Worker environment is incomplete", async () => {
     await expect(
       worker.fetch(
-        new Request("https://example.com/notion-task-changes", { method: "POST" }),
+        new Request("https://example.com/notion-task-tracker-changes", { method: "POST" }),
         {
           ...workerEnvironment,
           GITHUB_REPOSITORY_DISPATCH_TOKEN: "",
@@ -61,7 +61,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await worker.fetch(
-      new Request("https://example.com/notion-task-changes", {
+      new Request("https://example.com/notion-task-tracker-changes", {
         method: "POST",
         headers: {
           notion_webhook_secret: "wrong-secret",
@@ -82,7 +82,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
 
     const response = await worker.fetch(
       new Request(
-        "https://example.com/notion-task-changes?notion_webhook_secret=notion-secret&tracker_user=al0vya",
+        "https://example.com/notion-task-tracker-changes?notion_webhook_secret=notion-secret&tracker_user=al0vya",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -107,7 +107,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await worker.fetch(
-      new Request("https://example.com/notion-task-changes", {
+      new Request("https://example.com/notion-task-tracker-changes", {
         method: "POST",
         headers: {
           notion_webhook_secret: "notion-secret",
@@ -126,7 +126,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await worker.fetch(
-      new Request("https://example.com/notion-task-changes", {
+      new Request("https://example.com/notion-task-tracker-changes", {
         method: "POST",
         headers: {
           notion_webhook_secret: "notion-secret",
@@ -171,7 +171,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await worker.fetch(
-      new Request("https://example.com/notion-task-changes", {
+      new Request("https://example.com/notion-task-tracker-changes", {
         method: "POST",
         headers: {
           notion_webhook_secret: "notion-secret",

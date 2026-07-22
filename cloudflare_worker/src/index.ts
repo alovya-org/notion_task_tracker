@@ -5,12 +5,12 @@ import { dispatchDailyGoogleCalendarRecovery } from "./google_calendar/dispatch_
 import { readLatestGoogleCalendarNotificationChannel } from "./google_calendar/read_latest_google_calendar_notification_channel";
 import { receiveGoogleCalendarNotification } from "./google_calendar/receive_google_calendar_notification";
 import { recordGoogleCalendarNotificationChannel } from "./google_calendar/record_google_calendar_notification_channel";
-import { dispatchNotionTaskChangeToGitHub } from "./notion/dispatch_notion_task_change_to_github";
+import { dispatchNotionTaskTrackerChangeToGitHub } from "./notion/dispatch_notion_task_tracker_change_to_github";
 
 const GOOGLE_CALENDAR_NOTIFICATION_PATH = "/google-calendar-notifications";
 const GOOGLE_CALENDAR_NOTIFICATION_CHANNELS_PATH = "/google-calendar/notification-channels";
 const GOOGLE_CALENDAR_CHANGE_CURSORS_PATH = "/google-calendar/change-cursors";
-const NOTION_TASK_CHANGES_PATH = "/notion-task-changes";
+const NOTION_TASK_TRACKER_CHANGES_PATH = "/notion-task-tracker-changes";
 
 export default {
   async fetch(request: Request, environment: WorkerEnvironment): Promise<Response> {
@@ -31,8 +31,8 @@ export default {
     if (requestPath === GOOGLE_CALENDAR_CHANGE_CURSORS_PATH) {
       return await advanceGoogleCalendarChangeCursor(request, environment);
     }
-    if (requestPath === NOTION_TASK_CHANGES_PATH) {
-      return await dispatchNotionTaskChangeToGitHub(request, environment);
+    if (requestPath === NOTION_TASK_TRACKER_CHANGES_PATH) {
+      return await dispatchNotionTaskTrackerChangeToGitHub(request, environment);
     }
     return createJsonResponse({ error: "Not found." }, 404);
   },

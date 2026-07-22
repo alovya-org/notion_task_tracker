@@ -339,7 +339,7 @@ NTT_GOOGLE_CALENDAR_NOTIFICATION_URL=https://<worker>/google-calendar-notificati
 NTT_GOOGLE_CALENDAR_STATE_API_URL=https://<worker>/google-calendar
 ```
 
-Configure Notion's `Send webhook` action to call the deployed Worker's `/notion-task-changes` URL with `POST`. Add these custom headers:
+Configure Notion's `Send webhook` action to call the deployed Worker's `/notion-task-tracker-changes` URL with `POST`. Add these custom headers:
 
 ```text
 notion_webhook_secret: the same value stored in Cloudflare

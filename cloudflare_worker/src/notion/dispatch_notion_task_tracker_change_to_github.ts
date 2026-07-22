@@ -6,7 +6,7 @@ import {
   sendGitHubRepositoryDispatch,
 } from "../github/send_github_repository_dispatch";
 
-export async function dispatchNotionTaskChangeToGitHub(
+export async function dispatchNotionTaskTrackerChangeToGitHub(
   request: Request,
   environment: WorkerEnvironment,
 ): Promise<Response> {
@@ -21,7 +21,7 @@ export async function dispatchNotionTaskChangeToGitHub(
     "GITHUB_OWNER",
     "GITHUB_REPOSITORY",
     "GITHUB_API_VERSION",
-    "GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE",
+    "GITHUB_NOTION_TASK_TRACKER_CHANGE_EVENT_TYPE",
     "GITHUB_REPOSITORY_DISPATCH_TOKEN",
     "NOTION_WEBHOOK_SECRET",
   ]);
@@ -42,7 +42,7 @@ export async function dispatchNotionTaskChangeToGitHub(
   }
 
   const dispatchPayload = createGitHubDispatchPayload(
-    environment.GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE,
+    environment.GITHUB_NOTION_TASK_TRACKER_CHANGE_EVENT_TYPE,
     trackerUser,
   );
   const githubResponse = await sendGitHubRepositoryDispatch(
