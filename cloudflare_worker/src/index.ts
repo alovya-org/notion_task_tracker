@@ -29,6 +29,11 @@ interface CalendarChannelState {
   sync_token: string;
 }
 
+interface CalendarSyncCursorState {
+  tracker_user: string;
+  sync_token: string;
+}
+
 const GOOGLE_CALENDAR_NOTIFICATION_PATH = "/google-calendar-notifications";
 const CALENDAR_CHANNEL_REGISTRATION_PATH = "/calendar-sync-state/channels";
 const CALENDAR_CURSOR_ADVANCEMENT_PATH = "/calendar-sync-state/cursors";
@@ -47,7 +52,46 @@ export default {
     }
     return await _dispatchNotionRefreshRequestToGitHub(request, environment);
   },
+
+  async scheduled(
+    _controller: ScheduledController,
+    environment: Environment,
+  ): Promise<void> {
+    await _dispatchDailyCalendarRecoveryToGitHub(environment);
+  },
 };
+
+async function _dispatchDailyCalendarRecoveryToGitHub(
+  environment: Environment,
+): Promise<void> {
+  _assertGoogleCalendarEnvironmentIsComplete(environment);
+  const cursors = await environment.CALENDAR_SYNC_STATE.prepare(
+    `SELECT tracker_user, sync_token
+     FROM calendar_sync_cursors
+     ORDER BY tracker_user, calendar_id`,
+  ).all<CalendarSyncCursorState>();
+
+  for (const cursor of cursors.results) {
+    const dispatchPayload = _createGitHubDispatchPayload(
+      environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE,
+      cursor.tracker_user,
+      undefined,
+      cursor.sync_token,
+    );
+    const githubResponse = await _sendGitHubRepositoryDispatch(
+      environment.GITHUB_OWNER,
+      environment.GITHUB_REPOSITORY,
+      environment.GITHUB_API_VERSION,
+      environment.GITHUB_DISPATCH_TOKEN,
+      dispatchPayload,
+    );
+    if (!githubResponse.ok) {
+      throw new Error(
+        `Daily Calendar recovery dispatch failed for ${cursor.tracker_user}: ${githubResponse.status}`,
+      );
+    }
+  }
+}
 
 async function _registerGoogleCalendarChannel(
   request: Request,

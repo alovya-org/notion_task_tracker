@@ -2,6 +2,9 @@ name = "refresh-notion-tracker-dispatcher"
 main = "src/index.ts"
 compatibility_date = "2026-07-17"
 
+[triggers]
+crons = ["0 0 * * *"]
+
 [vars]
 GITHUB_OWNER = "alovya"
 GITHUB_REPOSITORY = "notion_task_tracker"

@@ -374,6 +374,45 @@ describe("Cloudflare Worker calendar sync state administration", () => {
   });
 });
 
+describe("Cloudflare Worker daily Calendar recovery", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("dispatches incremental reconciliation from every durable sync token", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const database = {
+      prepare: vi.fn(() => ({
+        all: vi.fn(() => Promise.resolve({
+          results: [
+            { tracker_user: "al0vya", sync_token: "current-sync-token" },
+          ],
+        })),
+      })),
+    } as unknown as D1Database;
+
+    await worker.scheduled(
+      {} as ScheduledController,
+      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/alovya/notion_task_tracker/dispatches",
+      expect.objectContaining({
+        body: JSON.stringify({
+          event_type: "reconcile-google-calendar",
+          client_payload: {
+            tracker_user: "al0vya",
+            sync_token: "current-sync-token",
+          },
+        }),
+      }),
+    );
+  });
+});
+
 function _calendarSyncDatabaseReturning(channelState: object | null) {
   return {
     prepare: vi.fn(() => ({
