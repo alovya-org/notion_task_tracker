@@ -1,3 +1,10 @@
+import { createJsonResponse } from "./create_http_response";
+import {
+  createGitHubDispatchPayload,
+  createGitHubFailureResponse,
+  sendGitHubRepositoryDispatch,
+} from "./github/send_github_repository_dispatch";
+
 interface Environment {
   GITHUB_OWNER: string;
   GITHUB_REPOSITORY: string;
@@ -8,15 +15,6 @@ interface Environment {
   NOTION_WEBHOOK_SECRET: string;
   CALENDAR_SYNC_ADMIN_TOKEN: string;
   CALENDAR_SYNC_STATE: D1Database;
-}
-
-interface GitHubDispatchPayload {
-  event_type: string;
-  client_payload: {
-    tracker_user: string;
-    channel_id?: string;
-    sync_token?: string;
-  };
 }
 
 interface CalendarChannelState {
@@ -72,13 +70,13 @@ async function _dispatchDailyCalendarRecoveryToGitHub(
   ).all<CalendarSyncCursorState>();
 
   for (const cursor of cursors.results) {
-    const dispatchPayload = _createGitHubDispatchPayload(
+    const dispatchPayload = createGitHubDispatchPayload(
       environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE,
       cursor.tracker_user,
       undefined,
       cursor.sync_token,
     );
-    const githubResponse = await _sendGitHubRepositoryDispatch(
+    const githubResponse = await sendGitHubRepositoryDispatch(
       environment.GITHUB_OWNER,
       environment.GITHUB_REPOSITORY,
       environment.GITHUB_API_VERSION,
@@ -101,7 +99,7 @@ async function _registerGoogleCalendarChannel(
     return await _readLatestGoogleCalendarChannel(request, environment);
   }
   if (request.method !== "POST") {
-    return _createJsonResponse({ error: "Use GET or POST." }, 405, { Allow: "GET, POST" });
+      return createJsonResponse({ error: "Use GET or POST." }, 405, { Allow: "GET, POST" });
   }
   const authorisationFailure = _authoriseCalendarSyncStateAdministration(request, environment);
   if (authorisationFailure !== null) {
@@ -140,7 +138,7 @@ async function _registerGoogleCalendarChannel(
     ),
   ]);
 
-  return _createJsonResponse({ registered: true, channel_id: channelId }, 201);
+  return createJsonResponse({ registered: true, channel_id: channelId }, 201);
 }
 
 async function _readLatestGoogleCalendarChannel(
@@ -155,7 +153,7 @@ async function _readLatestGoogleCalendarChannel(
   const trackerUser = query.get("tracker_user");
   const calendarId = query.get("calendar_id");
   if (!trackerUser || !calendarId) {
-    return _createJsonResponse({ error: "tracker_user and calendar_id are required." }, 400);
+    return createJsonResponse({ error: "tracker_user and calendar_id are required." }, 400);
   }
   const channel = await environment.CALENDAR_SYNC_STATE.prepare(
     `SELECT channels.channel_id,
@@ -173,7 +171,7 @@ async function _readLatestGoogleCalendarChannel(
   if (channel === null) {
     return new Response(null, { status: 204 });
   }
-  return _createJsonResponse(channel, 200);
+  return createJsonResponse(channel, 200);
 }
 
 async function _advanceGoogleCalendarSyncCursor(
@@ -181,7 +179,7 @@ async function _advanceGoogleCalendarSyncCursor(
   environment: Environment,
 ): Promise<Response> {
   if (request.method !== "PATCH") {
-    return _createJsonResponse({ error: "Use PATCH." }, 405, { Allow: "PATCH" });
+    return createJsonResponse({ error: "Use PATCH." }, 405, { Allow: "PATCH" });
   }
   const authorisationFailure = _authoriseCalendarSyncStateAdministration(request, environment);
   if (authorisationFailure !== null) {
@@ -202,9 +200,9 @@ async function _advanceGoogleCalendarSyncCursor(
     .run();
 
   if (updateResult.meta.changes !== 1) {
-    return _createJsonResponse({ error: "Calendar sync cursor has already advanced." }, 409);
+    return createJsonResponse({ error: "Calendar sync cursor has already advanced." }, 409);
   }
-  return _createJsonResponse({ advanced: true }, 200);
+  return createJsonResponse({ advanced: true }, 200);
 }
 
 async function _dispatchGoogleCalendarChangeToGitHub(
@@ -212,7 +210,7 @@ async function _dispatchGoogleCalendarChangeToGitHub(
   environment: Environment,
 ): Promise<Response> {
   if (request.method !== "POST") {
-    return _createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
+    return createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
   }
 
   _assertGoogleCalendarEnvironmentIsComplete(environment);
@@ -226,7 +224,7 @@ async function _dispatchGoogleCalendarChangeToGitHub(
     (headerName) => !request.headers.get(headerName),
   );
   if (missingHeaderName !== undefined) {
-    return _createJsonResponse(
+    return createJsonResponse(
       { error: `Missing Google Calendar notification header: ${missingHeaderName}` },
       400,
     );
@@ -253,29 +251,29 @@ async function _dispatchGoogleCalendarChangeToGitHub(
     .bind(channelId)
     .first<CalendarChannelState>();
   if (channelState === null) {
-    return _createJsonResponse({ error: "Unknown Google Calendar channel." }, 401);
+    return createJsonResponse({ error: "Unknown Google Calendar channel." }, 401);
   }
   const suppliedChannelTokenSha256 = await _sha256Hex(channelToken);
   if (
     channelState.channel_token_sha256 !== suppliedChannelTokenSha256
     || channelState.resource_id !== resourceId
   ) {
-    return _createJsonResponse({ error: "Google Calendar channel identity rejected." }, 401);
+    return createJsonResponse({ error: "Google Calendar channel identity rejected." }, 401);
   }
   if (resourceState === "sync") {
     return new Response(null, { status: 204 });
   }
   if (!new Set(["exists", "not_exists"]).has(resourceState)) {
-    return _createJsonResponse({ error: "Unsupported Google Calendar resource state." }, 400);
+    return createJsonResponse({ error: "Unsupported Google Calendar resource state." }, 400);
   }
 
-  const dispatchPayload = _createGitHubDispatchPayload(
+  const dispatchPayload = createGitHubDispatchPayload(
     environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE,
     channelState.tracker_user,
     channelId,
     channelState.sync_token,
   );
-  const githubResponse = await _sendGitHubRepositoryDispatch(
+  const githubResponse = await sendGitHubRepositoryDispatch(
     environment.GITHUB_OWNER,
     environment.GITHUB_REPOSITORY,
     environment.GITHUB_API_VERSION,
@@ -283,9 +281,9 @@ async function _dispatchGoogleCalendarChangeToGitHub(
     dispatchPayload,
   );
   if (!githubResponse.ok) {
-    return await _createGitHubFailureResponse(githubResponse);
+    return await createGitHubFailureResponse(githubResponse);
   }
-  return _createJsonResponse({
+  return createJsonResponse({
     dispatched: true,
     event_type: dispatchPayload.event_type,
     tracker_user: channelState.tracker_user,
@@ -308,32 +306,32 @@ async function _dispatchNotionRefreshRequestToGitHub(
     console.log("Rejected request because the method was not POST.", {
       method: request.method,
     });
-    return _createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
+    return createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
   }
 
   _assertWorkerEnvironmentIsComplete(environment);
 
   const suppliedSecret = request.headers.get("notion_webhook_secret");
   if (suppliedSecret === null || suppliedSecret.length === 0) {
-    return _createJsonResponse({ error: "Missing notion_webhook_secret header." }, 400);
+    return createJsonResponse({ error: "Missing notion_webhook_secret header." }, 400);
   }
 
   if (suppliedSecret !== environment.NOTION_WEBHOOK_SECRET) {
     console.log("Rejected request because the webhook secret did not match.");
-    return _createJsonResponse({ error: "Webhook secret rejected." }, 401);
+    return createJsonResponse({ error: "Webhook secret rejected." }, 401);
   }
 
   const trackerUser = request.headers.get("tracker_user");
   if (trackerUser === null || trackerUser.length === 0) {
-    return _createJsonResponse({ error: "Missing tracker_user header." }, 400);
+    return createJsonResponse({ error: "Missing tracker_user header." }, 400);
   }
 
-  const dispatchPayload = _createGitHubDispatchPayload(
+  const dispatchPayload = createGitHubDispatchPayload(
     environment.GITHUB_DISPATCH_EVENT_TYPE,
     trackerUser,
   );
 
-  const githubResponse = await _sendGitHubRepositoryDispatch(
+  const githubResponse = await sendGitHubRepositoryDispatch(
     environment.GITHUB_OWNER,
     environment.GITHUB_REPOSITORY,
     environment.GITHUB_API_VERSION,
@@ -346,7 +344,7 @@ async function _dispatchNotionRefreshRequestToGitHub(
       githubStatus: githubResponse.status,
       trackerUser: dispatchPayload.client_payload.tracker_user,
     });
-    return await _createGitHubFailureResponse(githubResponse);
+    return await createGitHubFailureResponse(githubResponse);
   }
 
   console.log("GitHub repository dispatch succeeded.", {
@@ -354,7 +352,7 @@ async function _dispatchNotionRefreshRequestToGitHub(
     trackerUser: dispatchPayload.client_payload.tracker_user,
   });
 
-  return _createJsonResponse(
+  return createJsonResponse(
     {
       dispatched: true,
       event_type: dispatchPayload.event_type,
@@ -405,30 +403,9 @@ function _authoriseCalendarSyncStateAdministration(
     throw new Error("Missing Worker environment variable: CALENDAR_SYNC_ADMIN_TOKEN");
   }
   if (request.headers.get("Authorization") !== `Bearer ${environment.CALENDAR_SYNC_ADMIN_TOKEN}`) {
-    return _createJsonResponse({ error: "Calendar sync state administration rejected." }, 401);
+    return createJsonResponse({ error: "Calendar sync state administration rejected." }, 401);
   }
   return null;
-}
-
-function _createGitHubDispatchPayload(
-  eventType: string,
-  trackerUser: string,
-  channelId?: string,
-  syncToken?: string,
-): GitHubDispatchPayload {
-  const clientPayload: GitHubDispatchPayload["client_payload"] = {
-    tracker_user: trackerUser,
-  };
-  if (channelId !== undefined) {
-    clientPayload.channel_id = channelId;
-  }
-  if (syncToken !== undefined) {
-    clientPayload.sync_token = syncToken;
-  }
-  return {
-    event_type: eventType,
-    client_payload: clientPayload,
-  };
 }
 
 function _readRequiredString(body: Record<string, unknown>, fieldName: string): string {
@@ -445,52 +422,4 @@ function _readRequiredNumber(body: Record<string, unknown>, fieldName: string): 
     throw new Error(`${fieldName} must be a finite number`);
   }
   return value;
-}
-
-async function _sendGitHubRepositoryDispatch(
-  githubOwner: string,
-  githubRepository: string,
-  githubApiVersion: string,
-  githubDispatchToken: string,
-  dispatchPayload: GitHubDispatchPayload,
-): Promise<Response> {
-  const dispatchUrl = `https://api.github.com/repos/${githubOwner}/${githubRepository}/dispatches`;
-
-  return await fetch(dispatchUrl, {
-    method: "POST",
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${githubDispatchToken}`,
-      "Content-Type": "application/json",
-      "User-Agent": "notion-task-tracker-cloudflare-worker",
-      "X-GitHub-Api-Version": githubApiVersion,
-    },
-    body: JSON.stringify(dispatchPayload),
-  });
-}
-
-async function _createGitHubFailureResponse(githubResponse: Response): Promise<Response> {
-  const responseText = await githubResponse.text();
-  return _createJsonResponse(
-    {
-      error: "GitHub repository dispatch failed.",
-      github_status: githubResponse.status,
-      github_response: responseText,
-    },
-    502,
-  );
-}
-
-function _createJsonResponse(
-  body: Record<string, unknown>,
-  status: number,
-  headers: HeadersInit = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
-  });
 }
