@@ -5,8 +5,11 @@ from typing import Any
 
 import pytest
 
-from notion_task_tracker.config import load_config
-from notion_task_tracker.initialise_tracker import initialise_tracker
+from notion_task_tracker.config import ManagedPageUrls, TrackerConfig, load_config
+from notion_task_tracker.initialise_tracker import (
+    add_configured_ready_priority_page_to_tracker_state,
+    initialise_tracker,
+)
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
@@ -46,6 +49,7 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
     assert [created_page["properties"]["title"] for created_page in notion_client.created_pages] == [
         "Alovya's ongoing tasks",
         "Alovya's completed tasks",
+        "Alovya's tasks in execution order",
         "Alovya's miscellaneous notes",
         "Alovya's synthesis notes",
     ]
@@ -59,10 +63,16 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
     assert config.pages.ongoing_tasks_url == (
         "https://www.notion.so/created-00000000000000000000000000000001"
     )
+    assert config.pages.ready_priority_page_url == (
+        "https://www.notion.so/created-00000000000000000000000000000003"
+    )
     assert tracker_state["identity"] == {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
     assert tracker_state["task_database"]["data_source_id"] == "cccccccccccccccccccccccccccccccc"
     assert tracker_state["ongoing_landing_page"]["notion_page_id"] == (
         "00000000000000000000000000000001"
+    )
+    assert tracker_state["ready_priority_page"]["notion_page_id"] == (
+        "00000000000000000000000000000003"
     )
     assert tracker_state["tasks"] == {}
     assert result.config_path == config_path
@@ -88,6 +98,32 @@ def test_initialise_tracker_rejects_database_without_the_fixed_schema(tmp_path: 
         )
 
     assert notion_client.created_pages == []
+
+
+def test_add_configured_ready_priority_page_to_existing_tracker_state() -> None:
+    configured_tracker = TrackerConfig(
+        display_name="Alovya",
+        ticket_prefix="ALOVYA",
+        parent_page_url="https://www.notion.so/parent-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        pages=ManagedPageUrls(
+            ready_priority_page_url=(
+                "https://www.notion.so/execution-cccccccccccccccccccccccccccccccc"
+            ),
+        ),
+    )
+
+    tracker_state = add_configured_ready_priority_page_to_tracker_state(
+        {"tasks": {}},
+        configured_tracker,
+    )
+
+    assert tracker_state["ready_priority_page"] == {
+        "local_page_key": "ready_priority_page",
+        "title": "Alovya's tasks in execution order",
+        "notion_page_id": "cccccccccccccccccccccccccccccccc",
+        "parent_page_key": None,
+    }
 
 
 def test_initialise_tracker_rejects_incompatible_fixed_property_type(tmp_path: Path) -> None:

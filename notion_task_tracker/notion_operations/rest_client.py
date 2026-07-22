@@ -115,16 +115,15 @@ class NotionRestClient:
         self,
         parent_block_id: str,
         children: list[dict[str, Any]],
-        after_block_id: str,
+        after_block_id: str | None,
     ) -> None:
-        await self.client.blocks.children.append(
-            block_id=parent_block_id,
-            children=children,
-            position={
+        arguments = {"block_id": parent_block_id, "children": children}
+        if after_block_id is not None:
+            arguments["position"] = {
                 "type": "after_block",
                 "after_block": {"id": after_block_id},
-            },
-        )
+            }
+        await self.client.blocks.children.append(**arguments)
 
     async def delete_block(self, block_id: str) -> None:
         await self.client.blocks.delete(block_id=block_id)

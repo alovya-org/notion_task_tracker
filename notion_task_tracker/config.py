@@ -24,6 +24,7 @@ _TICKET_PREFIX_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]*$")
 class ManagedPageUrls:
     ongoing_tasks_url: str | None = None
     completed_tasks_url: str | None = None
+    ready_priority_page_url: str | None = None
     miscellaneous_notes_url: str | None = None
     synthesis_notes_url: str | None = None
 
@@ -76,6 +77,7 @@ def load_config(config_path: str | Path | None = None) -> TrackerConfig:
         pages=ManagedPageUrls(
             ongoing_tasks_url=pages.get("ongoing_tasks_url"),
             completed_tasks_url=pages.get("completed_tasks_url"),
+            ready_priority_page_url=pages.get("ready_priority_page_url"),
             miscellaneous_notes_url=pages.get("miscellaneous_notes_url"),
             synthesis_notes_url=pages.get("synthesis_notes_url"),
         ),
@@ -102,6 +104,7 @@ def write_config(config: TrackerConfig, config_path: str | Path | None = None) -
     for key, value in {
         "ongoing_tasks_url": config.pages.ongoing_tasks_url,
         "completed_tasks_url": config.pages.completed_tasks_url,
+        "ready_priority_page_url": config.pages.ready_priority_page_url,
         "miscellaneous_notes_url": config.pages.miscellaneous_notes_url,
         "synthesis_notes_url": config.pages.synthesis_notes_url,
     }.items():

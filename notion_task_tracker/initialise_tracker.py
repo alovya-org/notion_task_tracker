@@ -12,6 +12,7 @@ from notion_task_tracker.fixed_pages import (
     COMPLETED_LANDING_PAGE_LOCAL_KEY,
     MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
     ONGOING_LANDING_PAGE_LOCAL_KEY,
+    READY_PRIORITY_PAGE_LOCAL_KEY,
     SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
 )
 from notion_task_tracker.notion_operations.notion_id import canonical_notion_page_id, notion_page_id_from_url
@@ -50,6 +51,7 @@ class TrackerInitialisationResult:
             "created_page_urls": {
                 "ongoing_tasks_url": self.created_page_urls.ongoing_tasks_url,
                 "completed_tasks_url": self.created_page_urls.completed_tasks_url,
+                "ready_priority_page_url": self.created_page_urls.ready_priority_page_url,
                 "miscellaneous_notes_url": self.created_page_urls.miscellaneous_notes_url,
                 "synthesis_notes_url": self.created_page_urls.synthesis_notes_url,
             },
@@ -116,6 +118,23 @@ async def create_tracker_state_from_configured_pages(
     )
     _write_tracker_state(tracker_state_path, tracker_state)
     return tracker_state
+
+
+def add_configured_ready_priority_page_to_tracker_state(
+    tracker_state: dict[str, Any],
+    configured_tracker: TrackerConfig,
+) -> dict[str, Any]:
+    updated_tracker_state = json.loads(json.dumps(tracker_state))
+    page_titles = _managed_page_titles(configured_tracker.display_name)
+    updated_tracker_state["ready_priority_page"] = _created_page_state(
+        READY_PRIORITY_PAGE_LOCAL_KEY,
+        page_titles,
+        _required_managed_page_url(
+            configured_tracker.pages.ready_priority_page_url,
+            "ready_priority_page_url",
+        ),
+    )
+    return updated_tracker_state
 
 
 def _refuse_to_replace_existing_tracker_files(config_path: Path, tracker_state_path: Path) -> None:
@@ -196,6 +215,7 @@ def _managed_page_titles(display_name: str) -> dict[str, str]:
     return {
         ONGOING_LANDING_PAGE_LOCAL_KEY: f"{display_name}'s ongoing tasks",
         COMPLETED_LANDING_PAGE_LOCAL_KEY: f"{display_name}'s completed tasks",
+        READY_PRIORITY_PAGE_LOCAL_KEY: f"{display_name}'s tasks in execution order",
         MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY: f"{display_name}'s miscellaneous notes",
         SYNTHESIS_NOTES_PAGE_LOCAL_KEY: f"{display_name}'s synthesis notes",
     }
@@ -205,6 +225,7 @@ def _managed_page_urls(created_pages: dict[str, dict[str, Any]]) -> ManagedPageU
     return ManagedPageUrls(
         ongoing_tasks_url=created_pages[ONGOING_LANDING_PAGE_LOCAL_KEY]["url"],
         completed_tasks_url=created_pages[COMPLETED_LANDING_PAGE_LOCAL_KEY]["url"],
+        ready_priority_page_url=created_pages[READY_PRIORITY_PAGE_LOCAL_KEY]["url"],
         miscellaneous_notes_url=created_pages[MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY]["url"],
         synthesis_notes_url=created_pages[SYNTHESIS_NOTES_PAGE_LOCAL_KEY]["url"],
     )
@@ -237,6 +258,14 @@ def _tracker_state_from_configured_pages(
             _required_managed_page_url(
                 configured_tracker.pages.completed_tasks_url,
                 "completed_tasks_url",
+            ),
+        ),
+        "ready_priority_page": _created_page_state(
+            READY_PRIORITY_PAGE_LOCAL_KEY,
+            page_titles,
+            _required_managed_page_url(
+                configured_tracker.pages.ready_priority_page_url,
+                "ready_priority_page_url",
             ),
         ),
         "miscellaneous_notes": {

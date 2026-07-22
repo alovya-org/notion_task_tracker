@@ -65,7 +65,7 @@ ntt --init \
   --task-database-url "https://www.notion.so/..."
 ```
 
-Initialisation validates the database property names and types, discovers its data-source ID, creates the four managed pages, and records the URLs returned by Notion. It refuses to replace existing tracker files.
+Initialisation validates the database property names and types, discovers its data-source ID, creates the five managed pages, and records the URLs returned by Notion. It refuses to replace existing tracker files.
 
 Configuration is written to the platform user-configuration directory:
 
@@ -75,7 +75,7 @@ Configuration is written to the platform user-configuration directory:
 
 Set `NTT_CONFIG_PATH` or pass `--config-path` to use another file. Mutable tracker state remains at `~/.notion-task-tracker/notion_tasks_tree.json` unless `--tracker-state-path` is supplied.
 
-The configuration contains identity, the two supplied URLs, and the four generated page URLs. Database property names are defined by the codebase, not user configuration. Keep `NOTION_API_KEY` in the environment or a private secret store; it is never written to configuration or state.
+The configuration contains identity, the two supplied URLs, and the five generated page URLs. Database property names are defined by the codebase, not user configuration. Keep `NOTION_API_KEY` in the environment or a private secret store; it is never written to configuration or state.
 
 ```toml
 [identity]
@@ -89,6 +89,7 @@ task_database_url = "https://www.notion.so/..."
 [pages]
 ongoing_tasks_url = "https://www.notion.so/..."
 completed_tasks_url = "https://www.notion.so/..."
+ready_priority_page_url = "https://www.notion.so/..."
 miscellaneous_notes_url = "https://www.notion.so/..."
 synthesis_notes_url = "https://www.notion.so/..."
 ```
@@ -197,12 +198,15 @@ ntt --reconcile-from-notion
 
 This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed. If the tracker state JSON is missing, the command first creates local state from `config.toml`: it resolves the task database data-source id, derives managed page ids from the configured page URLs, writes an empty task projection, and then continues reconciliation. This bootstrap step does not create Notion pages.
 
+Reconciliation also maintains the task execution-order page. A task appears there only when it is not complete or cancelled, has no children, and either has no dependencies or every dependency is complete. Existing eligible numbered items remain as the user ordered them in Notion, newly eligible tasks are appended, and ineligible or duplicate task items are removed. Each item renders the displayed priority, an optional deadline, the task-page mention, and status. An empty page therefore receives every currently eligible leaf task on its first reconciliation. The page may contain only numbered items that each mention one known task page, plus blank paragraphs that Notion creates while editing.
+
 The state bootstrap requires the `[pages]` URLs written by `ntt --init`:
 
 ```toml
 [pages]
 ongoing_tasks_url = "https://www.notion.so/..."
 completed_tasks_url = "https://www.notion.so/..."
+ready_priority_page_url = "https://www.notion.so/..."
 miscellaneous_notes_url = "https://www.notion.so/..."
 synthesis_notes_url = "https://www.notion.so/..."
 ```

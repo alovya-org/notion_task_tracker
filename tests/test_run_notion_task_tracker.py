@@ -348,6 +348,7 @@ def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(
     assert tracker_state["task_database"]["data_source_id"] == "cccccccccccccccccccccccccccccccc"
     assert tracker_state["ongoing_landing_page"]["notion_page_id"] == "dddddddddddddddddddddddddddddddd"
     assert tracker_state["completed_landing_page"]["notion_page_id"] == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    assert tracker_state["ready_priority_page"]["notion_page_id"] == "77777777777777777777777777777777"
     assert tracker_state["miscellaneous_notes"]["page"]["notion_page_id"] == (
         "ffffffffffffffffffffffffffffffff"
     )
@@ -449,6 +450,28 @@ class _FakeNotionClient:
             ],
         )
 
+    async def fetch_block_children(self, parent_block_id: str) -> list[dict]:
+        assert parent_block_id == "99999999999999999999999999999999"
+        return [{
+            "id": "existing-priority-block",
+            "type": "numbered_list_item",
+            "numbered_list_item": {
+                "rich_text": [{
+                    "type": "mention",
+                    "mention": {
+                        "type": "page",
+                        "page": {"id": "22222222222222222222222222222222"},
+                    },
+                }],
+            },
+        }]
+
+    async def delete_block(self, block_id: str) -> None:
+        raise AssertionError(f"Reconciliation should preserve priority block {block_id}")
+
+    async def append_block_children(self, parent_block_id, children, after_block_id) -> None:
+        raise AssertionError("Reconciliation should not append an existing ready task")
+
 
 class _ConfiguredTrackerReconcileClient:
     def __init__(self) -> None:
@@ -476,6 +499,10 @@ class _ConfiguredTrackerReconcileClient:
             ],
         )
 
+    async def fetch_block_children(self, parent_block_id: str) -> list[dict]:
+        assert parent_block_id == "77777777777777777777777777777777"
+        return []
+
     async def create_page(self, parent: dict, properties: dict, markdown: str) -> dict:
         self.created_pages.append(
             {"parent": parent, "properties": properties, "markdown": markdown}
@@ -495,6 +522,12 @@ def _tracker_state(title: str, priority: str) -> dict:
             "local_page_key": "completed_landing_page",
             "title": COMPLETED_LANDING_PAGE_TITLE,
             "notion_page_id": None,
+            "parent_page_key": None,
+        },
+        "ready_priority_page": {
+            "local_page_key": "ready_priority_page",
+            "title": "Tasks in execution order",
+            "notion_page_id": "99999999999999999999999999999999",
             "parent_page_key": None,
         },
         "tasks": {
@@ -547,6 +580,7 @@ def _markdown_for_call(notion_client: FakeNotionClient, operation_key: str) -> s
 
 def _configured_tracker(
     synthesis_notes_url: str | None = "https://www.notion.so/synthesis-99999999999999999999999999999999",
+    ready_priority_page_url: str | None = "https://www.notion.so/priorities-77777777777777777777777777777777",
 ) -> TrackerConfig:
     return TrackerConfig(
         display_name="Alovya",
@@ -556,6 +590,7 @@ def _configured_tracker(
         pages=ManagedPageUrls(
             ongoing_tasks_url="https://www.notion.so/ongoing-dddddddddddddddddddddddddddddddd",
             completed_tasks_url="https://www.notion.so/completed-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            ready_priority_page_url=ready_priority_page_url,
             miscellaneous_notes_url="https://www.notion.so/misc-ffffffffffffffffffffffffffffffff",
             synthesis_notes_url=synthesis_notes_url,
         ),

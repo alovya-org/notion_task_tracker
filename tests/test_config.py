@@ -21,6 +21,7 @@ def test_write_config_then_load_config_preserves_user_and_notion_configuration(t
         pages=ManagedPageUrls(
             ongoing_tasks_url="https://www.notion.so/ongoing-33333333333333333333333333333333",
             completed_tasks_url="https://www.notion.so/completed-44444444444444444444444444444444",
+            ready_priority_page_url="https://www.notion.so/priorities-77777777777777777777777777777777",
             miscellaneous_notes_url="https://www.notion.so/miscellaneous-55555555555555555555555555555555",
             synthesis_notes_url="https://www.notion.so/synthesis-66666666666666666666666666666666",
         ),

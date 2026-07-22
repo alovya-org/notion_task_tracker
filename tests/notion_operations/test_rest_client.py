@@ -79,6 +79,27 @@ def test_append_block_children_uses_current_position_object():
     ]
 
 
+def test_append_block_children_omits_position_for_an_empty_page():
+    notion_client = NotionRestClient(
+        access_token="ntn_test",
+        base_url="https://api.notion.test",
+        notion_version="2026-03-11",
+    )
+    notion_client.client = _FakeNotionSdkClient(page_result={})
+    children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
+
+    asyncio.run(notion_client.append_block_children(
+        parent_block_id="page-a",
+        children=children,
+        after_block_id=None,
+    ))
+
+    assert notion_client.client.blocks.children.requests == [{
+        "block_id": "page-a",
+        "children": children,
+    }]
+
+
 def test_from_environment_uses_notion_api_key(monkeypatch):
     monkeypatch.setenv("NOTION_API_KEY", "ntn_test")
 

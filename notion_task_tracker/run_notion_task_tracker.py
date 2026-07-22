@@ -16,6 +16,7 @@ from notion_task_tracker.apply_tracker_command import TrackerCommandResult, appl
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
 from notion_task_tracker.initialise_tracker import (
+    add_configured_ready_priority_page_to_tracker_state,
     create_tracker_state_from_configured_pages,
     initialise_tracker,
 )
@@ -35,6 +36,9 @@ from notion_task_tracker.notion_operations.reconcile_task_database import (
     refresh_tracker_state_for_task_ids,
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
+)
+from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
+    reconcile_task_execution_order_page,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY, ExternalCoordination, Friction, TaskTree, Uncertainty
@@ -368,7 +372,15 @@ async def _read_or_create_reconcile_tracker_state(
     notion_client: NotionRestClient,
 ) -> dict[str, Any]:
     if source_tracker_state_path.exists():
-        return _read_json(source_tracker_state_path)
+        tracker_state = _read_json(source_tracker_state_path)
+        if "ready_priority_page" in tracker_state:
+            return tracker_state
+
+        configured_tracker = config or load_config()
+        return add_configured_ready_priority_page_to_tracker_state(
+            tracker_state,
+            configured_tracker,
+        )
 
     configured_tracker = config or load_config()
     return await create_tracker_state_from_configured_pages(
@@ -657,6 +669,9 @@ async def repair_and_write_refreshed_tracker_state(
         task_tree_changes=task_changes,
     )
     repaired_tracker_state, completed_operation_keys = await execute_command_result_writes(repair_result, notion_client)
+    completed_operation_keys.extend(
+        await reconcile_task_execution_order_page(repaired_tracker_state, notion_client)
+    )
     _write_json(source_tracker_state_path, repaired_tracker_state)
 
     refresh_summary = TrackerActionExecutionSummary(
