@@ -69,6 +69,30 @@ def test_all_day_event_preserves_week_semantics_when_possible():
     assert task["duration_unit"] == "Weeks"
 
 
+def test_deleted_event_clears_the_complete_task_schedule():
+    tracker_state = _tracker_state(_scheduled_task(DurationUnit.HOURS))
+    deleted_event = _owned_event()
+    deleted_event["status"] = "cancelled"
+
+    result = plan_task_schedule_updates_from_calendar_events(
+        [deleted_event],
+        tracker_state,
+        "ALOVYA",
+        "Europe/London",
+    )
+
+    task = result.tracker_state["tasks"]["ALOVYA-1"]
+    assert task["start"] is None
+    assert task["duration"] is None
+    assert task["duration_unit"] is None
+    assert task["end"] is None
+    written_properties = result.write_intents[0].arguments["properties"]
+    assert written_properties["Start"] is None
+    assert written_properties["End"] is None
+    assert written_properties["Duration"] is None
+    assert written_properties["Duration unit"] is None
+
+
 def test_foreign_event_identity_fails_clearly():
     tracker_state = _tracker_state(_scheduled_task(DurationUnit.HOURS))
 

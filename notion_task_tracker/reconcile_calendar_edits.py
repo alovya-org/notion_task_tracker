@@ -34,6 +34,12 @@ class CalendarTaskScheduleChange:
 
 
 @dataclass(frozen=True)
+class CalendarTaskScheduleRemoval:
+    event_id: str
+    task_id: str
+
+
+@dataclass(frozen=True)
 class CalendarEditReconciliationSummary:
     task_ids: list[str]
     completed_operation_keys: list[str]
@@ -97,12 +103,16 @@ def plan_task_schedule_updates_from_calendar_events(
     )
 
     for change in schedule_changes:
-        task_tree.replace_task_schedule(
-            task_id=change.task_id,
-            start=change.start,
-            duration=change.duration,
-            duration_unit=change.duration_unit,
-        )
+        if isinstance(change, CalendarTaskScheduleRemoval):
+            task_tree.clear_task_start(change.task_id)
+            task_tree.clear_task_duration(change.task_id)
+        else:
+            task_tree.replace_task_schedule(
+                task_id=change.task_id,
+                start=change.start,
+                duration=change.duration,
+                duration_unit=change.duration_unit,
+            )
 
     updated_tracker_state = dict(tracker_state)
     updated_tracker_state.update(task_tree.to_tracker_state())
@@ -140,12 +150,18 @@ def _derive_unambiguous_task_schedule_changes(
     task_tree: TaskTree,
     tracker_id: str,
     timezone: ZoneInfo,
-) -> list[CalendarTaskScheduleChange]:
+) -> list[CalendarTaskScheduleChange | CalendarTaskScheduleRemoval]:
     task_ids = task_ids_from_owned_calendar_events(changed_events, tracker_id)
     schedule_changes = []
     for event, task_id in zip(changed_events, task_ids, strict=True):
         task = _calendar_editable_leaf_task(task_tree, task_id)
-        schedule_changes.append(_derive_task_schedule_change(event, task, timezone))
+        if event.get("status") == "cancelled":
+            schedule_changes.append(CalendarTaskScheduleRemoval(
+                event_id=_required_event_id(event),
+                task_id=task.task_id,
+            ))
+        else:
+            schedule_changes.append(_derive_task_schedule_change(event, task, timezone))
     return schedule_changes
 
 
@@ -166,9 +182,6 @@ def _derive_task_schedule_change(
     timezone: ZoneInfo,
 ) -> CalendarTaskScheduleChange:
     event_id = _required_event_id(event)
-    if event.get("status") == "cancelled":
-        raise ValueError(f"Google event {event_id} is cancelled and has no schedule to reconcile")
-
     start_boundary = event.get("start", {})
     end_boundary = event.get("end", {})
     if "dateTime" in start_boundary and "dateTime" in end_boundary:

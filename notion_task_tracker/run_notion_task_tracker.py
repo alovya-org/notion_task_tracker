@@ -449,27 +449,12 @@ async def _run_reconcile_google_calendar_changes(
         changed_calendar_events.events,
         configured_tracker.ticket_prefix,
     )
-    deleted_owned_event_ids = _deleted_event_ids_owned_by_tracker(
-        changed_calendar_events.events,
-        configured_tracker.ticket_prefix,
-    )
     reconciliation = await reconcile_changed_google_calendar_events(
         changed_events=owned_calendar_events,
         config=configured_tracker,
         tracker_state_path=tracker_state_path,
         notion_client=_notion_rest_client_from_optional_instance(notion_client),
     )
-    recovered_calendar_operations = []
-    if deleted_owned_event_ids:
-        projection = await _run_project_tasks_into_google_calendar(
-            config=configured_tracker,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            backup_path=None,
-            notion_client=notion_client,
-            google_calendar_client=calendar_client,
-        )
-        recovered_calendar_operations = list(projection.calendar_operation_keys or [])
     state_client = calendar_sync_state_client or CalendarSyncStateClient.from_environment()
     await state_client.advance_calendar_sync_token(
         tracker_user=command["tracker_user"],
@@ -485,7 +470,6 @@ async def _run_reconcile_google_calendar_changes(
         warnings=reconciliation.warnings,
         completed_operation_keys=reconciliation.completed_operation_keys,
         recovered_expired_calendar_sync_token=recovered_expired_sync_token,
-        calendar_operation_keys=recovered_calendar_operations,
     )
     _write_json(Path(output_path), execution_summary.to_json_summary())
     return execution_summary
@@ -510,24 +494,8 @@ def _select_changed_events_owned_by_tracker(
         private_properties = event.get("extendedProperties", {}).get("private", {})
         if private_properties.get("ntt_tracker") != tracker_id:
             continue
-        if event.get("status") == "cancelled":
-            continue
         owned_events.append(event)
     return owned_events
-
-
-def _deleted_event_ids_owned_by_tracker(
-    changed_events: list[dict[str, Any]],
-    tracker_id: str,
-) -> list[str]:
-    return [
-        event["id"]
-        for event in changed_events
-        if event.get("status") == "cancelled"
-        and event.get("extendedProperties", {}).get("private", {}).get("ntt_tracker") == tracker_id
-        and isinstance(event.get("id"), str)
-        and event["id"]
-    ]
 
 
 async def _run_project_tasks_into_google_calendar(
