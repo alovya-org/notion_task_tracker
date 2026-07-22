@@ -1,6 +1,5 @@
 import asyncio
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -8,11 +7,7 @@ import pytest
 import notion_task_tracker.run_notion_task_tracker as run_notion_task_tracker
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
-from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerConfig
-from notion_task_tracker.google_calendar import (
-    CalendarEventChanges,
-    GoogleCalendarSyncTokenExpiredError,
-)
+from notion_task_tracker.config import ManagedPageUrls, TrackerConfig
 from notion_task_tracker.notion_operations.rest_client import NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from tests.notion_operations.helpers import FakeNotionClient
@@ -39,10 +34,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
     _command_changes_task_relations,
-    _fetch_calendar_changes_with_expired_token_recovery,
     _run_reconcile_tracker_from_notion_command,
-    _run_project_tasks_into_google_calendar,
-    _select_changed_events_owned_by_tracker,
     _run_write_tracker_command,
     _run_read_task_pages,
     main,
@@ -50,61 +42,6 @@ from notion_task_tracker.run_notion_task_tracker import (
     resolve_tracker_state_path,
     repair_and_write_refreshed_tracker_state,
 )
-
-
-def test_automatic_calendar_reconciliation_ignores_native_calendar_events():
-    owned_event = {
-        "id": "owned-event",
-        "extendedProperties": {
-            "private": {"ntt_tracker": "ALOVYA", "ntt_task_id": "ALOVYA-1"},
-        },
-    }
-    native_event = {"id": "native-event", "summary": "Lunch"}
-
-    selected_events = _select_changed_events_owned_by_tracker(
-        [native_event, owned_event],
-        "ALOVYA",
-    )
-
-    assert selected_events == [owned_event]
-
-
-def test_automatic_calendar_reconciliation_includes_deleted_ntt_event():
-    deleted_event = {
-        "id": "deleted-event",
-        "status": "cancelled",
-        "extendedProperties": {
-            "private": {"ntt_tracker": "ALOVYA", "ntt_task_id": "ALOVYA-1"},
-        },
-    }
-
-    assert _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA") == [deleted_event]
-
-
-def test_calendar_reconciliation_rebuilds_incremental_state_after_google_expires_token():
-    class ExpiredThenInitialCalendarClient:
-        def __init__(self):
-            self.sync_tokens = []
-
-        async def fetch_calendar_event_changes(self, sync_token=None):
-            self.sync_tokens.append(sync_token)
-            if sync_token is not None:
-                raise GoogleCalendarSyncTokenExpiredError
-            return CalendarEventChanges(
-                events=[{"id": "current-event"}],
-                next_sync_token="rebuilt-sync-token",
-            )
-
-    calendar_client = ExpiredThenInitialCalendarClient()
-
-    changes, recovered = asyncio.run(_fetch_calendar_changes_with_expired_token_recovery(
-        calendar_client,
-        "expired-sync-token",
-    ))
-
-    assert recovered is True
-    assert calendar_client.sync_tokens == ["expired-sync-token", None]
-    assert changes.next_sync_token == "rebuilt-sync-token"
 
 
 def test_parse_args_reads_explicit_read_action():
@@ -127,37 +64,37 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
-def test_parse_args_reads_project_calendar_action():
-    args = parse_args(["--project-calendar"])
+def test_parse_args_reads_sync_calendar_action():
+    args = parse_args(["--sync-calendar"])
 
-    assert args.project_calendar is True
+    assert args.sync_calendar is True
 
 
 def test_parse_args_reads_calendar_watch_maintenance_identity():
     args = parse_args([
-        "--ensure-calendar-watch",
+        "--maintain-calendar-watch",
         "--tracker-user",
         "al0vya",
         "--calendar-notification-url",
         "https://worker.example/google-calendar-notifications",
     ])
 
-    assert args.ensure_calendar_watch is True
+    assert args.maintain_calendar_watch is True
     assert args.tracker_user == "al0vya"
     assert args.calendar_notification_url.endswith("/google-calendar-notifications")
 
 
-def test_parse_args_reads_automatic_calendar_reconciliation_identity():
+def test_parse_args_reads_google_calendar_change_identity():
     args = parse_args([
-        "--reconcile-calendar-changes",
-        "--sync-token",
+        "--apply-calendar-changes",
+        "--google-change-cursor",
         "current-sync-token",
         "--tracker-user",
         "al0vya",
     ])
 
-    assert args.reconcile_calendar_changes is True
-    assert args.sync_token == "current-sync-token"
+    assert args.apply_calendar_changes is True
+    assert args.google_change_cursor == "current-sync-token"
     assert args.tracker_user == "al0vya"
 
 
@@ -538,57 +475,6 @@ def test_reconcile_from_notion_rejects_missing_configured_page_url(tmp_path: Pat
         )
 
 
-def test_project_calendar_refreshes_tasks_then_creates_desired_google_event(tmp_path: Path):
-    tracker_state = _tracker_state(title="Write Stage 5", priority="P2")
-    tracker_state["identity"] = {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
-    tracker_state["tasks"]["ALOVYA-1"].update({
-        "start": "2026-08-03T09:00:00+01:00",
-        "end": "2026-08-03T10:30:00+01:00",
-        "duration": 1.5,
-        "duration_unit": "Hours",
-    })
-    tracker_state_path = tmp_path / "tracker_state.json"
-    output_path = tmp_path / "output.json"
-    backup_path = tmp_path / "backup.json"
-    tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
-    google_calendar_client = _FakeGoogleCalendarClient()
-    config = replace(
-        _configured_tracker(),
-        calendar=CalendarConfig(
-            calendar_id="test-calendar",
-            timezone_name="Europe/London",
-            colour_id="8",
-        ),
-    )
-
-    summary = asyncio.run(_run_project_tasks_into_google_calendar(
-        config=config,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=backup_path,
-        notion_client=FakeNotionClient(),
-        google_calendar_client=google_calendar_client,
-    ))
-
-    assert google_calendar_client.list_queries == [{
-        "privateExtendedProperty": "ntt_tracker=ALOVYA",
-        "showDeleted": "false",
-    }]
-    assert len(google_calendar_client.created_events) == 1
-    created_event = google_calendar_client.created_events[0]
-    assert created_event["summary"] == "[NTT] Write Stage 5"
-    assert created_event["colorId"] == "8"
-    assert created_event["extendedProperties"]["private"] == {
-        "ntt_tracker": "ALOVYA",
-        "ntt_task_id": "ALOVYA-1",
-    }
-    assert summary.to_json_summary()["calendar_operations"] == [
-        "create:calendar_event:ALOVYA-1"
-    ]
-    assert summary.to_json_summary()["desired_calendar_event_count"] == 1
-    assert json.loads(output_path.read_text(encoding="utf-8"))["action_name"] == "project_calendar"
-
-
 def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_writes(tmp_path: Path):
     tracker_state = build_tracker_state_with_root_task()
     tracker_state_path = tmp_path / "tracker_state.json"
@@ -729,26 +615,6 @@ class _FakeNotionClient:
 
     async def query_checkbox_page_ids(self, data_source_id: str, property_name: str):
         return {"22222222222222222222222222222222"}
-
-
-class _FakeGoogleCalendarClient:
-    def __init__(self) -> None:
-        self.list_queries = []
-        self.created_events = []
-
-    async def list_all_calendar_events(self, query: dict) -> list[dict]:
-        self.list_queries.append(query)
-        return []
-
-    async def create_calendar_event(self, event: dict) -> dict:
-        self.created_events.append(event)
-        return {"id": "created-event"}
-
-    async def replace_calendar_event(self, event_id: str, event: dict) -> dict:
-        raise AssertionError("No event should be replaced")
-
-    async def delete_calendar_event(self, event_id: str) -> None:
-        raise AssertionError("No event should be deleted")
 
 
 class _ConfiguredTrackerReconcileClient:

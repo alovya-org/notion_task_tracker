@@ -6,7 +6,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 from notion_task_tracker.config import load_config
-from notion_task_tracker.google_calendar import GoogleCalendarClient
+from notion_task_tracker.google_calendar_sync.call_google_calendar_api import GoogleCalendarClient
 
 
 async def verify_google_calendar_transport_live() -> None:

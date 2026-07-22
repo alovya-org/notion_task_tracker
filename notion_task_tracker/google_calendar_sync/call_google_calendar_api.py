@@ -1,7 +1,9 @@
-"""Execute narrow Google Calendar event requests without task-domain decisions."""
+"""Authenticate with Google and execute narrow Calendar event requests."""
 
 from __future__ import annotations
 
+import os
+import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -9,18 +11,31 @@ from urllib.parse import quote
 from httpx import AsyncClient
 from httpx import HTTPStatusError
 
-from notion_task_tracker.google_calendar.authenticate_with_google import (
-    GoogleOAuthAccessTokenProvider,
-)
-
 
 GOOGLE_CALENDAR_API_URL = "https://www.googleapis.com/calendar/v3"
+GOOGLE_CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 @dataclass(frozen=True)
 class CalendarEventChanges:
     events: list[dict[str, Any]]
     next_sync_token: str
+
+
+@dataclass(frozen=True)
+class GoogleCalendarCredentials:
+    client_id: str
+    client_secret: str
+    refresh_token: str
+
+    @classmethod
+    def from_environment(cls) -> "GoogleCalendarCredentials":
+        return cls(
+            client_id=_required_secret("GOOGLE_CALENDAR_CLIENT_ID"),
+            client_secret=_required_secret("GOOGLE_CALENDAR_CLIENT_SECRET"),
+            refresh_token=_required_secret("GOOGLE_CALENDAR_REFRESH_TOKEN"),
+        )
 
 
 class GoogleCalendarSyncTokenExpiredError(Exception):
@@ -31,12 +46,12 @@ class GoogleCalendarClient:
     def __init__(
         self,
         calendar_id: str,
-        access_token_provider: GoogleOAuthAccessTokenProvider,
+        credentials: GoogleCalendarCredentials,
         http_client: AsyncClient | None = None,
     ) -> None:
         self.calendar_id = calendar_id
-        self.access_token_provider = access_token_provider
         self.http_client = http_client or AsyncClient()
+        self._access_tokens = _GoogleOAuthAccessTokenProvider(credentials, self.http_client)
 
     @classmethod
     def from_environment(
@@ -44,11 +59,10 @@ class GoogleCalendarClient:
         calendar_id: str,
         http_client: AsyncClient | None = None,
     ) -> "GoogleCalendarClient":
-        shared_http_client = http_client or AsyncClient()
         return cls(
             calendar_id=calendar_id,
-            access_token_provider=GoogleOAuthAccessTokenProvider.from_environment(shared_http_client),
-            http_client=shared_http_client,
+            credentials=GoogleCalendarCredentials.from_environment(),
+            http_client=http_client,
         )
 
     async def list_calendar_events(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -111,7 +125,7 @@ class GoogleCalendarClient:
         query: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        access_token = await self.access_token_provider.obtain_valid_access_token()
+        access_token = await self._access_tokens.obtain_valid_access_token()
         response = await self.http_client.request(
             method,
             f"{GOOGLE_CALENDAR_API_URL}{path}",
@@ -127,3 +141,46 @@ class GoogleCalendarClient:
 
     def _event_path(self, event_id: str) -> str:
         return f"{self._events_path()}/{quote(event_id, safe='')}"
+
+
+class _GoogleOAuthAccessTokenProvider:
+    def __init__(
+        self,
+        credentials: GoogleCalendarCredentials,
+        http_client: AsyncClient,
+    ) -> None:
+        self.credentials = credentials
+        self.http_client = http_client
+        self._access_token: str | None = None
+        self._access_token_expires_at = 0.0
+
+    async def obtain_valid_access_token(self) -> str:
+        if self._access_token is not None and time.monotonic() < self._access_token_expires_at:
+            return self._access_token
+
+        response = await self.http_client.post(
+            GOOGLE_OAUTH_TOKEN_URL,
+            data={
+                "client_id": self.credentials.client_id,
+                "client_secret": self.credentials.client_secret,
+                "refresh_token": self.credentials.refresh_token,
+                "grant_type": "refresh_token",
+            },
+        )
+        response.raise_for_status()
+        response_body = response.json()
+        access_token = response_body.get("access_token")
+        if not access_token:
+            raise ValueError("Google OAuth refresh response has no access_token")
+
+        expires_in = float(response_body.get("expires_in", 3600))
+        self._access_token = str(access_token)
+        self._access_token_expires_at = time.monotonic() + max(0, expires_in - 60)
+        return self._access_token
+
+
+def _required_secret(environment_variable: str) -> str:
+    value = os.environ.get(environment_variable)
+    if not value:
+        raise PermissionError(f"Set {environment_variable} before using Google Calendar")
+    return value

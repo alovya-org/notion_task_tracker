@@ -25,9 +25,9 @@ from notion_task_tracker.apply_tracker_command import (
     apply_command_to_tracker_state,
 )
 from notion_task_tracker.run_notion_task_tracker import (
-    TrackerActionExecutionSummary,
     refresh_task_tracker_from_notion,
 )
+from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 from notion_task_tracker.miscellaneous_pages import (
     MiscellaneousNoteEntry,
     MiscellaneousNotesMetadata,

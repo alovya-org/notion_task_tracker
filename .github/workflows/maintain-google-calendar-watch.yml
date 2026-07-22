@@ -1,4 +1,4 @@
-name: Renew Google Calendar watch
+name: Maintain Google Calendar watch
 
 on:
   schedule:
@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: renew-google-calendar-watch-al0vya
+  group: maintain-google-calendar-watch-al0vya
   cancel-in-progress: false
 
 jobs:
-  renew:
-    name: Renew al0vya Google Calendar watch when required
+  maintain:
+    name: Maintain al0vya Google Calendar watch
     runs-on: ubuntu-latest
     environment: al0vya
 
@@ -34,9 +34,9 @@ jobs:
         env:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
 
-      - name: Ensure the Google Calendar watch remains active
+      - name: Maintain the Google Calendar watch
         run: >-
-          ntt --ensure-calendar-watch
+          ntt --maintain-calendar-watch
           --tracker-user al0vya
           --calendar-notification-url "$NTT_CALENDAR_NOTIFICATION_URL"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
@@ -46,6 +46,6 @@ jobs:
           GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NTT_CALENDAR_NOTIFICATION_URL: ${{ vars.NTT_CALENDAR_NOTIFICATION_URL }}
-          NTT_CALENDAR_SYNC_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_ADMIN_TOKEN }}
-          NTT_CALENDAR_SYNC_STATE_URL: ${{ vars.NTT_CALENDAR_SYNC_STATE_URL }}
+          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN }}
+          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL: ${{ vars.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml

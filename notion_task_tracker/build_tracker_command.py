@@ -51,9 +51,9 @@ READ_ACTIONS = {
 }
 
 MAINTENANCE_ACTIONS = {
-    "ensure_calendar_watch",
-    "project_calendar",
-    "reconcile_calendar_changes",
+    "maintain_calendar_watch",
+    "sync_calendar",
+    "apply_calendar_changes",
     "reconcile_from_notion",
 }
 
@@ -70,26 +70,26 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
     action_name = selected_cli_action_from_arguments(arguments)
     if action_name is None:
         raise ValueError("Choose one tracker action")
-    if action_name == "project_calendar":
-        return {"command": "project_calendar"}
-    if action_name == "ensure_calendar_watch":
+    if action_name == "sync_calendar":
+        return {"command": "sync_calendar"}
+    if action_name == "maintain_calendar_watch":
         if not arguments.tracker_user:
-            raise ValueError("--ensure-calendar-watch requires --tracker-user")
+            raise ValueError("--maintain-calendar-watch requires --tracker-user")
         if not arguments.calendar_notification_url:
-            raise ValueError("--ensure-calendar-watch requires --calendar-notification-url")
+            raise ValueError("--maintain-calendar-watch requires --calendar-notification-url")
         return {
-            "command": "ensure_calendar_watch",
+            "command": "maintain_calendar_watch",
             "tracker_user": arguments.tracker_user,
             "notification_url": arguments.calendar_notification_url,
         }
-    if action_name == "reconcile_calendar_changes":
-        if not arguments.sync_token:
-            raise ValueError("--reconcile-calendar-changes requires --sync-token")
+    if action_name == "apply_calendar_changes":
+        if not arguments.google_change_cursor:
+            raise ValueError("--apply-calendar-changes requires --google-change-cursor")
         if not arguments.tracker_user:
-            raise ValueError("--reconcile-calendar-changes requires --tracker-user")
+            raise ValueError("--apply-calendar-changes requires --tracker-user")
         return {
-            "command": "reconcile_calendar_changes",
-            "sync_token": arguments.sync_token,
+            "command": "apply_calendar_changes",
+            "google_change_cursor": arguments.google_change_cursor,
             "tracker_user": arguments.tracker_user,
         }
     if action_name == "reconcile_from_notion":

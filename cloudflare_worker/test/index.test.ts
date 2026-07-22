@@ -5,8 +5,8 @@ const workerEnvironment = {
   GITHUB_OWNER: "alovya",
   GITHUB_REPOSITORY: "notion_task_tracker",
   GITHUB_API_VERSION: "2022-11-28",
-  GITHUB_DISPATCH_EVENT_TYPE: "refresh-notion-tracker",
-  GITHUB_CALENDAR_DISPATCH_EVENT_TYPE: "reconcile-google-calendar",
+  GITHUB_DISPATCH_EVENT_TYPE: "refresh-notion-task-tracker",
+  GITHUB_CALENDAR_DISPATCH_EVENT_TYPE: "apply-google-calendar-changes-to-notion-task-tracker",
   GITHUB_DISPATCH_TOKEN: "github-token",
   NOTION_WEBHOOK_SECRET: "notion-secret",
   CALENDAR_SYNC_ADMIN_TOKEN: "calendar-admin-token",
@@ -127,7 +127,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({
       dispatched: true,
-      event_type: "refresh-notion-tracker",
+      event_type: "refresh-notion-task-tracker",
       tracker_user: "al0vya",
     });
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -143,7 +143,7 @@ describe("Cloudflare Worker refresh dispatcher", () => {
           "X-GitHub-Api-Version": "2022-11-28",
         },
         body: JSON.stringify({
-          event_type: "refresh-notion-tracker",
+          event_type: "refresh-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
           },
@@ -224,7 +224,7 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({
       dispatched: true,
-      event_type: "reconcile-google-calendar",
+      event_type: "apply-google-calendar-changes-to-notion-task-tracker",
       tracker_user: "al0vya",
       channel_id: "channel-one",
     });
@@ -232,7 +232,7 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
       "https://api.github.com/repos/alovya/notion_task_tracker/dispatches",
       expect.objectContaining({
         body: JSON.stringify({
-          event_type: "reconcile-google-calendar",
+          event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
             channel_id: "channel-one",
@@ -402,7 +402,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
       "https://api.github.com/repos/alovya/notion_task_tracker/dispatches",
       expect.objectContaining({
         body: JSON.stringify({
-          event_type: "reconcile-google-calendar",
+          event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
             sync_token: "current-sync-token",

@@ -237,13 +237,13 @@ colour_id = "8"
 
 Keep Google OAuth secrets outside this file. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REFRESH_TOKEN` in the process environment or deployment secret store. Obtain the refresh token through offline OAuth consent using only `https://www.googleapis.com/auth/calendar.events`; NTT does not request Gmail access. The Calendar client renews short-lived access tokens automatically.
 
-Project scheduled active leaf tasks after reconciling the current Notion database:
+Sync scheduled active leaf tasks after reconciling the current Notion database:
 
 ```bash
-ntt --project-calendar
+ntt --sync-calendar
 ```
 
-NTT identifies its events through private Google extended properties containing the configured ticket prefix and full task ID. It creates missing events, replaces changed events, and deletes only uniquely identified NTT events whose task is no longer eligible. Foreign, malformed, and duplicate events are preserved. Projected task slots use an `[NTT]` title, remain transparent so meetings may be booked over them, and may use the configured colour. Keep recurring daily routines as native recurring Google Calendar events; this command projects only tasks stored in the NTT task database.
+NTT identifies its events through private Google extended properties containing the configured ticket prefix and full task ID. It creates missing events, replaces changed events, and deletes only uniquely identified NTT events whose task is no longer eligible. Foreign, malformed, and duplicate events are preserved. Synced task slots use an `[NTT]` title, remain transparent so meetings may be booked over them, and may use the configured colour. Keep recurring daily routines as native recurring Google Calendar events; this command syncs only tasks stored in the NTT task database.
 
 Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
@@ -266,7 +266,7 @@ Task ids are derived from Notion's `Task ID`. The visible Notion page title stay
 
 ## Refresh from GitHub Actions
 
-`.github/workflows/refresh-notion-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --reconcile-from-notion` with a temporary tracker state path.
+`.github/workflows/refresh-notion-task-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --reconcile-from-notion` with a temporary tracker state path.
 
 Each tracker user is represented by one GitHub environment. The environment name is the `tracker_user` value passed to the workflow. Each environment must define:
 
@@ -290,7 +290,7 @@ gh secret set NOTION_API_KEY --env "$TRACKER_USER"
 
 ```json
 {
-  "event_type": "refresh-notion-tracker",
+  "event_type": "refresh-notion-task-tracker",
   "client_payload": {
     "tracker_user": "al0vya"
   }
@@ -301,7 +301,7 @@ The GitHub token used to dispatch the workflow is separate from `NOTION_API_KEY`
 
 ## Refresh from a Notion webhook
 
-`cloudflare_worker/` contains a small Cloudflare Worker that turns two Notion webhook headers into the authenticated GitHub `repository_dispatch` request above. Notion sends a shared secret to the Worker, the Worker dispatches `refresh-notion-tracker`, and GitHub Actions refreshes the configured tracker user.
+`cloudflare_worker/` contains a small Cloudflare Worker that turns two Notion webhook headers into the authenticated GitHub `repository_dispatch` request above. Notion sends a shared secret to the Worker, the Worker dispatches `refresh-notion-task-tracker`, and GitHub Actions refreshes the configured tracker user.
 
 Install the pinned Worker development dependencies and verify the Worker locally:
 

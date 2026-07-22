@@ -7,20 +7,21 @@ import asyncio
 import json
 import time
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.calendar_sync_state import CalendarSyncStateClient
+from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
+    CalendarSyncCloudflareWorker,
+)
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
-from notion_task_tracker.derive_calendar_events import derive_desired_calendar_events
-from notion_task_tracker.google_calendar import (
-    CalendarEventChanges,
+from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     GoogleCalendarClient,
-    GoogleCalendarSyncTokenExpiredError,
+)
+from notion_task_tracker.google_calendar_sync.apply_google_calendar_changes_to_tasks import (
+    apply_google_calendar_changes_to_tasks,
 )
 from notion_task_tracker.initialise_tracker import (
     add_configured_ready_priority_page_to_tracker_state,
@@ -48,12 +49,12 @@ from notion_task_tracker.notion_operations.reconcile_task_execution_order_page i
     reconcile_task_execution_order_page,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.reconcile_calendar_events import (
-    CalendarReconciliationPlan,
-    plan_calendar_event_reconciliation,
+from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
+    sync_tasks_to_google_calendar,
 )
-from notion_task_tracker.reconcile_calendar_edits import reconcile_changed_google_calendar_events
-from notion_task_tracker.register_google_calendar_watch import ensure_google_calendar_watch_is_active
+from notion_task_tracker.google_calendar_sync.maintain_google_calendar_watch import (
+    maintain_google_calendar_watch,
+)
 from notion_task_tracker.tasks import (
     DEFAULT_TASK_PRIORITY,
     DurationUnit,
@@ -63,6 +64,7 @@ from notion_task_tracker.tasks import (
     Uncertainty,
 )
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
+from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
 APP_HOME_PATH = Path.home() / ".notion-task-tracker"
@@ -106,9 +108,9 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--install-skill", action="store_true")
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
-    action_group.add_argument("--project-calendar", action="store_true")
-    action_group.add_argument("--ensure-calendar-watch", action="store_true")
-    action_group.add_argument("--reconcile-calendar-changes", action="store_true")
+    action_group.add_argument("--sync-calendar", action="store_true")
+    action_group.add_argument("--maintain-calendar-watch", action="store_true")
+    action_group.add_argument("--apply-calendar-changes", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--read-all", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -161,7 +163,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--entry-date")
     parser.add_argument("--destination-ticket-number", type=int)
     parser.add_argument("--log-id")
-    parser.add_argument("--sync-token")
+    parser.add_argument("--google-change-cursor")
     parser.add_argument("--tracker-user")
     parser.add_argument("--calendar-notification-url")
     return parser
@@ -224,7 +226,7 @@ def execute_tracker_command(
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
-    calendar_sync_state_client: CalendarSyncStateClient | None = None,
+    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
@@ -234,7 +236,7 @@ def execute_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
         google_calendar_client=google_calendar_client,
-        calendar_sync_state_client=calendar_sync_state_client,
+        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
     ))
 
 
@@ -291,39 +293,45 @@ async def _run_tracker_command(
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_state_client: CalendarSyncStateClient | None,
+    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
 ) -> "TrackerActionExecutionSummary":
-    if command["command"] == "ensure_calendar_watch":
-        return await _run_ensure_google_calendar_watch_is_active(
-            command=command,
+    if command["command"] == "maintain_calendar_watch":
+        return await maintain_google_calendar_watch(
+            tracker_user=command["tracker_user"],
+            notification_url=command["notification_url"],
+            current_time_milliseconds=int(time.time() * 1000),
+            renew_within_milliseconds=2 * 24 * 60 * 60 * 1000,
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
-            calendar_sync_state_client=calendar_sync_state_client,
+            calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+            refresh_tasks_from_notion=_run_reconcile_tracker_from_notion_command,
         )
 
-    if command["command"] == "project_calendar":
-        return await _run_project_tasks_into_google_calendar(
+    if command["command"] == "sync_calendar":
+        return await sync_tasks_to_google_calendar(
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
+            refresh_tasks_from_notion=_run_reconcile_tracker_from_notion_command,
         )
 
-    if command["command"] == "reconcile_calendar_changes":
-        return await _run_reconcile_google_calendar_changes(
-            command=command,
+    if command["command"] == "apply_calendar_changes":
+        return await apply_google_calendar_changes_to_tasks(
+            tracker_user=command["tracker_user"],
+            google_change_cursor=command["google_change_cursor"],
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
-            calendar_sync_state_client=calendar_sync_state_client,
+            calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
         )
 
     if command["command"] == "reconcile_from_notion":
@@ -358,220 +366,6 @@ async def _run_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
     )
-
-
-async def _run_ensure_google_calendar_watch_is_active(
-    command: dict[str, Any],
-    config: TrackerConfig | None,
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
-    google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_state_client: CalendarSyncStateClient | None,
-) -> "TrackerActionExecutionSummary":
-    configured_tracker = config or load_config()
-    if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before maintaining a Google Calendar watch")
-    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
-        configured_tracker.calendar.calendar_id,
-    )
-    state_client = calendar_sync_state_client or CalendarSyncStateClient.from_environment()
-    maintenance = await ensure_google_calendar_watch_is_active(
-        tracker_user=command["tracker_user"],
-        notification_url=command["notification_url"],
-        current_time_milliseconds=int(time.time() * 1000),
-        renew_within_milliseconds=2 * 24 * 60 * 60 * 1000,
-        config=configured_tracker,
-        google_calendar_client=calendar_client,
-        calendar_sync_state_client=state_client,
-    )
-    if maintenance.catch_up_sync_token is not None:
-        await _run_reconcile_tracker_from_notion_command(
-            config=configured_tracker,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            backup_path=backup_path,
-            notion_client=notion_client,
-        )
-        await _run_reconcile_google_calendar_changes(
-            command={
-                "tracker_user": command["tracker_user"],
-                "sync_token": maintenance.catch_up_sync_token,
-            },
-            config=configured_tracker,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            notion_client=notion_client,
-            google_calendar_client=calendar_client,
-            calendar_sync_state_client=state_client,
-        )
-
-    execution_summary = TrackerActionExecutionSummary(
-        action_name="ensure_calendar_watch",
-        output_path=Path(output_path),
-        tracker_state_path=Path(tracker_state_path),
-        warnings=[],
-        calendar_watch={
-            "channel_id": maintenance.channel_id,
-            "expires_at": maintenance.expires_at,
-            "registered_replacement": maintenance.registered_replacement,
-            "caught_up_after_expiration": maintenance.catch_up_sync_token is not None,
-        },
-    )
-    _write_json(Path(output_path), execution_summary.to_json_summary())
-    return execution_summary
-
-
-async def _run_reconcile_google_calendar_changes(
-    command: dict[str, Any],
-    config: TrackerConfig | None,
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    notion_client: NotionRestClient | None,
-    google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_state_client: CalendarSyncStateClient | None,
-) -> "TrackerActionExecutionSummary":
-    configured_tracker = config or load_config()
-    if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before reconciling Google Calendar changes")
-
-    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
-        configured_tracker.calendar.calendar_id,
-    )
-    changed_calendar_events, recovered_expired_sync_token = (
-        await _fetch_calendar_changes_with_expired_token_recovery(
-            calendar_client,
-            command["sync_token"],
-        )
-    )
-    owned_calendar_events = _select_changed_events_owned_by_tracker(
-        changed_calendar_events.events,
-        configured_tracker.ticket_prefix,
-    )
-    reconciliation = await reconcile_changed_google_calendar_events(
-        changed_events=owned_calendar_events,
-        config=configured_tracker,
-        tracker_state_path=tracker_state_path,
-        notion_client=_notion_rest_client_from_optional_instance(notion_client),
-    )
-    state_client = calendar_sync_state_client or CalendarSyncStateClient.from_environment()
-    await state_client.advance_calendar_sync_token(
-        tracker_user=command["tracker_user"],
-        calendar_id=configured_tracker.calendar.calendar_id,
-        previous_sync_token=command["sync_token"],
-        next_sync_token=changed_calendar_events.next_sync_token,
-    )
-
-    execution_summary = TrackerActionExecutionSummary(
-        action_name="reconcile_calendar_changes",
-        output_path=Path(output_path),
-        tracker_state_path=Path(tracker_state_path),
-        warnings=reconciliation.warnings,
-        completed_operation_keys=reconciliation.completed_operation_keys,
-        recovered_expired_calendar_sync_token=recovered_expired_sync_token,
-    )
-    _write_json(Path(output_path), execution_summary.to_json_summary())
-    return execution_summary
-
-
-async def _fetch_calendar_changes_with_expired_token_recovery(
-    calendar_client: GoogleCalendarClient,
-    sync_token: str,
-) -> tuple[CalendarEventChanges, bool]:
-    try:
-        return await calendar_client.fetch_calendar_event_changes(sync_token), False
-    except GoogleCalendarSyncTokenExpiredError:
-        return await calendar_client.fetch_calendar_event_changes(), True
-
-
-def _select_changed_events_owned_by_tracker(
-    changed_events: list[dict[str, Any]],
-    tracker_id: str,
-) -> list[dict[str, Any]]:
-    owned_events = []
-    for event in changed_events:
-        private_properties = event.get("extendedProperties", {}).get("private", {})
-        if private_properties.get("ntt_tracker") != tracker_id:
-            continue
-        owned_events.append(event)
-    return owned_events
-
-
-async def _run_project_tasks_into_google_calendar(
-    config: TrackerConfig | None,
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
-    google_calendar_client: GoogleCalendarClient | None,
-) -> "TrackerActionExecutionSummary":
-    configured_tracker = config or load_config()
-    if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before projecting tasks into Google Calendar")
-
-    refresh_summary = await _run_reconcile_tracker_from_notion_command(
-        config=configured_tracker,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=backup_path,
-        notion_client=notion_client,
-    )
-    refreshed_tracker_state = _read_json(Path(tracker_state_path))
-    desired_events = derive_desired_calendar_events(
-        TaskTree.from_tracker_state(refreshed_tracker_state),
-        configured_tracker.calendar.timezone_name,
-    )
-    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
-        configured_tracker.calendar.calendar_id
-    )
-    existing_events = await calendar_client.list_all_calendar_events({
-        "privateExtendedProperty": f"ntt_tracker={configured_tracker.ticket_prefix}",
-        "showDeleted": "false",
-    })
-    plan = plan_calendar_event_reconciliation(
-        desired_events=desired_events,
-        existing_events=existing_events,
-        tracker_id=configured_tracker.ticket_prefix,
-        timezone_name=configured_tracker.calendar.timezone_name,
-        colour_id=configured_tracker.calendar.colour_id,
-    )
-    calendar_operation_keys = await _execute_calendar_reconciliation_plan(plan, calendar_client)
-
-    execution_summary = TrackerActionExecutionSummary(
-        action_name="project_calendar",
-        output_path=Path(output_path),
-        tracker_state_path=Path(tracker_state_path),
-        warnings=[*refresh_summary.warnings, *plan.warnings],
-        backup_path=refresh_summary.backup_path,
-        completed_operation_keys=refresh_summary.completed_operation_keys,
-        task_tree_changes=refresh_summary.task_tree_changes,
-        task_count=refresh_summary.task_count,
-        repair_operation_count=refresh_summary.repair_operation_count,
-        calendar_operation_keys=calendar_operation_keys,
-        desired_calendar_event_count=len(desired_events),
-    )
-    _write_json(Path(output_path), execution_summary.to_json_summary())
-    return execution_summary
-
-
-async def _execute_calendar_reconciliation_plan(
-    plan: CalendarReconciliationPlan,
-    calendar_client: GoogleCalendarClient,
-) -> list[str]:
-    completed_operation_keys = []
-    for event in plan.events_to_create:
-        await calendar_client.create_calendar_event(event)
-        task_id = event["extendedProperties"]["private"]["ntt_task_id"]
-        completed_operation_keys.append(f"create:calendar_event:{task_id}")
-    for replacement in plan.events_to_replace:
-        await calendar_client.replace_calendar_event(replacement.event_id, replacement.event)
-        task_id = replacement.event["extendedProperties"]["private"]["ntt_task_id"]
-        completed_operation_keys.append(f"replace:calendar_event:{task_id}")
-    for event_id in plan.event_ids_to_delete:
-        await calendar_client.delete_calendar_event(event_id)
-        completed_operation_keys.append(f"delete:calendar_event:{event_id}")
-    return completed_operation_keys
 
 
 async def _run_move_task_timeline_log_command(
@@ -998,63 +792,11 @@ async def repair_and_write_refreshed_tracker_state(
     return refresh_summary
 
 
-@dataclass(frozen=True)
-class TrackerActionExecutionSummary:
-    action_name: str
-    output_path: Path
-    tracker_state_path: Path
-    warnings: list[dict[str, str]]
-    backup_path: Path | None = None
-    completed_operation_keys: list[str] | None = None
-    tasks: list[dict[str, Any]] | None = None
-    task_tree_changes: list[dict[str, Any]] | None = None
-    task_count: int | None = None
-    repair_operation_count: int | None = None
-    movement: dict[str, Any] | None = None
-    calendar_operation_keys: list[str] | None = None
-    desired_calendar_event_count: int | None = None
-    calendar_watch: dict[str, Any] | None = None
-    recovered_expired_calendar_sync_token: bool | None = None
-
-    def to_json_summary(self) -> dict[str, Any]:
-        summary = {
-            "action_name": self.action_name,
-            "output_path": str(self.output_path),
-            "tracker_state_path": str(self.tracker_state_path),
-            "warnings": list(self.warnings),
-        }
-        if self.backup_path is not None:
-            summary["backup_path"] = str(self.backup_path)
-        if self.completed_operation_keys is not None:
-            summary["completed_operations"] = list(self.completed_operation_keys)
-        if self.tasks is not None:
-            summary["tasks"] = self.tasks
-        if self.task_tree_changes is not None:
-            summary["task_tree_changes"] = self.task_tree_changes
-        if self.task_count is not None:
-            summary["task_count"] = self.task_count
-        if self.repair_operation_count is not None:
-            summary["repair_operation_count"] = self.repair_operation_count
-        if self.movement is not None:
-            summary["movement"] = self.movement
-        if self.calendar_operation_keys is not None:
-            summary["calendar_operations"] = list(self.calendar_operation_keys)
-        if self.desired_calendar_event_count is not None:
-            summary["desired_calendar_event_count"] = self.desired_calendar_event_count
-        if self.calendar_watch is not None:
-            summary["calendar_watch"] = dict(self.calendar_watch)
-        if self.recovered_expired_calendar_sync_token is not None:
-            summary["recovered_expired_calendar_sync_token"] = (
-                self.recovered_expired_calendar_sync_token
-            )
-        return summary
-
-
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
-        "project_calendar": "project_calendar",
-        "ensure_calendar_watch": "ensure_calendar_watch",
-        "reconcile_calendar_changes": "reconcile_calendar_changes",
+        "sync_calendar": "sync_calendar",
+        "maintain_calendar_watch": "maintain_calendar_watch",
+        "apply_calendar_changes": "apply_calendar_changes",
         "reconcile_from_notion": "reconcile_from_notion",
         "read_tasks": "read",
         "read_all_tasks": "read_all",

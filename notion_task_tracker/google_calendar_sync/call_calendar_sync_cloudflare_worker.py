@@ -1,4 +1,4 @@
-"""Execute authenticated calendar synchronisation state requests without workflow decisions."""
+"""Call the deployed Cloudflare Worker that stores Calendar sync state in D1."""
 
 from __future__ import annotations
 
@@ -9,26 +9,28 @@ from typing import Any
 from httpx import AsyncClient
 
 
-CALENDAR_SYNC_STATE_URL_ENVIRONMENT_VARIABLE = "NTT_CALENDAR_SYNC_STATE_URL"
-CALENDAR_SYNC_ADMIN_TOKEN_ENVIRONMENT_VARIABLE = "NTT_CALENDAR_SYNC_ADMIN_TOKEN"
+CALENDAR_SYNC_CLOUDFLARE_WORKER_URL_ENVIRONMENT_VARIABLE = "NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL"
+CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN_ENVIRONMENT_VARIABLE = (
+    "NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN"
+)
 
 
 @dataclass(frozen=True)
-class CalendarChannelStatus:
+class GoogleNotificationChannelStatus:
     channel_id: str
     resource_id: str
     expires_at: int
-    sync_token: str
+    google_change_cursor: str
 
 
-class CalendarSyncStateClient:
+class CalendarSyncCloudflareWorker:
     def __init__(
         self,
-        state_url: str,
+        worker_url: str,
         administration_token: str,
         http_client: AsyncClient | None = None,
     ) -> None:
-        self.state_url = state_url.rstrip("/")
+        self.worker_url = worker_url.rstrip("/")
         self.administration_token = administration_token
         self.http_client = http_client or AsyncClient()
 
@@ -36,28 +38,30 @@ class CalendarSyncStateClient:
     def from_environment(
         cls,
         http_client: AsyncClient | None = None,
-    ) -> "CalendarSyncStateClient":
+    ) -> "CalendarSyncCloudflareWorker":
         return cls(
-            state_url=_required_environment_value(CALENDAR_SYNC_STATE_URL_ENVIRONMENT_VARIABLE),
+            worker_url=_required_environment_value(
+                CALENDAR_SYNC_CLOUDFLARE_WORKER_URL_ENVIRONMENT_VARIABLE,
+            ),
             administration_token=_required_environment_value(
-                CALENDAR_SYNC_ADMIN_TOKEN_ENVIRONMENT_VARIABLE,
+                CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN_ENVIRONMENT_VARIABLE,
             ),
             http_client=http_client,
         )
 
-    async def register_calendar_channel(
+    async def register_google_notification_channel(
         self,
         channel: dict[str, Any],
     ) -> dict[str, Any]:
-        return await self._send_state_request("POST", "channels", channel)
+        return await self._send_worker_request("POST", "channels", channel)
 
-    async def find_latest_calendar_channel(
+    async def find_latest_google_notification_channel(
         self,
         tracker_user: str,
         calendar_id: str,
-    ) -> CalendarChannelStatus | None:
+    ) -> GoogleNotificationChannelStatus | None:
         response = await self.http_client.get(
-            f"{self.state_url}/channels",
+            f"{self.worker_url}/channels",
             headers=self._authorisation_headers(),
             params={"tracker_user": tracker_user, "calendar_id": calendar_id},
         )
@@ -65,32 +69,32 @@ class CalendarSyncStateClient:
         if response.status_code == 204:
             return None
         channel = response.json()
-        return CalendarChannelStatus(
+        return GoogleNotificationChannelStatus(
             channel_id=channel["channel_id"],
             resource_id=channel["resource_id"],
             expires_at=channel["expires_at"],
-            sync_token=channel["sync_token"],
+            google_change_cursor=channel["sync_token"],
         )
 
-    async def advance_calendar_sync_token(
+    async def advance_google_change_cursor(
         self,
         tracker_user: str,
         calendar_id: str,
-        previous_sync_token: str,
-        next_sync_token: str,
+        previous_google_change_cursor: str,
+        next_google_change_cursor: str,
     ) -> dict[str, Any]:
-        return await self._send_state_request(
+        return await self._send_worker_request(
             "PATCH",
             "cursors",
             {
                 "tracker_user": tracker_user,
                 "calendar_id": calendar_id,
-                "previous_sync_token": previous_sync_token,
-                "next_sync_token": next_sync_token,
+                "previous_sync_token": previous_google_change_cursor,
+                "next_sync_token": next_google_change_cursor,
             },
         )
 
-    async def _send_state_request(
+    async def _send_worker_request(
         self,
         method: str,
         resource_name: str,
@@ -98,7 +102,7 @@ class CalendarSyncStateClient:
     ) -> dict[str, Any]:
         response = await self.http_client.request(
             method,
-            f"{self.state_url}/{resource_name}",
+            f"{self.worker_url}/{resource_name}",
             headers=self._authorisation_headers(),
             json=body,
         )

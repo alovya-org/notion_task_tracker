@@ -1,4 +1,4 @@
-name: Project Notion tasks into Google Calendar
+name: Refresh Notion task tracker
 
 on:
   workflow_dispatch:
@@ -9,15 +9,15 @@ on:
         type: string
   repository_dispatch:
     types:
-      - refresh-notion-tracker
+      - refresh-notion-task-tracker
 
 concurrency:
-  group: synchronise-notion-google-calendar-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+  group: refresh-notion-task-tracker-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
 jobs:
-  project:
-    name: Project ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }} tasks
+  refresh:
+    name: Refresh ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }} task tracker
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
 
@@ -46,8 +46,8 @@ jobs:
         env:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
 
-      - name: Project current Notion tasks into Google Calendar
-        run: ntt --project-calendar --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+      - name: Sync current Notion tasks to Google Calendar
+        run: ntt --sync-calendar --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
         env:
           GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
           GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}

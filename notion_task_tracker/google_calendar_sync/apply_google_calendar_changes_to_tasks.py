@@ -1,4 +1,4 @@
-"""Reconcile concrete Google Calendar event edits into NTT task schedules."""
+"""Apply concrete Google Calendar event changes to NTT task schedules."""
 
 from __future__ import annotations
 
@@ -10,7 +10,15 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
-from notion_task_tracker.config import TrackerConfig
+from notion_task_tracker.config import TrackerConfig, load_config
+from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
+    CalendarSyncCloudflareWorker,
+)
+from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
+    CalendarEventChanges,
+    GoogleCalendarClient,
+    GoogleCalendarSyncTokenExpiredError,
+)
 from notion_task_tracker.json_file import write_json_file
 from notion_task_tracker.notion_operations.reconcile_task_database import (
     refresh_tracker_state_for_task_ids,
@@ -22,6 +30,7 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_task_database_property_refresh_intent,
 )
 from notion_task_tracker.tasks import DurationUnit, Task, TaskStatus, TaskTree
+from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
 @dataclass(frozen=True)
@@ -40,30 +49,108 @@ class CalendarTaskScheduleRemoval:
 
 
 @dataclass(frozen=True)
-class CalendarEditReconciliationSummary:
+class AppliedGoogleCalendarChanges:
     task_ids: list[str]
     completed_operation_keys: list[str]
     warnings: list[dict[str, str]]
 
 
-async def reconcile_changed_google_calendar_events(
+async def apply_google_calendar_changes_to_tasks(
+    tracker_user: str,
+    google_change_cursor: str,
+    config: TrackerConfig | None,
+    tracker_state_path: str | Path,
+    output_path: str | Path,
+    notion_client: NotionRestClient | None,
+    google_calendar_client: GoogleCalendarClient | None,
+    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
+) -> TrackerActionExecutionSummary:
+    configured_tracker = config or load_config()
+    if configured_tracker.calendar is None:
+        raise ValueError("Configure [calendar] before applying Google Calendar changes")
+
+    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
+        configured_tracker.calendar.calendar_id,
+    )
+    changed_calendar_events, recovered_expired_google_change_cursor = (
+        await _fetch_calendar_changes_with_expired_cursor_recovery(
+            calendar_client,
+            google_change_cursor,
+        )
+    )
+    owned_calendar_events = _select_changed_events_owned_by_tracker(
+        changed_calendar_events.events,
+        configured_tracker.ticket_prefix,
+    )
+    applied_changes = await _apply_changed_google_calendar_events_to_tasks(
+        changed_events=owned_calendar_events,
+        config=configured_tracker,
+        tracker_state_path=tracker_state_path,
+        notion_client=notion_client or NotionRestClient.from_environment(),
+    )
+    cloudflare_worker = (
+        calendar_sync_cloudflare_worker or CalendarSyncCloudflareWorker.from_environment()
+    )
+    await cloudflare_worker.advance_google_change_cursor(
+        tracker_user=tracker_user,
+        calendar_id=configured_tracker.calendar.calendar_id,
+        previous_google_change_cursor=google_change_cursor,
+        next_google_change_cursor=changed_calendar_events.next_sync_token,
+    )
+
+    execution_summary = TrackerActionExecutionSummary(
+        action_name="apply_calendar_changes",
+        output_path=Path(output_path),
+        tracker_state_path=Path(tracker_state_path),
+        warnings=applied_changes.warnings,
+        completed_operation_keys=applied_changes.completed_operation_keys,
+        recovered_expired_google_change_cursor=recovered_expired_google_change_cursor,
+    )
+    write_json_file(execution_summary.to_json_summary(), output_path)
+    return execution_summary
+
+
+async def _fetch_calendar_changes_with_expired_cursor_recovery(
+    calendar_client: GoogleCalendarClient,
+    google_change_cursor: str,
+) -> tuple[CalendarEventChanges, bool]:
+    try:
+        return await calendar_client.fetch_calendar_event_changes(google_change_cursor), False
+    except GoogleCalendarSyncTokenExpiredError:
+        return await calendar_client.fetch_calendar_event_changes(), True
+
+
+def _select_changed_events_owned_by_tracker(
+    changed_events: list[dict[str, Any]],
+    tracker_id: str,
+) -> list[dict[str, Any]]:
+    owned_events = []
+    for event in changed_events:
+        private_properties = event.get("extendedProperties", {}).get("private", {})
+        if private_properties.get("ntt_tracker") != tracker_id:
+            continue
+        owned_events.append(event)
+    return owned_events
+
+
+async def _apply_changed_google_calendar_events_to_tasks(
     changed_events: list[dict[str, Any]],
     config: TrackerConfig,
     tracker_state_path: str | Path,
     notion_client: NotionRestClient,
-) -> CalendarEditReconciliationSummary:
+) -> AppliedGoogleCalendarChanges:
     if config.calendar is None:
         raise ValueError("Configure [calendar] before reconciling Google Calendar edits")
 
     source_tracker_state_path = Path(tracker_state_path)
     tracker_state = json.loads(source_tracker_state_path.read_text(encoding="utf-8"))
-    task_ids = task_ids_from_owned_calendar_events(changed_events, config.ticket_prefix)
+    task_ids = _read_task_ids_from_owned_calendar_events(changed_events, config.ticket_prefix)
     refreshed_result = await refresh_tracker_state_for_task_ids(
         task_ids=task_ids,
         tracker_state=tracker_state,
         notion_client=notion_client,
     )
-    planned_updates = plan_task_schedule_updates_from_calendar_events(
+    planned_updates = _plan_task_schedule_updates_from_google_events(
         changed_events=changed_events,
         tracker_state=refreshed_result.tracker_state,
         tracker_id=config.ticket_prefix,
@@ -81,14 +168,14 @@ async def reconcile_changed_google_calendar_events(
         notion_client,
     )
     write_json_file(updated_tracker_state, source_tracker_state_path)
-    return CalendarEditReconciliationSummary(
+    return AppliedGoogleCalendarChanges(
         task_ids=task_ids,
         completed_operation_keys=completed_operation_keys,
         warnings=list(refreshed_result.warnings or []),
     )
 
 
-def plan_task_schedule_updates_from_calendar_events(
+def _plan_task_schedule_updates_from_google_events(
     changed_events: list[dict[str, Any]],
     tracker_state: dict[str, Any],
     tracker_id: str,
@@ -126,7 +213,7 @@ def plan_task_schedule_updates_from_calendar_events(
     )
 
 
-def task_ids_from_owned_calendar_events(
+def _read_task_ids_from_owned_calendar_events(
     changed_events: list[dict[str, Any]],
     tracker_id: str,
 ) -> list[str]:
@@ -151,7 +238,7 @@ def _derive_unambiguous_task_schedule_changes(
     tracker_id: str,
     timezone: ZoneInfo,
 ) -> list[CalendarTaskScheduleChange | CalendarTaskScheduleRemoval]:
-    task_ids = task_ids_from_owned_calendar_events(changed_events, tracker_id)
+    task_ids = _read_task_ids_from_owned_calendar_events(changed_events, tracker_id)
     schedule_changes = []
     for event, task_id in zip(changed_events, task_ids, strict=True):
         task = _calendar_editable_leaf_task(task_tree, task_id)

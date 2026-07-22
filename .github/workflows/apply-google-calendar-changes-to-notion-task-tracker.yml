@@ -1,17 +1,17 @@
-name: Reconcile Google Calendar
+name: Apply Google Calendar changes to Notion task tracker
 
 on:
   repository_dispatch:
     types:
-      - reconcile-google-calendar
+      - apply-google-calendar-changes-to-notion-task-tracker
 
 concurrency:
-  group: synchronise-notion-google-calendar-${{ github.event.client_payload.tracker_user }}
+  group: apply-google-calendar-changes-to-notion-task-tracker-${{ github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
 jobs:
-  reconcile:
-    name: Reconcile ${{ github.event.client_payload.tracker_user }}
+  apply:
+    name: Apply Google Calendar changes to ${{ github.event.client_payload.tracker_user }} task tracker
     runs-on: ubuntu-latest
     environment: ${{ github.event.client_payload.tracker_user }}
 
@@ -19,10 +19,10 @@ jobs:
       - name: Check dispatch identity
         run: |
           test -n "$TRACKER_USER"
-          test -n "$SYNC_TOKEN"
+          test -n "$GOOGLE_CHANGE_CURSOR"
         env:
           TRACKER_USER: ${{ github.event.client_payload.tracker_user }}
-          SYNC_TOKEN: ${{ github.event.client_payload.sync_token }}
+          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.sync_token }}
 
       - name: Check out tracker
         uses: actions/checkout@v4
@@ -48,10 +48,10 @@ jobs:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
 
-      - name: Reconcile changed Google events into Notion
+      - name: Apply changed Google events to Notion tasks
         run: >-
-          ntt --reconcile-calendar-changes
-          --sync-token "$SYNC_TOKEN"
+          ntt --apply-calendar-changes
+          --google-change-cursor "$GOOGLE_CHANGE_CURSOR"
           --tracker-user "$TRACKER_USER"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
         env:
@@ -59,8 +59,8 @@ jobs:
           GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
           GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NTT_CALENDAR_SYNC_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_ADMIN_TOKEN }}
-          NTT_CALENDAR_SYNC_STATE_URL: ${{ vars.NTT_CALENDAR_SYNC_STATE_URL }}
+          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN }}
+          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL: ${{ vars.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
-          SYNC_TOKEN: ${{ github.event.client_payload.sync_token }}
+          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.sync_token }}
           TRACKER_USER: ${{ github.event.client_payload.tracker_user }}
