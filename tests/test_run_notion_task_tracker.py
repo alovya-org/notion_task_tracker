@@ -70,16 +70,16 @@ def test_parse_args_reads_sync_tasks_to_google_calendar_action():
     assert args.sync_tasks_to_google_calendar is True
 
 
-def test_parse_args_reads_calendar_watch_maintenance_identity():
+def test_parse_args_reads_notification_channel_maintenance_identity():
     args = parse_args([
-        "--maintain-google-calendar-watch",
+        "--maintain-google-calendar-notification-channel",
         "--tracker-user",
         "al0vya",
         "--calendar-notification-url",
         "https://worker.example/google-calendar-notifications",
     ])
 
-    assert args.maintain_google_calendar_watch is True
+    assert args.maintain_google_calendar_notification_channel is True
     assert args.tracker_user == "al0vya"
     assert args.calendar_notification_url.endswith("/google-calendar-notifications")
 

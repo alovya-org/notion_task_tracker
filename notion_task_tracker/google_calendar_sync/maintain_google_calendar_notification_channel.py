@@ -23,14 +23,14 @@ from notion_task_tracker.tracker_action_execution_summary import TrackerActionEx
 
 
 @dataclass(frozen=True)
-class CalendarWatchRegistration:
+class GoogleCalendarNotificationChannel:
     channel_id: str
     resource_id: str
     expires_at: int
 
 
 @dataclass(frozen=True)
-class GoogleCalendarWatchMaintenance:
+class GoogleCalendarNotificationChannelMaintenance:
     channel_id: str
     expires_at: int
     registered_replacement: bool
@@ -48,11 +48,11 @@ class _RefreshTasksFromNotion(Protocol):
     ) -> TrackerActionExecutionSummary: ...
 
 
-async def maintain_google_calendar_watch(
+async def maintain_google_calendar_notification_channel(
     tracker_user: str,
     notification_url: str,
     current_time_milliseconds: int,
-    renew_within_milliseconds: int,
+    replace_within_milliseconds: int,
     config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
@@ -64,7 +64,9 @@ async def maintain_google_calendar_watch(
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
     if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before maintaining a Google Calendar watch")
+        raise ValueError(
+            "Configure [calendar] before maintaining a Google Calendar notification channel"
+        )
 
     calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
         configured_tracker.calendar.calendar_id,
@@ -72,11 +74,11 @@ async def maintain_google_calendar_watch(
     cloudflare_worker = (
         calendar_sync_cloudflare_worker or CalendarSyncCloudflareWorker.from_environment()
     )
-    maintenance = await _maintain_google_calendar_watch_registration(
+    maintenance = await _maintain_google_calendar_notification_channel(
         tracker_user=tracker_user,
         notification_url=notification_url,
         current_time_milliseconds=current_time_milliseconds,
-        renew_within_milliseconds=renew_within_milliseconds,
+        replace_within_milliseconds=replace_within_milliseconds,
         config=configured_tracker,
         google_calendar_client=calendar_client,
         calendar_sync_cloudflare_worker=cloudflare_worker,
@@ -101,11 +103,11 @@ async def maintain_google_calendar_watch(
         )
 
     execution_summary = TrackerActionExecutionSummary(
-        action_name="maintain_google_calendar_watch",
+        action_name="maintain_google_calendar_notification_channel",
         output_path=Path(output_path),
         tracker_state_path=Path(tracker_state_path),
         warnings=[],
-        calendar_watch={
+        google_calendar_notification_channel={
             "channel_id": maintenance.channel_id,
             "expires_at": maintenance.expires_at,
             "registered_replacement": maintenance.registered_replacement,
@@ -118,34 +120,34 @@ async def maintain_google_calendar_watch(
     return execution_summary
 
 
-async def _maintain_google_calendar_watch_registration(
+async def _maintain_google_calendar_notification_channel(
     tracker_user: str,
     notification_url: str,
     current_time_milliseconds: int,
-    renew_within_milliseconds: int,
+    replace_within_milliseconds: int,
     config: TrackerConfig,
     google_calendar_client: GoogleCalendarClient,
     calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker,
-) -> GoogleCalendarWatchMaintenance:
+) -> GoogleCalendarNotificationChannelMaintenance:
     calendar_id = _configured_calendar_id(config)
     current_channel = await calendar_sync_cloudflare_worker.find_latest_google_notification_channel(
         tracker_user,
         calendar_id,
     )
-    if _channel_remains_active_beyond_renewal_window(
+    if _channel_remains_active_beyond_replacement_window(
         current_channel,
         current_time_milliseconds,
-        renew_within_milliseconds,
+        replace_within_milliseconds,
     ):
         assert current_channel is not None
-        return GoogleCalendarWatchMaintenance(
+        return GoogleCalendarNotificationChannelMaintenance(
             channel_id=current_channel.channel_id,
             expires_at=current_channel.expires_at,
             registered_replacement=False,
             catch_up_google_change_cursor=None,
         )
 
-    replacement = await _register_google_calendar_watch(
+    replacement = await _create_google_calendar_notification_channel(
         tracker_user=tracker_user,
         notification_url=notification_url,
         channel_id=str(uuid4()),
@@ -162,7 +164,7 @@ async def _maintain_google_calendar_watch_registration(
         if current_channel is not None and current_channel.expires_at <= current_time_milliseconds
         else None
     )
-    return GoogleCalendarWatchMaintenance(
+    return GoogleCalendarNotificationChannelMaintenance(
         channel_id=replacement.channel_id,
         expires_at=replacement.expires_at,
         registered_replacement=True,
@@ -170,7 +172,7 @@ async def _maintain_google_calendar_watch_registration(
     )
 
 
-async def _register_google_calendar_watch(
+async def _create_google_calendar_notification_channel(
     tracker_user: str,
     notification_url: str,
     channel_id: str,
@@ -179,7 +181,7 @@ async def _register_google_calendar_watch(
     google_calendar_client: GoogleCalendarClient,
     calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker,
     initial_google_change_cursor: str | None = None,
-) -> CalendarWatchRegistration:
+) -> GoogleCalendarNotificationChannel:
     calendar_id = _configured_calendar_id(config)
     google_change_cursor = initial_google_change_cursor
     if google_change_cursor is None:
@@ -206,35 +208,41 @@ async def _register_google_calendar_watch(
 
 def _configured_calendar_id(config: TrackerConfig) -> str:
     if config.calendar is None:
-        raise ValueError("Configure [calendar] before registering a Google Calendar watch")
+        raise ValueError(
+            "Configure [calendar] before creating a Google Calendar notification channel"
+        )
     return config.calendar.calendar_id
 
 
-def _channel_remains_active_beyond_renewal_window(
+def _channel_remains_active_beyond_replacement_window(
     channel: GoogleNotificationChannelStatus | None,
     current_time_milliseconds: int,
-    renew_within_milliseconds: int,
+    replace_within_milliseconds: int,
 ) -> bool:
     return (
         channel is not None
-        and channel.expires_at > current_time_milliseconds + renew_within_milliseconds
+        and channel.expires_at > current_time_milliseconds + replace_within_milliseconds
     )
 
 
 def _read_registered_google_channel(
     google_channel: dict[str, Any],
     requested_channel_id: str,
-) -> CalendarWatchRegistration:
+) -> GoogleCalendarNotificationChannel:
     returned_channel_id = google_channel.get("id")
     if returned_channel_id != requested_channel_id:
-        raise ValueError("Google Calendar watch response did not preserve the requested channel id")
+        raise ValueError(
+            "Google Calendar notification channel response did not preserve the requested channel id"
+        )
     resource_id = google_channel.get("resourceId")
     if not isinstance(resource_id, str) or not resource_id:
-        raise ValueError("Google Calendar watch response has no resourceId")
+        raise ValueError("Google Calendar notification channel response has no resourceId")
     expiration = google_channel.get("expiration")
     if not isinstance(expiration, str) or not expiration.isdigit():
-        raise ValueError("Google Calendar watch response has no millisecond expiration")
-    return CalendarWatchRegistration(
+        raise ValueError(
+            "Google Calendar notification channel response has no millisecond expiration"
+        )
+    return GoogleCalendarNotificationChannel(
         channel_id=returned_channel_id,
         resource_id=resource_id,
         expires_at=int(expiration),

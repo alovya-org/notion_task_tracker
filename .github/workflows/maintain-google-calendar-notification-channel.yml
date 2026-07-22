@@ -1,4 +1,4 @@
-name: Maintain Google Calendar watch
+name: Maintain Google Calendar notification channel
 
 on:
   schedule:
@@ -6,12 +6,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: maintain-google-calendar-watch-al0vya
+  group: maintain-google-calendar-notification-channel-al0vya
   cancel-in-progress: false
 
 jobs:
   maintain:
-    name: Maintain al0vya Google Calendar watch
+    name: Maintain al0vya Google Calendar notification channel
     runs-on: ubuntu-latest
     environment: al0vya
 
@@ -34,9 +34,9 @@ jobs:
         env:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
 
-      - name: Maintain the Google Calendar watch
+      - name: Maintain the Google Calendar notification channel
         run: >-
-          ntt --maintain-google-calendar-watch
+          ntt --maintain-google-calendar-notification-channel
           --tracker-user al0vya
           --calendar-notification-url "$NTT_CALENDAR_NOTIFICATION_URL"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"

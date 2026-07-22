@@ -52,8 +52,8 @@ from notion_task_tracker.notion_operations.write_executor import execute_command
 from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
     sync_tasks_to_google_calendar,
 )
-from notion_task_tracker.google_calendar_sync.maintain_google_calendar_watch import (
-    maintain_google_calendar_watch,
+from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notification_channel import (
+    maintain_google_calendar_notification_channel,
 )
 from notion_task_tracker.tasks import (
     DEFAULT_TASK_PRIORITY,
@@ -109,7 +109,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--refresh-notion-task-tracker", action="store_true")
     action_group.add_argument("--sync-tasks-to-google-calendar", action="store_true")
-    action_group.add_argument("--maintain-google-calendar-watch", action="store_true")
+    action_group.add_argument(
+        "--maintain-google-calendar-notification-channel",
+        action="store_true",
+    )
     action_group.add_argument("--apply-google-calendar-changes-to-tasks", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--read-all", action="store_true")
@@ -295,12 +298,12 @@ async def _run_tracker_command(
     google_calendar_client: GoogleCalendarClient | None,
     calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
 ) -> "TrackerActionExecutionSummary":
-    if command["command"] == "maintain_google_calendar_watch":
-        return await maintain_google_calendar_watch(
+    if command["command"] == "maintain_google_calendar_notification_channel":
+        return await maintain_google_calendar_notification_channel(
             tracker_user=command["tracker_user"],
             notification_url=command["notification_url"],
             current_time_milliseconds=int(time.time() * 1000),
-            renew_within_milliseconds=2 * 24 * 60 * 60 * 1000,
+            replace_within_milliseconds=2 * 24 * 60 * 60 * 1000,
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
@@ -795,7 +798,9 @@ async def repair_and_write_refreshed_tracker_state(
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
         "sync_tasks_to_google_calendar": "sync_tasks_to_google_calendar",
-        "maintain_google_calendar_watch": "maintain_google_calendar_watch",
+        "maintain_google_calendar_notification_channel": (
+            "maintain_google_calendar_notification_channel"
+        ),
         "apply_google_calendar_changes_to_tasks": "apply_google_calendar_changes_to_tasks",
         "refresh_notion_task_tracker": "refresh_notion_task_tracker",
         "read_tasks": "read",

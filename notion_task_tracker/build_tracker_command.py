@@ -51,7 +51,7 @@ READ_ACTIONS = {
 }
 
 MAINTENANCE_ACTIONS = {
-    "maintain_google_calendar_watch",
+    "maintain_google_calendar_notification_channel",
     "sync_tasks_to_google_calendar",
     "apply_google_calendar_changes_to_tasks",
     "refresh_notion_task_tracker",
@@ -72,15 +72,18 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         raise ValueError("Choose one tracker action")
     if action_name == "sync_tasks_to_google_calendar":
         return {"command": "sync_tasks_to_google_calendar"}
-    if action_name == "maintain_google_calendar_watch":
+    if action_name == "maintain_google_calendar_notification_channel":
         if not arguments.tracker_user:
-            raise ValueError("--maintain-google-calendar-watch requires --tracker-user")
+            raise ValueError(
+                "--maintain-google-calendar-notification-channel requires --tracker-user"
+            )
         if not arguments.calendar_notification_url:
             raise ValueError(
-                "--maintain-google-calendar-watch requires --calendar-notification-url"
+                "--maintain-google-calendar-notification-channel requires "
+                "--calendar-notification-url"
             )
         return {
-            "command": "maintain_google_calendar_watch",
+            "command": "maintain_google_calendar_notification_channel",
             "tracker_user": arguments.tracker_user,
             "notification_url": arguments.calendar_notification_url,
         }

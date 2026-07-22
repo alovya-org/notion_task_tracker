@@ -24,15 +24,15 @@ def test_sync_tasks_to_google_calendar_action_builds_sync_command():
     assert command == {"command": "sync_tasks_to_google_calendar"}
 
 
-def test_maintain_google_calendar_watch_action_preserves_renewal_identity():
+def test_maintain_google_calendar_notification_channel_action_preserves_identity():
     command = _build_tracker_command(_arguments(
-        maintain_google_calendar_watch=True,
+        maintain_google_calendar_notification_channel=True,
         tracker_user="al0vya",
         calendar_notification_url="https://worker.example/google-calendar-notifications",
     ))
 
     assert command == {
-        "command": "maintain_google_calendar_watch",
+        "command": "maintain_google_calendar_notification_channel",
         "tracker_user": "al0vya",
         "notification_url": "https://worker.example/google-calendar-notifications",
     }
@@ -573,7 +573,7 @@ def _arguments(**overrides):
     values = {
         "refresh_notion_task_tracker": False,
         "sync_tasks_to_google_calendar": False,
-        "maintain_google_calendar_watch": False,
+        "maintain_google_calendar_notification_channel": False,
         "apply_google_calendar_changes_to_tasks": False,
         "read": False,
         "read_all": False,

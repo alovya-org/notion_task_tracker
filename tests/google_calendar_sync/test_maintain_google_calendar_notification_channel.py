@@ -9,17 +9,17 @@ from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_work
     GoogleNotificationChannelStatus,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import CalendarEventChanges
-from notion_task_tracker.google_calendar_sync.maintain_google_calendar_watch import (
-    _maintain_google_calendar_watch_registration,
-    _register_google_calendar_watch,
+from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notification_channel import (
+    _create_google_calendar_notification_channel,
+    _maintain_google_calendar_notification_channel,
 )
 
 
-def test_registers_google_watch_identity_and_initial_google_change_cursor_in_durable_state():
+def test_creates_google_notification_channel_with_initial_change_cursor_in_durable_state():
     google_calendar_client = _RecordingGoogleCalendarClient()
     calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker()
 
-    registration = asyncio.run(_register_google_calendar_watch(
+    channel = asyncio.run(_create_google_calendar_notification_channel(
         tracker_user="al0vya",
         notification_url="https://worker.example/google-calendar-notifications",
         channel_id="channel-one",
@@ -29,10 +29,10 @@ def test_registers_google_watch_identity_and_initial_google_change_cursor_in_dur
         calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
     ))
 
-    assert registration.channel_id == "channel-one"
-    assert registration.resource_id == "resource-one"
-    assert registration.expires_at == 1786000000000
-    assert google_calendar_client.watched_channel == {
+    assert channel.channel_id == "channel-one"
+    assert channel.resource_id == "resource-one"
+    assert channel.expires_at == 1786000000000
+    assert google_calendar_client.requested_channel == {
         "id": "channel-one",
         "type": "web_hook",
         "address": "https://worker.example/google-calendar-notifications",
@@ -49,11 +49,11 @@ def test_registers_google_watch_identity_and_initial_google_change_cursor_in_dur
     }
 
 
-def test_refuses_a_google_watch_response_for_another_channel():
+def test_refuses_google_response_for_another_notification_channel():
     google_calendar_client = _RecordingGoogleCalendarClient(returned_channel_id="wrong-channel")
 
     with pytest.raises(ValueError) as error:
-            asyncio.run(_register_google_calendar_watch(
+            asyncio.run(_create_google_calendar_notification_channel(
             tracker_user="al0vya",
             notification_url="https://worker.example/google-calendar-notifications",
             channel_id="channel-one",
@@ -64,11 +64,11 @@ def test_refuses_a_google_watch_response_for_another_channel():
         ))
 
     assert str(error.value) == (
-        "Google Calendar watch response did not preserve the requested channel id"
+        "Google Calendar notification channel response did not preserve the requested channel id"
     )
 
 
-def test_keeps_a_watch_that_remains_active_beyond_the_renewal_window():
+def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
     google_calendar_client = _RecordingGoogleCalendarClient()
     calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
         current_channel=GoogleNotificationChannelStatus(
@@ -79,11 +79,11 @@ def test_keeps_a_watch_that_remains_active_beyond_the_renewal_window():
         ),
     )
 
-    maintenance = asyncio.run(_maintain_google_calendar_watch_registration(
+    maintenance = asyncio.run(_maintain_google_calendar_notification_channel(
         tracker_user="al0vya",
         notification_url="https://worker.example/google-calendar-notifications",
         current_time_milliseconds=1_000_000,
-        renew_within_milliseconds=500_000,
+        replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=google_calendar_client,
         calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
@@ -91,10 +91,10 @@ def test_keeps_a_watch_that_remains_active_beyond_the_renewal_window():
 
     assert maintenance.registered_replacement is False
     assert maintenance.channel_id == "current-channel"
-    assert google_calendar_client.watched_channel is None
+    assert google_calendar_client.requested_channel is None
 
 
-def test_replaces_an_expired_watch_and_requests_incremental_catch_up():
+def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
     calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
         current_channel=GoogleNotificationChannelStatus(
             channel_id="expired-channel",
@@ -104,11 +104,11 @@ def test_replaces_an_expired_watch_and_requests_incremental_catch_up():
         ),
     )
 
-    maintenance = asyncio.run(_maintain_google_calendar_watch_registration(
+    maintenance = asyncio.run(_maintain_google_calendar_notification_channel(
         tracker_user="al0vya",
         notification_url="https://worker.example/google-calendar-notifications",
         current_time_milliseconds=1_000_000,
-        renew_within_milliseconds=500_000,
+        replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=_RecordingGoogleCalendarClient(returned_channel_id=None),
         calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
@@ -118,7 +118,7 @@ def test_replaces_an_expired_watch_and_requests_incremental_catch_up():
     assert maintenance.catch_up_google_change_cursor == "last-delivered-sync-token"
 
 
-def test_renews_a_nearly_expired_watch_without_fetching_calendar_events():
+def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
     google_calendar_client = _RecordingGoogleCalendarClient(returned_channel_id=None)
     calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
         current_channel=GoogleNotificationChannelStatus(
@@ -129,11 +129,11 @@ def test_renews_a_nearly_expired_watch_without_fetching_calendar_events():
         ),
     )
 
-    maintenance = asyncio.run(_maintain_google_calendar_watch_registration(
+    maintenance = asyncio.run(_maintain_google_calendar_notification_channel(
         tracker_user="al0vya",
         notification_url="https://worker.example/google-calendar-notifications",
         current_time_milliseconds=1_000_000,
-        renew_within_milliseconds=500_000,
+        replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=google_calendar_client,
         calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
@@ -148,7 +148,7 @@ def test_renews_a_nearly_expired_watch_without_fetching_calendar_events():
 class _RecordingGoogleCalendarClient:
     def __init__(self, returned_channel_id: str | None = "channel-one") -> None:
         self.returned_channel_id = returned_channel_id
-        self.watched_channel = None
+        self.requested_channel = None
         self.change_fetch_count = 0
 
     async def fetch_calendar_event_changes(self):
@@ -156,7 +156,7 @@ class _RecordingGoogleCalendarClient:
         return CalendarEventChanges(events=[], next_sync_token="initial-sync-token")
 
     async def watch_calendar_events(self, channel):
-        self.watched_channel = channel
+        self.requested_channel = channel
         return {
             "id": self.returned_channel_id or channel["id"],
             "resourceId": "resource-one",

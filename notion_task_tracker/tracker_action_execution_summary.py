@@ -20,7 +20,7 @@ class TrackerActionExecutionSummary:
     movement: dict[str, Any] | None = None
     calendar_operation_keys: list[str] | None = None
     desired_calendar_event_count: int | None = None
-    calendar_watch: dict[str, Any] | None = None
+    google_calendar_notification_channel: dict[str, Any] | None = None
     recovered_expired_google_change_cursor: bool | None = None
 
     def to_json_summary(self) -> dict[str, Any]:
@@ -48,8 +48,10 @@ class TrackerActionExecutionSummary:
             summary["calendar_operations"] = list(self.calendar_operation_keys)
         if self.desired_calendar_event_count is not None:
             summary["desired_calendar_event_count"] = self.desired_calendar_event_count
-        if self.calendar_watch is not None:
-            summary["calendar_watch"] = dict(self.calendar_watch)
+        if self.google_calendar_notification_channel is not None:
+            summary["google_calendar_notification_channel"] = dict(
+                self.google_calendar_notification_channel
+            )
         if self.recovered_expired_google_change_cursor is not None:
             summary["recovered_expired_google_change_cursor"] = (
                 self.recovered_expired_google_change_cursor
