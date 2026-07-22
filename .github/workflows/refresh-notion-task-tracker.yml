@@ -16,6 +16,9 @@ concurrency:
   group: synchronise-notion-and-google-calendar-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   synchronise:
     name: Synchronise ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }} task tracker
@@ -30,10 +33,10 @@ jobs:
           TRACKER_USER: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
 
       - name: Check out tracker
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -82,3 +85,22 @@ jobs:
           NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: ${{ secrets.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN }}
           NTT_GOOGLE_CALENDAR_STATE_API_URL: ${{ vars.NTT_GOOGLE_CALENDAR_STATE_API_URL }}
           TRACKER_USER: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+
+  report-failure:
+    name: Report synchronisation failure
+    if: ${{ always() && needs.synchronise.result == 'failure' }}
+    needs: synchronise
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Create actionable failure issue
+        run: >-
+          gh issue create
+          --title "Google Calendar synchronisation failed in run $GITHUB_RUN_ID"
+          --body "Inspect the failed workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}

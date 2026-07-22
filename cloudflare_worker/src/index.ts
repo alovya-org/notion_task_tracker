@@ -5,6 +5,7 @@ import { dispatchDailyGoogleCalendarRecovery } from "./google_calendar/dispatch_
 import { dispatchGoogleCalendarSynchronisation } from "./google_calendar/dispatch_google_calendar_synchronisation";
 import { deleteGoogleCalendarEventMappingRoute } from "./google_calendar/delete_google_calendar_event_mapping";
 import { markGoogleCalendarEventDeletedByNttRoute } from "./google_calendar/mark_google_calendar_event_deleted_by_ntt";
+import { pruneExpiredGoogleCalendarNotificationChannels } from "./google_calendar/prune_expired_google_calendar_notification_channels";
 import { readGoogleCalendarSynchronisationState } from "./google_calendar/read_google_calendar_synchronisation_state";
 import { readLatestGoogleCalendarNotificationChannel } from "./google_calendar/read_latest_google_calendar_notification_channel";
 import { receiveGoogleCalendarNotification } from "./google_calendar/receive_google_calendar_notification";
@@ -22,6 +23,7 @@ const GOOGLE_CALENDAR_NTT_DELETIONS_PATH = "/google-calendar/event-ledger/ntt-de
 const GOOGLE_CALENDAR_EVENT_MAPPINGS_PATH = "/google-calendar/event-ledger/events";
 const GOOGLE_CALENDAR_EVENT_LEDGER_SNAPSHOT_PATH = "/google-calendar/event-ledger/snapshot";
 const GOOGLE_CALENDAR_SYNCHRONISATION_DISPATCHES_PATH = "/google-calendar/synchronisation-dispatches";
+const GOOGLE_CALENDAR_EXPIRED_NOTIFICATION_CHANNELS_PATH = "/google-calendar/notification-channels/expired";
 const NOTION_TASK_TRACKER_CHANGES_PATH = "/notion-task-tracker-changes";
 
 export default {
@@ -60,6 +62,9 @@ export default {
     }
     if (requestPath === GOOGLE_CALENDAR_SYNCHRONISATION_DISPATCHES_PATH) {
       return await dispatchGoogleCalendarSynchronisation(request, environment);
+    }
+    if (requestPath === GOOGLE_CALENDAR_EXPIRED_NOTIFICATION_CHANNELS_PATH) {
+      return await pruneExpiredGoogleCalendarNotificationChannels(request, environment);
     }
     if (requestPath === NOTION_TASK_TRACKER_CHANGES_PATH) {
       return await dispatchNotionTaskTrackerChangeToGitHub(request, environment);

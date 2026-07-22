@@ -226,6 +226,17 @@ export async function findGoogleCalendarNotificationChannelById(
   ).bind(channelId).first<GoogleCalendarNotificationChannelState>();
 }
 
+export async function deleteExpiredGoogleCalendarNotificationChannels(
+  database: D1Database,
+  expiredBefore: number,
+): Promise<number> {
+  const deleteResult = await database.prepare(
+    `DELETE FROM google_calendar_notification_channels
+     WHERE expires_at < ?`,
+  ).bind(expiredBefore).run();
+  return deleteResult.meta.changes;
+}
+
 export async function advanceGoogleCalendarChangeCursorInDatabase(
   database: D1Database,
   trackerUser: string,

@@ -33,3 +33,20 @@ def test_google_change_cursor_never_crosses_the_github_dispatch_boundary():
 
     assert "google-change-cursor" not in workflow
     assert "GOOGLE_CHANGE_CURSOR" not in workflow
+
+
+def test_workflows_use_current_actions_and_report_background_failures():
+    workflow_dir = REPOSITORY_ROOT_PATH / ".github/workflows"
+    calendar_workflow_paths = [
+        SYNCHRONISATION_WORKFLOW_PATH,
+        workflow_dir / "maintain-google-calendar-notification-channel.yml",
+    ]
+
+    for workflow_path in calendar_workflow_paths:
+        workflow = workflow_path.read_text(encoding="utf-8")
+        assert "actions/checkout@v6" in workflow
+        assert "actions/setup-python@v6" in workflow
+        assert "contents: read" in workflow
+        assert "issues: write" in workflow
+        assert "gh issue create" in workflow
+        assert "actions/runs/$GITHUB_RUN_ID" in workflow

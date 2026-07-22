@@ -267,6 +267,31 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("rejects a correctly signed notification after its channel trust expires", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const environment = {
+      ..._environmentWithCalendarChannel(),
+      GOOGLE_CALENDAR_STATE_DATABASE: _googleCalendarStateDatabaseReturning({
+        channel_id: "channel-one",
+        resource_id: "resource-one",
+        notification_channel_token_sha256: "07aae475f67f53e5cef11ebee8a133038a448d23615ec60808577872155db76e",
+        tracker_user: "al0vya",
+        calendar_id: "calendar@example.com",
+        expiration: 1,
+      }),
+    };
+
+    const response = await worker.fetch(
+      _googleCalendarNotificationRequest("exists"),
+      environment,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Expired Google Calendar channel." });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 function _environmentWithCalendarChannel() {
@@ -557,6 +582,29 @@ describe("Cloudflare Worker Google Calendar state API", () => {
         }),
       }),
     );
+  });
+
+  it("prunes notification channels beyond the expiry grace period", async () => {
+    const recordedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _googleCalendarStateDatabaseRecordingRuns(recordedStatements, 2);
+    const response = await worker.fetch(
+      new Request("https://example.com/google-calendar/notification-channels/expired", {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer calendar-state-api-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ expired_before: 1785000000000 }),
+      }),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted_channel_count: 2 });
+    expect(recordedStatements[0].query).toContain(
+      "DELETE FROM google_calendar_notification_channels",
+    );
+    expect(recordedStatements[0].values).toEqual([1785000000000]);
   });
 });
 

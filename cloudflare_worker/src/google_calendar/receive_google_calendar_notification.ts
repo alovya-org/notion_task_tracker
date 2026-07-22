@@ -11,6 +11,8 @@ import {
   hashGoogleCalendarNotificationChannelToken,
 } from "./google_calendar_state_database";
 
+const EXPIRED_NOTIFICATION_CHANNEL_GRACE_MILLISECONDS = 10 * 60 * 1000;
+
 export async function receiveGoogleCalendarNotification(
   request: Request,
   environment: WorkerEnvironment,
@@ -46,6 +48,12 @@ export async function receiveGoogleCalendarNotification(
   );
   if (channelState === null) {
     return createJsonResponse({ error: "Unknown Google Calendar channel." }, 401);
+  }
+  if (
+    channelState.expiration + EXPIRED_NOTIFICATION_CHANNEL_GRACE_MILLISECONDS
+    < Date.now()
+  ) {
+    return createJsonResponse({ error: "Expired Google Calendar channel." }, 401);
   }
 
   const suppliedChannelTokenSha256 = await hashGoogleCalendarNotificationChannelToken(

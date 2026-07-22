@@ -194,6 +194,27 @@ def test_requests_synchronisation_without_sending_the_google_change_cursor():
     assert json.loads(requests[0].read()) == {"tracker_user": "al0vya"}
 
 
+def test_prunes_notification_channels_before_an_explicit_expiry_boundary():
+    requests = []
+
+    async def record_request(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"deleted_channel_count": 2})
+
+    state_client = _state_client(record_request)
+
+    result = asyncio.run(
+        state_client.prune_expired_google_calendar_notification_channels(1785000000000)
+    )
+
+    assert result == {"deleted_channel_count": 2}
+    assert requests[0].method == "DELETE"
+    assert requests[0].url == (
+        "https://worker.example/google-calendar/notification-channels/expired"
+    )
+    assert json.loads(requests[0].read()) == {"expired_before": 1785000000000}
+
+
 def test_requires_google_calendar_state_api_environment(monkeypatch):
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_URL", raising=False)
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_TOKEN", raising=False)

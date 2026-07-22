@@ -18,6 +18,9 @@ from notion_task_tracker.json_file import write_json_file
 from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
+EXPIRED_NOTIFICATION_CHANNEL_GRACE_MILLISECONDS = 10 * 60 * 1000
+
+
 @dataclass(frozen=True)
 class GoogleCalendarNotificationChannel:
     channel_id: str
@@ -68,6 +71,9 @@ async def maintain_google_calendar_notification_channel(
     )
     if maintenance.requires_synchronisation:
         await state_client.dispatch_google_calendar_synchronisation(tracker_user)
+    prune_result = await state_client.prune_expired_google_calendar_notification_channels(
+        current_time_milliseconds - EXPIRED_NOTIFICATION_CHANNEL_GRACE_MILLISECONDS
+    )
 
     execution_summary = TrackerActionExecutionSummary(
         action_name="maintain_google_calendar_notification_channel",
@@ -81,6 +87,7 @@ async def maintain_google_calendar_notification_channel(
             "dispatched_synchronisation_after_expiration": (
                 maintenance.requires_synchronisation
             ),
+            "pruned_expired_channel_count": prune_result["deleted_channel_count"],
         },
     )
     write_json_file(execution_summary.to_json_summary(), output_path)

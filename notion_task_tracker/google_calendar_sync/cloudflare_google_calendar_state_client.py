@@ -213,6 +213,16 @@ class CloudflareGoogleCalendarStateClient:
             {"tracker_user": tracker_user},
         )
 
+    async def prune_expired_google_calendar_notification_channels(
+        self,
+        expired_before: int,
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "DELETE",
+            "notification-channels/expired",
+            {"expired_before": expired_before},
+        )
+
     async def _send_google_calendar_state_request(
         self,
         method: str,
