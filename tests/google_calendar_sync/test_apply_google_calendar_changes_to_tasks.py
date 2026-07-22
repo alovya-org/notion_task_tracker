@@ -355,7 +355,6 @@ def test_id_only_user_cancellation_clears_notion_before_acknowledging_the_cursor
 
     asyncio.run(apply_google_calendar_changes_to_tasks(
         tracker_user="al0vya",
-        google_change_cursor="current-sync-token",
         config=TrackerConfig(
             display_name="Alovya",
             ticket_prefix="ALOVYA",
@@ -434,7 +433,6 @@ def test_expired_cursor_rebuild_unschedules_a_task_whose_owned_event_disappeared
 
     asyncio.run(apply_google_calendar_changes_to_tasks(
         tracker_user="al0vya",
-        google_change_cursor="expired-sync-token",
         config=TrackerConfig(
             display_name="Alovya",
             ticket_prefix="ALOVYA",

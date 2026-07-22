@@ -4,24 +4,18 @@ export interface GitHubDispatchPayload {
   event_type: string;
   client_payload: {
     tracker_user: string;
-    google_change_cursor?: string;
   };
 }
 
 export function createGitHubDispatchPayload(
   eventType: string,
   trackerUser: string,
-  googleChangeCursor?: string,
 ): GitHubDispatchPayload {
-  const clientPayload: GitHubDispatchPayload["client_payload"] = {
-    tracker_user: trackerUser,
-  };
-  if (googleChangeCursor !== undefined) {
-    clientPayload.google_change_cursor = googleChangeCursor;
-  }
   return {
     event_type: eventType,
-    client_payload: clientPayload,
+    client_payload: {
+      tracker_user: trackerUser,
+    },
   };
 }
 

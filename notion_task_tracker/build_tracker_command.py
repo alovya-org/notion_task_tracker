@@ -93,15 +93,10 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
             "notification_url": arguments.calendar_notification_url,
         }
     if action_name == "apply_google_calendar_changes_to_tasks":
-        if not arguments.google_change_cursor:
-            raise ValueError(
-                "--apply-google-calendar-changes-to-tasks requires --google-change-cursor"
-            )
         if not arguments.tracker_user:
             raise ValueError("--apply-google-calendar-changes-to-tasks requires --tracker-user")
         return {
             "command": "apply_google_calendar_changes_to_tasks",
-            "google_change_cursor": arguments.google_change_cursor,
             "tracker_user": arguments.tracker_user,
         }
     if action_name == "refresh_notion_task_tracker":

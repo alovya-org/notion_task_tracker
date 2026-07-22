@@ -247,7 +247,6 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
           event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
-            google_change_cursor: "current-sync-token",
           },
         }),
       }),
@@ -286,6 +285,10 @@ function _environmentWithCalendarChannel() {
 }
 
 describe("Cloudflare Worker Google Calendar state API", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns the latest channel and current sync token for renewal decisions", async () => {
     const environment = _environmentWithCalendarChannel();
     const response = await worker.fetch(
@@ -527,6 +530,34 @@ describe("Cloudflare Worker Google Calendar state API", () => {
       "ALOVYA-42",
     ]);
   });
+
+  it("lets channel maintenance wake the unified synchronisation workflow", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await worker.fetch(
+      new Request("https://example.com/google-calendar/synchronisation-dispatches", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer calendar-state-api-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tracker_user: "al0vya" }),
+      }),
+      workerEnvironment,
+    );
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ dispatched: true, tracker_user: "al0vya" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.github.com/repos/alovya/notion_task_tracker/dispatches",
+      expect.objectContaining({
+        body: JSON.stringify({
+          event_type: "apply-google-calendar-changes-to-notion-task-tracker",
+          client_payload: { tracker_user: "al0vya" },
+        }),
+      }),
+    );
+  });
 });
 
 describe("Cloudflare Worker daily Calendar recovery", () => {
@@ -541,7 +572,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
       prepare: vi.fn(() => ({
         all: vi.fn(() => Promise.resolve({
           results: [
-            { tracker_user: "al0vya", google_change_cursor: "current-sync-token" },
+            { tracker_user: "al0vya" },
           ],
         })),
       })),
@@ -560,7 +591,6 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
           event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
-            google_change_cursor: "current-sync-token",
           },
         }),
       }),

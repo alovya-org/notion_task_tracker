@@ -5,12 +5,10 @@ export interface GoogleCalendarNotificationChannelState {
   tracker_user: string;
   calendar_id: string;
   expiration: number;
-  google_change_cursor: string;
 }
 
-export interface GoogleCalendarChangeCursorState {
+export interface GoogleCalendarTrackerIdentity {
   tracker_user: string;
-  google_change_cursor: string;
 }
 
 export interface GoogleCalendarEventLedgerEntry {
@@ -29,15 +27,15 @@ export interface GoogleCalendarNotificationChannelRegistration {
   expiresAt: number;
 }
 
-export async function listGoogleCalendarChangeCursors(
+export async function listGoogleCalendarTrackerIdentities(
   database: D1Database,
-): Promise<GoogleCalendarChangeCursorState[]> {
-  const cursors = await database.prepare(
-    `SELECT tracker_user, google_change_cursor
+): Promise<GoogleCalendarTrackerIdentity[]> {
+  const trackers = await database.prepare(
+    `SELECT DISTINCT tracker_user
      FROM google_calendar_change_cursors
-     ORDER BY tracker_user, calendar_id`,
-  ).all<GoogleCalendarChangeCursorState>();
-  return cursors.results;
+     ORDER BY tracker_user`,
+  ).all<GoogleCalendarTrackerIdentity>();
+  return trackers.results;
 }
 
 export async function readGoogleCalendarChangeCursor(
@@ -222,12 +220,8 @@ export async function findGoogleCalendarNotificationChannelById(
             channels.notification_channel_token_sha256,
             channels.tracker_user,
             channels.calendar_id,
-            channels.expires_at AS expiration,
-            cursors.google_change_cursor
+            channels.expires_at AS expiration
      FROM google_calendar_notification_channels AS channels
-     JOIN google_calendar_change_cursors AS cursors
-       ON cursors.tracker_user = channels.tracker_user
-      AND cursors.calendar_id = channels.calendar_id
      WHERE channels.channel_id = ?`,
   ).bind(channelId).first<GoogleCalendarNotificationChannelState>();
 }

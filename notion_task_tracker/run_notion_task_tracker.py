@@ -166,7 +166,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--entry-date")
     parser.add_argument("--destination-ticket-number", type=int)
     parser.add_argument("--log-id")
-    parser.add_argument("--google-change-cursor")
     parser.add_argument("--tracker-user")
     parser.add_argument("--calendar-notification-url")
     return parser
@@ -307,11 +306,8 @@ async def _run_tracker_command(
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
-            backup_path=backup_path,
-            notion_client=notion_client,
             google_calendar_client=google_calendar_client,
             google_calendar_state_client=google_calendar_state_client,
-            refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
         )
 
     if command["command"] == "sync_tasks_to_google_calendar":
@@ -330,7 +326,6 @@ async def _run_tracker_command(
     if command["command"] == "apply_google_calendar_changes_to_tasks":
         return await apply_google_calendar_changes_to_tasks(
             tracker_user=command["tracker_user"],
-            google_change_cursor=command["google_change_cursor"],
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,

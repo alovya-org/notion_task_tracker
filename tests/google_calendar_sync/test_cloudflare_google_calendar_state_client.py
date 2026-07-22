@@ -176,6 +176,24 @@ def test_removes_acknowledged_event_identity_and_replaces_a_recovered_snapshot()
     ]
 
 
+def test_requests_synchronisation_without_sending_the_google_change_cursor():
+    requests = []
+
+    async def record_request(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(202, json={"dispatched": True})
+
+    state_client = _state_client(record_request)
+
+    asyncio.run(state_client.dispatch_google_calendar_synchronisation("al0vya"))
+
+    assert requests[0].method == "POST"
+    assert requests[0].url == (
+        "https://worker.example/google-calendar/synchronisation-dispatches"
+    )
+    assert json.loads(requests[0].read()) == {"tracker_user": "al0vya"}
+
+
 def test_requires_google_calendar_state_api_environment(monkeypatch):
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_URL", raising=False)
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_TOKEN", raising=False)

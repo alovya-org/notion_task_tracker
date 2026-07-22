@@ -2,6 +2,7 @@ import { createJsonResponse } from "./create_http_response";
 import { WorkerEnvironment } from "./environment";
 import { advanceGoogleCalendarChangeCursor } from "./google_calendar/advance_google_calendar_change_cursor";
 import { dispatchDailyGoogleCalendarRecovery } from "./google_calendar/dispatch_daily_google_calendar_recovery";
+import { dispatchGoogleCalendarSynchronisation } from "./google_calendar/dispatch_google_calendar_synchronisation";
 import { deleteGoogleCalendarEventMappingRoute } from "./google_calendar/delete_google_calendar_event_mapping";
 import { markGoogleCalendarEventDeletedByNttRoute } from "./google_calendar/mark_google_calendar_event_deleted_by_ntt";
 import { readGoogleCalendarSynchronisationState } from "./google_calendar/read_google_calendar_synchronisation_state";
@@ -20,6 +21,7 @@ const GOOGLE_CALENDAR_ACTIVE_EVENTS_PATH = "/google-calendar/event-ledger/active
 const GOOGLE_CALENDAR_NTT_DELETIONS_PATH = "/google-calendar/event-ledger/ntt-deletions";
 const GOOGLE_CALENDAR_EVENT_MAPPINGS_PATH = "/google-calendar/event-ledger/events";
 const GOOGLE_CALENDAR_EVENT_LEDGER_SNAPSHOT_PATH = "/google-calendar/event-ledger/snapshot";
+const GOOGLE_CALENDAR_SYNCHRONISATION_DISPATCHES_PATH = "/google-calendar/synchronisation-dispatches";
 const NOTION_TASK_TRACKER_CHANGES_PATH = "/notion-task-tracker-changes";
 
 export default {
@@ -55,6 +57,9 @@ export default {
     }
     if (requestPath === GOOGLE_CALENDAR_EVENT_LEDGER_SNAPSHOT_PATH) {
       return await replaceGoogleCalendarEventLedgerSnapshot(request, environment);
+    }
+    if (requestPath === GOOGLE_CALENDAR_SYNCHRONISATION_DISPATCHES_PATH) {
+      return await dispatchGoogleCalendarSynchronisation(request, environment);
     }
     if (requestPath === NOTION_TASK_TRACKER_CHANGES_PATH) {
       return await dispatchNotionTaskTrackerChangeToGitHub(request, environment);

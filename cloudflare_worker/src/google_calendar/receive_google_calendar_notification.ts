@@ -67,7 +67,6 @@ export async function receiveGoogleCalendarNotification(
   const dispatchPayload = createGitHubDispatchPayload(
     environment.GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE,
     channelState.tracker_user,
-    channelState.google_change_cursor,
   );
   const githubResponse = await sendGitHubRepositoryDispatch(
     environment.GITHUB_OWNER,

@@ -4,21 +4,20 @@ import {
   sendGitHubRepositoryDispatch,
 } from "../github/send_github_repository_dispatch";
 import { requireGoogleCalendarEnvironment } from "./authenticate_google_calendar_state_request";
-import { listGoogleCalendarChangeCursors } from "./google_calendar_state_database";
+import { listGoogleCalendarTrackerIdentities } from "./google_calendar_state_database";
 
 export async function dispatchDailyGoogleCalendarRecovery(
   environment: WorkerEnvironment,
 ): Promise<void> {
   requireGoogleCalendarEnvironment(environment);
-  const cursors = await listGoogleCalendarChangeCursors(
+  const trackers = await listGoogleCalendarTrackerIdentities(
     environment.GOOGLE_CALENDAR_STATE_DATABASE,
   );
 
-  for (const cursor of cursors) {
+  for (const tracker of trackers) {
     const dispatchPayload = createGitHubDispatchPayload(
       environment.GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE,
-      cursor.tracker_user,
-      cursor.google_change_cursor,
+      tracker.tracker_user,
     );
     const githubResponse = await sendGitHubRepositoryDispatch(
       environment.GITHUB_OWNER,
@@ -29,7 +28,7 @@ export async function dispatchDailyGoogleCalendarRecovery(
     );
     if (!githubResponse.ok) {
       throw new Error(
-        `Daily Calendar recovery dispatch failed for ${cursor.tracker_user}: ${githubResponse.status}`,
+        `Daily Calendar recovery dispatch failed for ${tracker.tracker_user}: ${githubResponse.status}`,
       );
     }
   }

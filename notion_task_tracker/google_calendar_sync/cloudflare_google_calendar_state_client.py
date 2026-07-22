@@ -203,6 +203,16 @@ class CloudflareGoogleCalendarStateClient:
             },
         )
 
+    async def dispatch_google_calendar_synchronisation(
+        self,
+        tracker_user: str,
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "POST",
+            "synchronisation-dispatches",
+            {"tracker_user": tracker_user},
+        )
+
     async def _send_google_calendar_state_request(
         self,
         method: str,

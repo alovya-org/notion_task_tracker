@@ -5,20 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 import secrets
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from uuid import uuid4
 
 from notion_task_tracker.config import TrackerConfig, load_config
-from notion_task_tracker.google_calendar_sync.apply_google_calendar_changes_to_tasks import (
-    apply_google_calendar_changes_to_tasks,
-)
 from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
     CloudflareGoogleCalendarStateClient,
     GoogleCalendarNotificationChannelState,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import GoogleCalendarClient
 from notion_task_tracker.json_file import write_json_file
-from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
@@ -34,18 +30,7 @@ class GoogleCalendarNotificationChannelMaintenance:
     channel_id: str
     expires_at: int
     registered_replacement: bool
-    catch_up_google_change_cursor: str | None
-
-
-class _RefreshTasksFromNotion(Protocol):
-    async def __call__(
-        self,
-        config: TrackerConfig | None,
-        tracker_state_path: str | Path,
-        output_path: str | Path,
-        backup_path: str | Path | None,
-        notion_client: NotionRestClient | None,
-    ) -> TrackerActionExecutionSummary: ...
+    requires_synchronisation: bool
 
 
 async def maintain_google_calendar_notification_channel(
@@ -56,11 +41,8 @@ async def maintain_google_calendar_notification_channel(
     config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
     google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
-    refresh_tasks_from_notion: _RefreshTasksFromNotion,
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
     if configured_tracker.calendar is None:
@@ -84,24 +66,8 @@ async def maintain_google_calendar_notification_channel(
         google_calendar_client=calendar_client,
         google_calendar_state_client=state_client,
     )
-    if maintenance.catch_up_google_change_cursor is not None:
-        await refresh_tasks_from_notion(
-            config=configured_tracker,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            backup_path=backup_path,
-            notion_client=notion_client,
-        )
-        await apply_google_calendar_changes_to_tasks(
-            tracker_user=tracker_user,
-            google_change_cursor=maintenance.catch_up_google_change_cursor,
-            config=configured_tracker,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            notion_client=notion_client,
-            google_calendar_client=calendar_client,
-            google_calendar_state_client=state_client,
-        )
+    if maintenance.requires_synchronisation:
+        await state_client.dispatch_google_calendar_synchronisation(tracker_user)
 
     execution_summary = TrackerActionExecutionSummary(
         action_name="maintain_google_calendar_notification_channel",
@@ -112,8 +78,8 @@ async def maintain_google_calendar_notification_channel(
             "channel_id": maintenance.channel_id,
             "expires_at": maintenance.expires_at,
             "registered_replacement": maintenance.registered_replacement,
-            "caught_up_after_expiration": (
-                maintenance.catch_up_google_change_cursor is not None
+            "dispatched_synchronisation_after_expiration": (
+                maintenance.requires_synchronisation
             ),
         },
     )
@@ -147,7 +113,7 @@ async def _maintain_google_calendar_notification_channel(
             channel_id=current_channel.channel_id,
             expires_at=current_channel.expires_at,
             registered_replacement=False,
-            catch_up_google_change_cursor=None,
+            requires_synchronisation=False,
         )
 
     replacement = await _create_google_calendar_notification_channel(
@@ -162,16 +128,15 @@ async def _maintain_google_calendar_notification_channel(
             current_channel.google_change_cursor if current_channel is not None else None
         ),
     )
-    catch_up_google_change_cursor = (
-        current_channel.google_change_cursor
-        if current_channel is not None and current_channel.expires_at <= current_time_milliseconds
-        else None
+    requires_synchronisation = (
+        current_channel is not None
+        and current_channel.expires_at <= current_time_milliseconds
     )
     return GoogleCalendarNotificationChannelMaintenance(
         channel_id=replacement.channel_id,
         expires_at=replacement.expires_at,
         registered_replacement=True,
-        catch_up_google_change_cursor=catch_up_google_change_cursor,
+        requires_synchronisation=requires_synchronisation,
     )
 
 

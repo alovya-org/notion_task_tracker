@@ -115,7 +115,7 @@ def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
     ))
 
     assert maintenance.registered_replacement is True
-    assert maintenance.catch_up_google_change_cursor == "last-delivered-sync-token"
+    assert maintenance.requires_synchronisation is True
 
 
 def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
@@ -140,7 +140,7 @@ def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
     ))
 
     assert maintenance.registered_replacement is True
-    assert maintenance.catch_up_google_change_cursor is None
+    assert maintenance.requires_synchronisation is False
     assert google_calendar_client.change_fetch_count == 0
     assert google_calendar_state_client.registered_channel["google_change_cursor"] == (
         "current-sync-token"

@@ -11,6 +11,7 @@ concurrency:
 
 jobs:
   maintain:
+    # TODO: Discover configured tracker owners before offering multi-user scheduled maintenance.
     name: Maintain al0vya Google Calendar notification channel
     runs-on: ubuntu-latest
     environment: al0vya

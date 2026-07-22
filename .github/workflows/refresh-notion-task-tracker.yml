@@ -1,4 +1,4 @@
-name: Refresh Notion task tracker
+name: Synchronise Notion task tracker and Google Calendar
 
 on:
   workflow_dispatch:
@@ -10,14 +10,15 @@ on:
   repository_dispatch:
     types:
       - refresh-notion-task-tracker
+      - apply-google-calendar-changes-to-notion-task-tracker
 
 concurrency:
-  group: refresh-notion-task-tracker-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+  group: synchronise-notion-and-google-calendar-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
 jobs:
-  refresh:
-    name: Refresh ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }} task tracker
+  synchronise:
+    name: Synchronise ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }} task tracker
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
 
@@ -45,6 +46,27 @@ jobs:
           printf '%s\n' "$NTT_CONFIG_TOML" > "$RUNNER_TEMP/ntt/config.toml"
         env:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
+
+      - name: Build current tracker state before applying Google changes
+        run: ntt --refresh-notion-task-tracker --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
+
+      - name: Apply Google Calendar changes to Notion tasks
+        run: >-
+          ntt --apply-google-calendar-changes-to-tasks
+          --tracker-user "$TRACKER_USER"
+          --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+        env:
+          GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
+          GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
+          GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: ${{ secrets.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN }}
+          NTT_GOOGLE_CALENDAR_STATE_API_URL: ${{ vars.NTT_GOOGLE_CALENDAR_STATE_API_URL }}
+          NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
+          TRACKER_USER: ${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
 
       - name: Sync current Notion tasks to Google Calendar
         run: >-

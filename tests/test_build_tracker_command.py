@@ -55,13 +55,11 @@ def test_maintain_google_calendar_notification_channel_action_preserves_identity
 def test_apply_google_calendar_changes_to_tasks_action_preserves_dispatch_identity():
     command = _build_tracker_command(_arguments(
         apply_google_calendar_changes_to_tasks=True,
-        google_change_cursor="current-sync-token",
         tracker_user="al0vya",
     ))
 
     assert command == {
         "command": "apply_google_calendar_changes_to_tasks",
-        "google_change_cursor": "current-sync-token",
         "tracker_user": "al0vya",
     }
 
@@ -612,7 +610,6 @@ def _arguments(**overrides):
         "synth": False,
         "move_logs": False,
         "ticket_number": [],
-        "google_change_cursor": None,
         "tracker_user": None,
         "calendar_notification_url": None,
         "parent_ticket_number": None,

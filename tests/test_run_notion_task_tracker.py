@@ -84,17 +84,14 @@ def test_parse_args_reads_notification_channel_maintenance_identity():
     assert args.calendar_notification_url.endswith("/google-calendar-notifications")
 
 
-def test_parse_args_reads_google_calendar_change_identity():
+def test_parse_args_reads_google_calendar_change_tracker_identity():
     args = parse_args([
         "--apply-google-calendar-changes-to-tasks",
-        "--google-change-cursor",
-        "current-sync-token",
         "--tracker-user",
         "al0vya",
     ])
 
     assert args.apply_google_calendar_changes_to_tasks is True
-    assert args.google_change_cursor == "current-sync-token"
     assert args.tracker_user == "al0vya"
 
 

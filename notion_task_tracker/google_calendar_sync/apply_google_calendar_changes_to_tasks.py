@@ -66,7 +66,6 @@ class SelectedGoogleCalendarChanges:
 
 async def apply_google_calendar_changes_to_tasks(
     tracker_user: str,
-    google_change_cursor: str,
     config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
@@ -89,6 +88,7 @@ async def apply_google_calendar_changes_to_tasks(
         tracker_user,
         configured_tracker.calendar.calendar_id,
     )
+    google_change_cursor = synchronisation_state.google_change_cursor
     changed_calendar_events, recovered_expired_google_change_cursor = (
         await _fetch_calendar_changes_with_expired_cursor_recovery(
             calendar_client,
