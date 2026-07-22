@@ -14,6 +14,6 @@ GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE = "apply-google-calendar-changes-to-not
 
 [[d1_databases]]
 binding = "GOOGLE_CALENDAR_STATE_DATABASE"
-database_name = "ntt-google-calendar-state"
+database_name = "google-calendar-state-database"
 database_id = "5c483632-603c-4517-97eb-47c0b6159e17"
 migrations_dir = "migrations"
