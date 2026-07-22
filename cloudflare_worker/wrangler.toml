@@ -12,5 +12,5 @@ GITHUB_CALENDAR_DISPATCH_EVENT_TYPE = "reconcile-google-calendar"
 [[d1_databases]]
 binding = "CALENDAR_SYNC_STATE"
 database_name = "ntt-calendar-sync"
-database_id = "REPLACE_WITH_CALENDAR_SYNC_STATE_D1_ID"
+database_id = "5c483632-603c-4517-97eb-47c0b6159e17"
 migrations_dir = "migrations"
