@@ -7,3 +7,10 @@ GITHUB_OWNER = "alovya"
 GITHUB_REPOSITORY = "notion_task_tracker"
 GITHUB_API_VERSION = "2022-11-28"
 GITHUB_DISPATCH_EVENT_TYPE = "refresh-notion-tracker"
+GITHUB_CALENDAR_DISPATCH_EVENT_TYPE = "reconcile-google-calendar"
+
+[[d1_databases]]
+binding = "CALENDAR_SYNC_STATE"
+database_name = "ntt-calendar-sync"
+database_id = "REPLACE_WITH_CALENDAR_SYNC_STATE_D1_ID"
+migrations_dir = "migrations"

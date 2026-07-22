@@ -3,22 +3,122 @@ interface Environment {
   GITHUB_REPOSITORY: string;
   GITHUB_API_VERSION: string;
   GITHUB_DISPATCH_EVENT_TYPE: string;
+  GITHUB_CALENDAR_DISPATCH_EVENT_TYPE: string;
   GITHUB_DISPATCH_TOKEN: string;
   NOTION_WEBHOOK_SECRET: string;
+  CALENDAR_SYNC_STATE: D1Database;
 }
 
 interface GitHubDispatchPayload {
   event_type: string;
   client_payload: {
     tracker_user: string;
+    channel_id?: string;
   };
 }
 
+interface CalendarChannelState {
+  channel_id: string;
+  resource_id: string;
+  channel_token_sha256: string;
+  tracker_user: string;
+  calendar_id: string;
+  expiration: number;
+}
+
+const GOOGLE_CALENDAR_NOTIFICATION_PATH = "/google-calendar-notifications";
+
 export default {
   async fetch(request: Request, environment: Environment): Promise<Response> {
+    if (new URL(request.url).pathname === GOOGLE_CALENDAR_NOTIFICATION_PATH) {
+      return await _dispatchGoogleCalendarChangeToGitHub(request, environment);
+    }
     return await _dispatchNotionRefreshRequestToGitHub(request, environment);
   },
 };
+
+async function _dispatchGoogleCalendarChangeToGitHub(
+  request: Request,
+  environment: Environment,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return _createJsonResponse({ error: "Use POST." }, 405, { Allow: "POST" });
+  }
+
+  _assertGoogleCalendarEnvironmentIsComplete(environment);
+  const requiredHeaderNames = [
+    "X-Goog-Channel-ID",
+    "X-Goog-Channel-Token",
+    "X-Goog-Resource-ID",
+    "X-Goog-Resource-State",
+  ];
+  const missingHeaderName = requiredHeaderNames.find(
+    (headerName) => !request.headers.get(headerName),
+  );
+  if (missingHeaderName !== undefined) {
+    return _createJsonResponse(
+      { error: `Missing Google Calendar notification header: ${missingHeaderName}` },
+      400,
+    );
+  }
+  const channelId = request.headers.get("X-Goog-Channel-ID")!;
+  const channelToken = request.headers.get("X-Goog-Channel-Token")!;
+  const resourceId = request.headers.get("X-Goog-Resource-ID")!;
+  const resourceState = request.headers.get("X-Goog-Resource-State")!;
+  const channelState = await environment.CALENDAR_SYNC_STATE
+    .prepare(
+      `SELECT channel_id, resource_id, channel_token_sha256, tracker_user, calendar_id, expires_at AS expiration
+       FROM calendar_channels
+       WHERE channel_id = ?`,
+    )
+    .bind(channelId)
+    .first<CalendarChannelState>();
+  if (channelState === null) {
+    return _createJsonResponse({ error: "Unknown Google Calendar channel." }, 401);
+  }
+  const suppliedChannelTokenSha256 = await _sha256Hex(channelToken);
+  if (
+    channelState.channel_token_sha256 !== suppliedChannelTokenSha256
+    || channelState.resource_id !== resourceId
+  ) {
+    return _createJsonResponse({ error: "Google Calendar channel identity rejected." }, 401);
+  }
+  if (resourceState === "sync") {
+    return new Response(null, { status: 204 });
+  }
+  if (!new Set(["exists", "not_exists"]).has(resourceState)) {
+    return _createJsonResponse({ error: "Unsupported Google Calendar resource state." }, 400);
+  }
+
+  const dispatchPayload = _createGitHubDispatchPayload(
+    environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE,
+    channelState.tracker_user,
+    channelId,
+  );
+  const githubResponse = await _sendGitHubRepositoryDispatch(
+    environment.GITHUB_OWNER,
+    environment.GITHUB_REPOSITORY,
+    environment.GITHUB_API_VERSION,
+    environment.GITHUB_DISPATCH_TOKEN,
+    dispatchPayload,
+  );
+  if (!githubResponse.ok) {
+    return await _createGitHubFailureResponse(githubResponse);
+  }
+  return _createJsonResponse({
+    dispatched: true,
+    event_type: dispatchPayload.event_type,
+    tracker_user: channelState.tracker_user,
+    channel_id: channelId,
+  }, 202);
+}
+
+async function _sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 async function _dispatchNotionRefreshRequestToGitHub(
   request: Request,
@@ -106,15 +206,30 @@ function _assertWorkerEnvironmentIsComplete(environment: Environment): void {
   }
 }
 
+function _assertGoogleCalendarEnvironmentIsComplete(environment: Environment): void {
+  _assertWorkerEnvironmentIsComplete(environment);
+  if (!environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE) {
+    throw new Error("Missing Worker environment variable: GITHUB_CALENDAR_DISPATCH_EVENT_TYPE");
+  }
+  if (!environment.CALENDAR_SYNC_STATE) {
+    throw new Error("Missing Worker environment binding: CALENDAR_SYNC_STATE");
+  }
+}
+
 function _createGitHubDispatchPayload(
   eventType: string,
   trackerUser: string,
+  channelId?: string,
 ): GitHubDispatchPayload {
+  const clientPayload: GitHubDispatchPayload["client_payload"] = {
+    tracker_user: trackerUser,
+  };
+  if (channelId !== undefined) {
+    clientPayload.channel_id = channelId;
+  }
   return {
     event_type: eventType,
-    client_payload: {
-      tracker_user: trackerUser,
-    },
+    client_payload: clientPayload,
   };
 }
 
