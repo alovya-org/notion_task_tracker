@@ -42,6 +42,17 @@ class GoogleCalendarClient:
     async def list_calendar_events(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
         return await self._send_calendar_request("GET", self._events_path(), query=query)
 
+    async def list_all_calendar_events(self, query: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        events = []
+        next_query = dict(query or {})
+        while True:
+            response = await self.list_calendar_events(next_query)
+            events.extend(response.get("items", []))
+            next_page_token = response.get("nextPageToken")
+            if next_page_token is None:
+                return events
+            next_query["pageToken"] = next_page_token
+
     async def create_calendar_event(self, event: dict[str, Any]) -> dict[str, Any]:
         return await self._send_calendar_request("POST", self._events_path(), body=event)
 

@@ -1,4 +1,4 @@
-"""Create, verify, update, and remove one temporary Google Calendar event."""
+"""Create, verify, update, and retain one Google Calendar event for inspection."""
 
 from __future__ import annotations
 
@@ -15,26 +15,25 @@ async def verify_google_calendar_transport_live() -> None:
         raise ValueError("Add [calendar] configuration before running the live Google Calendar test")
 
     client = GoogleCalendarClient.from_environment(calendar_config.calendar_id)
-    temporary_event = _build_temporary_event(calendar_config.timezone_name)
-    created_event = await client.create_calendar_event(temporary_event)
+    inspection_event = _build_inspection_event(calendar_config.timezone_name)
+    created_event = await client.create_calendar_event(inspection_event)
     event_id = str(created_event["id"])
 
-    try:
-        await _verify_created_event_can_be_listed(client, event_id)
-        await _replace_and_verify_event(client, event_id, temporary_event)
-    finally:
-        await client.delete_calendar_event(event_id)
+    await _verify_created_event_can_be_listed(client, event_id)
+    await _replace_and_verify_event(client, event_id, inspection_event)
 
-    await _verify_deleted_event_is_absent(client, event_id)
-    print(f"Google Calendar live transport test passed and removed event {event_id}")
+    print(
+        "Google Calendar live transport test passed and retained "
+        f"event {event_id}; remove it manually after inspection"
+    )
 
 
-def _build_temporary_event(timezone_name: str) -> dict:
+def _build_inspection_event(timezone_name: str) -> dict:
     start_date_time = datetime.now(UTC) + timedelta(days=30)
     end_date_time = start_date_time + timedelta(minutes=30)
     return {
         "summary": "[NTT TEST] Temporary transport verification",
-        "description": "Created by the reversible NTT Google Calendar transport test.",
+        "description": "Retained by the NTT Google Calendar transport test for manual inspection.",
         "transparency": "transparent",
         "start": {"dateTime": start_date_time.isoformat(), "timeZone": timezone_name},
         "end": {"dateTime": end_date_time.isoformat(), "timeZone": timezone_name},
@@ -61,13 +60,6 @@ async def _replace_and_verify_event(
     replaced_event = await client.replace_calendar_event(event_id, replacement_event)
     if replaced_event.get("summary") != replacement_event["summary"]:
         raise ValueError(f"Google Calendar event {event_id} did not retain its replacement title")
-
-
-async def _verify_deleted_event_is_absent(client: GoogleCalendarClient, event_id: str) -> None:
-    response = await client.list_calendar_events({"privateExtendedProperty": "ntt_live_test=true"})
-    listed_event_ids = {str(event["id"]) for event in response.get("items", [])}
-    if event_id in listed_event_ids:
-        raise ValueError(f"Deleted Google Calendar event {event_id} is still listed")
 
 
 if __name__ == "__main__":

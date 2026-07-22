@@ -63,3 +63,26 @@ def test_exposes_list_replace_delete_and_watch_event_operations():
         ("DELETE", "/calendar/v3/calendars/primary/events/event/id"),
         ("POST", "/calendar/v3/calendars/primary/events/watch"),
     ]
+
+
+def test_lists_every_calendar_event_page_without_changing_the_original_query():
+    requests = []
+
+    def respond(request: Request) -> Response:
+        requests.append(request)
+        if request.url.params.get("pageToken") == "second-page":
+            return Response(200, json={"items": [{"id": "two"}]})
+        return Response(200, json={"items": [{"id": "one"}], "nextPageToken": "second-page"})
+
+    client = GoogleCalendarClient(
+        calendar_id="primary",
+        access_token_provider=FixedAccessTokenProvider(),
+        http_client=AsyncClient(transport=MockTransport(respond)),
+    )
+    query = {"privateExtendedProperty": "ntt_tracker=ALOVYA"}
+
+    events = asyncio.run(client.list_all_calendar_events(query))
+
+    assert events == [{"id": "one"}, {"id": "two"}]
+    assert query == {"privateExtendedProperty": "ntt_tracker=ALOVYA"}
+    assert requests[1].url.params["pageToken"] == "second-page"

@@ -18,6 +18,12 @@ def test_reconcile_action_builds_refresh_command():
     assert command == {"command": "reconcile_from_notion"}
 
 
+def test_project_calendar_action_builds_projection_command():
+    command = _build_tracker_command(_arguments(project_calendar=True))
+
+    assert command == {"command": "project_calendar"}
+
+
 def test_read_action_builds_read_command_for_all_ticket_numbers():
     command = _build_tracker_command(_arguments(read=True, ticket_number=[67, 68]))
 
@@ -537,6 +543,7 @@ def _assert_uuid4_log_id(log_id: str, ticket_prefix: str = "ALOVYA") -> None:
 
 def _arguments(**overrides):
     values = {
+        "project_calendar": False,
         "reconcile_from_notion": False,
         "read": False,
         "read_all": False,

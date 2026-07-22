@@ -51,6 +51,7 @@ READ_ACTIONS = {
 }
 
 MAINTENANCE_ACTIONS = {
+    "project_calendar",
     "reconcile_from_notion",
 }
 
@@ -66,7 +67,9 @@ def selected_cli_action_from_arguments(arguments: Namespace) -> str | None:
 def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     action_name = selected_cli_action_from_arguments(arguments)
     if action_name is None:
-        raise ValueError("Choose --reconcile-from-notion or one tracker action")
+        raise ValueError("Choose one tracker action")
+    if action_name == "project_calendar":
+        return {"command": "project_calendar"}
     if action_name == "reconcile_from_notion":
         return {"command": "reconcile_from_notion"}
     if action_name == "read":
