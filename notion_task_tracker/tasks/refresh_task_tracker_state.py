@@ -117,6 +117,10 @@ def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_sta
         "cancel_task",
         "set_task_dependencies",
         "set_task_dependants",
+        "set_task_start",
+        "clear_task_start",
+        "set_task_duration",
+        "clear_task_duration",
     }:
         return [command["task_id"]]
 

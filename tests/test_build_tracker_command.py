@@ -381,6 +381,40 @@ def test_set_deadline_actions_build_field_specific_commands():
         "task_id": "ALOVYA-67",
         "deadline": "2026-06-15",
     }
+
+
+def test_start_actions_build_field_specific_commands():
+    assert _build_tracker_command(
+        _arguments(set_start=True, ticket_number=[67], start="2026-06-15")
+    ) == {
+        "command": "set_task_start",
+        "task_id": "ALOVYA-67",
+        "start": "2026-06-15",
+    }
+    assert _build_tracker_command(_arguments(clear_start=True, ticket_number=[67])) == {
+        "command": "clear_task_start",
+        "task_id": "ALOVYA-67",
+    }
+
+
+def test_duration_actions_keep_estimates_independent_from_start():
+    assert _build_tracker_command(
+        _arguments(set_duration=True, ticket_number=[67], duration=2.5, duration_unit="Hours")
+    ) == {
+        "command": "set_task_duration",
+        "task_id": "ALOVYA-67",
+        "duration": 2.5,
+        "duration_unit": "Hours",
+    }
+    assert _build_tracker_command(_arguments(clear_duration=True, ticket_number=[67])) == {
+        "command": "clear_task_duration",
+        "task_id": "ALOVYA-67",
+    }
+
+
+def test_set_duration_requires_the_value_and_unit_together():
+    with pytest.raises(ValueError, match="requires --duration and --duration-unit"):
+        _build_tracker_command(_arguments(set_duration=True, ticket_number=[67], duration=2))
     assert _build_tracker_command(
         _arguments(clear_deadline=True, ticket_number=[67])
     ) == {

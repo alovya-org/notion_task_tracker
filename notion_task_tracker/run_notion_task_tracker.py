@@ -105,6 +105,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--set-dependants", action="store_true")
     action_group.add_argument("--set-deadline", action="store_true")
     action_group.add_argument("--clear-deadline", action="store_true")
+    action_group.add_argument("--set-start", action="store_true")
+    action_group.add_argument("--clear-start", action="store_true")
+    action_group.add_argument("--set-duration", action="store_true")
+    action_group.add_argument("--clear-duration", action="store_true")
     action_group.add_argument("--set-external-coordination", action="store_true")
     action_group.add_argument("--set-uncertainty", action="store_true")
     action_group.add_argument("--set-friction", action="store_true")
@@ -775,6 +779,10 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "set_task_dependants": "set_dependants",
         "set_task_deadline": "set_deadline",
         "clear_task_deadline": "clear_deadline",
+        "set_task_start": "set_start",
+        "clear_task_start": "clear_start",
+        "set_task_duration": "set_duration",
+        "clear_task_duration": "clear_duration",
         "set_task_external_coordination": "set_external_coordination",
         "set_task_uncertainty": "set_uncertainty",
         "set_task_friction": "set_friction",

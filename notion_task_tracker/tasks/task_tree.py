@@ -267,6 +267,37 @@ class TaskTree:
         self.tasks[task_id].deadline = None
         self._validate_after_task_field_change()
 
+    def set_task_start(self, task_id: str, start: str) -> None:
+        task = self.tasks[task_id]
+        task.start = start
+        self._derive_end_after_schedule_change(task)
+
+    def clear_task_start(self, task_id: str) -> None:
+        task = self.tasks[task_id]
+        task.start = None
+        self._derive_end_after_schedule_change(task)
+
+    def set_task_duration(self, task_id: str, duration: float, duration_unit: str) -> None:
+        task = self.tasks[task_id]
+        task.duration = duration
+        task.duration_unit = DurationUnit(duration_unit)
+        self._derive_end_after_schedule_change(task)
+
+    def clear_task_duration(self, task_id: str) -> None:
+        task = self.tasks[task_id]
+        task.duration = None
+        task.duration_unit = None
+        self._derive_end_after_schedule_change(task)
+
+    def _derive_end_after_schedule_change(self, task: Task) -> None:
+        task.end = derive_task_end(
+            task_label=task.task_id,
+            start=task.start,
+            duration=task.duration,
+            duration_unit=task.duration_unit,
+        )
+        self._validate_after_task_field_change()
+
     def set_task_external_coordination(self, task_id: str, external_coordination: str) -> None:
         self.tasks[task_id].external_coordination = ExternalCoordination(external_coordination)
         self._validate_after_task_field_change()

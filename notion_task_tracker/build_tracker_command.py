@@ -28,6 +28,10 @@ WRITE_ACTIONS = {
     "set_dependants",
     "set_deadline",
     "clear_deadline",
+    "set_start",
+    "clear_start",
+    "set_duration",
+    "clear_duration",
     "set_external_coordination",
     "set_uncertainty",
     "set_friction",
@@ -89,6 +93,14 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return _build_set_deadline_command(arguments, ticket_prefix)
     if action_name == "clear_deadline":
         return _build_clear_deadline_command(arguments, ticket_prefix)
+    if action_name == "set_start":
+        return _build_set_start_command(arguments, ticket_prefix)
+    if action_name == "clear_start":
+        return _build_clear_start_command(arguments, ticket_prefix)
+    if action_name == "set_duration":
+        return _build_set_duration_command(arguments, ticket_prefix)
+    if action_name == "clear_duration":
+        return _build_clear_duration_command(arguments, ticket_prefix)
     if action_name == "set_external_coordination":
         return _build_set_external_coordination_command(arguments, ticket_prefix)
     if action_name == "set_uncertainty":
@@ -248,6 +260,43 @@ def _build_set_deadline_command(arguments: Namespace, ticket_prefix: str) -> dic
 def _build_clear_deadline_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     return {
         "command": "clear_task_deadline",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+    }
+
+
+def _build_set_start_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    if arguments.start is None:
+        raise ValueError("--set-start requires --start")
+
+    return {
+        "command": "set_task_start",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "start": _optional_start_arg(arguments.start),
+    }
+
+
+def _build_clear_start_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    return {
+        "command": "clear_task_start",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+    }
+
+
+def _build_set_duration_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    if arguments.duration is None or arguments.duration_unit is None:
+        raise ValueError("--set-duration requires --duration and --duration-unit")
+
+    return {
+        "command": "set_task_duration",
+        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
+        "duration": arguments.duration,
+        "duration_unit": arguments.duration_unit,
+    }
+
+
+def _build_clear_duration_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    return {
+        "command": "clear_task_duration",
         "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
     }
 

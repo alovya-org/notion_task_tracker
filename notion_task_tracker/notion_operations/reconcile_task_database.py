@@ -224,4 +224,8 @@ def _needs_task_context_for_command(command: dict[str, Any]) -> bool:
         "split_task_with_sibling",
         "set_task_dependencies",
         "set_task_dependants",
+        "set_task_start",
+        "clear_task_start",
+        "set_task_duration",
+        "clear_task_duration",
     }

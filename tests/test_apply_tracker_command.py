@@ -435,6 +435,53 @@ class TestApplyCommandToTrackerState:
             "Deadline": "2026-06-15",
         }
 
+    def test_set_task_duration_without_start_preserves_an_unscheduled_estimate(self):
+        command_result = apply_command_to_tracker_state(
+            command={
+                "command": "set_task_duration",
+                "task_id": "ALOVYA-1",
+                "duration": 2.5,
+                "duration_unit": "Hours",
+            },
+            tracker_state=_combined_tracker_state(),
+        )
+
+        task = command_result.tracker_state["tasks"]["ALOVYA-1"]
+        assert task["start"] is None
+        assert task["end"] is None
+        assert task["duration"] == 2.5
+        assert task["duration_unit"] == "Hours"
+        assert command_result.write_intents[0].arguments["properties"] == {
+            "End": None,
+            "Duration": 2.5,
+            "Duration unit": "Hours",
+        }
+
+    def test_setting_and_clearing_start_derives_end_without_clearing_duration(self):
+        tracker_state = _combined_tracker_state()
+        tracker_state["tasks"]["ALOVYA-1"]["duration"] = 2.5
+        tracker_state["tasks"]["ALOVYA-1"]["duration_unit"] = "Hours"
+
+        scheduled_result = apply_command_to_tracker_state(
+            command={
+                "command": "set_task_start",
+                "task_id": "ALOVYA-1",
+                "start": "2026-06-15T09:30:00+01:00",
+            },
+            tracker_state=tracker_state,
+        )
+        cleared_result = apply_command_to_tracker_state(
+            command={"command": "clear_task_start", "task_id": "ALOVYA-1"},
+            tracker_state=scheduled_result.tracker_state,
+        )
+
+        assert scheduled_result.tracker_state["tasks"]["ALOVYA-1"]["end"] == "2026-06-15T12:00:00+01:00"
+        cleared_task = cleared_result.tracker_state["tasks"]["ALOVYA-1"]
+        assert cleared_task["start"] is None
+        assert cleared_task["end"] is None
+        assert cleared_task["duration"] == 2.5
+        assert cleared_task["duration_unit"] == "Hours"
+
 def test_cancel_task_updates_status_and_produces_write_intents():
     tracker_state = _combined_tracker_state()
     tracker_state["completed_landing_page"]["notion_page_id"] = "33333333333333333333333333333333"

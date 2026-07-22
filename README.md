@@ -138,6 +138,10 @@ python -m notion_task_tracker --log --ticket-number 67 --content-path /tmp/log.j
 python -m notion_task_tracker --complete --ticket-number 67 --content-path /tmp/complete.json
 python -m notion_task_tracker --cancel --ticket-number 67 --content-path /tmp/cancel.json
 python -m notion_task_tracker --delete --ticket-number 67
+python -m notion_task_tracker --set-start --ticket-number 67 --start "2026-07-23T09:30"
+python -m notion_task_tracker --clear-start --ticket-number 67
+python -m notion_task_tracker --set-duration --ticket-number 67 --duration 2.5 --duration-unit Hours
+python -m notion_task_tracker --clear-duration --ticket-number 67
 python -m notion_task_tracker --parent --title "Measure activation mismatch" --priority P1 --content-path /tmp/initial.json
 python -m notion_task_tracker --child --parent-ticket-number 67 --title "Add explicit CLI actions" --priority P1 --content-path /tmp/initial.json
 python -m notion_task_tracker --sibling --sibling-ticket-number 67 --title "Document explicit CLI actions" --priority P2 --content-path /tmp/initial.json
@@ -147,6 +151,8 @@ python -m notion_task_tracker --move-logs --ticket-number 67 --destination-ticke
 ```
 
 `--read`, `--read-all`, and `--work` are read-only with respect to Notion. They fetch live task pages, refresh local task metadata, write JSON to `--output-path`, and perform no Notion writes. `--read` and `--work` include a five-line page summary; `--read-all` additionally includes the complete fetched page markup in each task's `full_page_content` field.
+
+Scheduling actions update `Start` and `Duration` independently. `--set-start` accepts `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, or `YYYY-MM-DDTHH:MM`; NTT applies the machine's local timezone to timed starts. `--set-duration` requires a positive duration together with `Hours`, `Days`, or `Weeks`. A duration estimate may exist without a start. NTT always derives `End` when both fields form a complete valid schedule; clearing either field clears `End` without clearing the other field.
 
 Timeline content files for `--log`, `--complete`, `--cancel`, `--parent`, `--child`, and `--sibling` use this shape:
 
