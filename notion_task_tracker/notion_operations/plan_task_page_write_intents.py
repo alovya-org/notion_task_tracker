@@ -49,11 +49,13 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
     TASK_DATABASE_DEPENDANTS_PROPERTY,
-    TASK_DATABASE_END_DATE_TIME_PROPERTY,
+    TASK_DATABASE_DURATION_PROPERTY,
+    TASK_DATABASE_DURATION_UNIT_PROPERTY,
+    TASK_DATABASE_END_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
-    TASK_DATABASE_START_DATE_TIME_PROPERTY,
+    TASK_DATABASE_START_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
 )
 from notion_task_tracker.tasks.task_tree import TaskTree
@@ -136,8 +138,12 @@ def build_task_database_property_refresh_intent(task: Task) -> NotionWriteIntent
                 TASK_DATABASE_PRIORITY_PROPERTY: task.configured_priority.value,
                 TASK_DATABASE_STATUS_PROPERTY: task.status.value,
                 TASK_DATABASE_DEADLINE_PROPERTY: task.deadline,
-                TASK_DATABASE_START_DATE_TIME_PROPERTY: task.start_date_time,
-                TASK_DATABASE_END_DATE_TIME_PROPERTY: task.end_date_time,
+                TASK_DATABASE_START_PROPERTY: task.start,
+                TASK_DATABASE_END_PROPERTY: task.end,
+                TASK_DATABASE_DURATION_PROPERTY: task.duration,
+                TASK_DATABASE_DURATION_UNIT_PROPERTY: (
+                    task.duration_unit.value if task.duration_unit else None
+                ),
                 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: task.external_coordination.value,
                 TASK_DATABASE_UNCERTAINTY_PROPERTY: task.uncertainty.value,
                 TASK_DATABASE_FRICTION_PROPERTY: task.friction.value,
@@ -209,19 +215,26 @@ def build_task_deadline_update_intent(task: Task) -> NotionWriteIntent:
     )
 
 
-def build_task_start_date_time_update_intent(task: Task) -> NotionWriteIntent:
+def build_task_start_update_intent(task: Task) -> NotionWriteIntent:
     return _build_task_property_update_intent(
         task=task,
-        operation_key=f"update_start_date_time:{task.local_page_key}",
-        properties={TASK_DATABASE_START_DATE_TIME_PROPERTY: task.start_date_time},
+        operation_key=f"update_start:{task.local_page_key}",
+        properties={
+            TASK_DATABASE_START_PROPERTY: task.start,
+            TASK_DATABASE_END_PROPERTY: task.end,
+        },
     )
 
 
-def build_task_end_date_time_update_intent(task: Task) -> NotionWriteIntent:
+def build_task_duration_update_intent(task: Task) -> NotionWriteIntent:
     return _build_task_property_update_intent(
         task=task,
-        operation_key=f"update_end_date_time:{task.local_page_key}",
-        properties={TASK_DATABASE_END_DATE_TIME_PROPERTY: task.end_date_time},
+        operation_key=f"update_duration:{task.local_page_key}",
+        properties={
+            TASK_DATABASE_END_PROPERTY: task.end,
+            TASK_DATABASE_DURATION_PROPERTY: task.duration,
+            TASK_DATABASE_DURATION_UNIT_PROPERTY: task.duration_unit.value if task.duration_unit else None,
+        },
     )
 
 

@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any
 
+from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.external_links import ExternalLink
 
 
@@ -64,6 +66,14 @@ class Friction(str, Enum):
     CHARGED = "Charged"
     STALE = "Stale"
     NONE = "None"
+
+
+class DurationUnit(str, Enum):
+    """Unit used by a task's independent duration estimate."""
+
+    HOURS = "Hours"
+    DAYS = "Days"
+    WEEKS = "Weeks"
 
 
 DEFAULT_TASK_PRIORITY = Priority.P3
@@ -186,8 +196,10 @@ class Task:
     dependency_task_ids: list[str] = field(default_factory=list)
     dependant_task_ids: list[str] = field(default_factory=list)
     deadline: str | None = None
-    start_date_time: str | None = None
-    end_date_time: str | None = None
+    start: str | None = None
+    end: str | None = None
+    duration: float | None = None
+    duration_unit: DurationUnit | None = None
     external_coordination: ExternalCoordination = DEFAULT_TASK_EXTERNAL_COORDINATION
     uncertainty: Uncertainty = DEFAULT_TASK_UNCERTAINTY
     friction: Friction = DEFAULT_TASK_FRICTION
@@ -239,6 +251,55 @@ class Task:
 
     def normalise_timeline_entries(self) -> None:
         self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
+
+
+def validate_task_schedule(
+    task_label: str,
+    start: str | None,
+    duration: float | None,
+    duration_unit: DurationUnit | None,
+) -> None:
+    if (duration is None) != (duration_unit is None):
+        raise NotionPlanningError(f"Task {task_label} must set Duration and Duration unit together")
+    if duration is None:
+        return
+    if duration <= 0:
+        raise NotionPlanningError(f"Task {task_label} Duration must be positive")
+    if duration_unit in {DurationUnit.DAYS, DurationUnit.WEEKS} and not float(duration).is_integer():
+        raise NotionPlanningError(
+            f"Task {task_label} {duration_unit.value} duration must be a whole number"
+        )
+    if start is None:
+        return
+
+    start_has_time = "T" in start
+    datetime.fromisoformat(start.replace("Z", "+00:00"))
+    if start_has_time and duration_unit is not DurationUnit.HOURS:
+        raise NotionPlanningError(f"Task {task_label} timed Start requires Duration unit Hours")
+    if not start_has_time and duration_unit is DurationUnit.HOURS:
+        raise NotionPlanningError(
+            f"Task {task_label} date-only Start requires Duration unit Days or Weeks"
+        )
+
+
+def derive_task_end(
+    task_label: str,
+    start: str | None,
+    duration: float | None,
+    duration_unit: DurationUnit | None,
+) -> str | None:
+    validate_task_schedule(task_label, start, duration, duration_unit)
+    if start is None or duration is None or duration_unit is None:
+        return None
+
+    if duration_unit is DurationUnit.HOURS:
+        start_date_time = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        return (start_date_time + timedelta(hours=duration)).isoformat()
+
+    duration_days = int(duration)
+    if duration_unit is DurationUnit.WEEKS:
+        duration_days *= 7
+    return (date.fromisoformat(start) + timedelta(days=duration_days)).isoformat()
 
 
 def task_id_sort_key(task_id: str) -> tuple[str, int, str]:

@@ -239,8 +239,6 @@ class TestTaskTreeFromDatabaseQueryResults:
             page_id="11111111111111111111111111111111",
             priority="",
             status="",
-            start_date_time="",
-            end_date_time="",
         )
         del row["Priority"]
         del row["Status"]
@@ -261,8 +259,9 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task.configured_priority == Priority.P3
         assert task.status == TaskStatus.ACTIVE
         assert task.deadline is None
-        assert task.start_date_time is None
-        assert task.end_date_time is None
+        assert task.start is None
+        assert task.duration is None
+        assert task.duration_unit is None
         assert task.external_coordination == ExternalCoordination.NO
         assert task.uncertainty == Uncertainty.LOW
         assert task.friction == Friction.NONE
@@ -384,8 +383,9 @@ def _build_task_database_row(
     dependency_page_ids: list[str] | None = None,
     dependant_page_ids: list[str] | None = None,
     deadline: str | None = None,
-    start_date_time: str | None = None,
-    end_date_time: str | None = None,
+    start: str | None = None,
+    duration: float | None = None,
+    duration_unit: str | None = None,
     external_coordination: str = "No",
     uncertainty: str = "Low",
     friction: str = "None",
@@ -399,8 +399,10 @@ def _build_task_database_row(
         "Dependencies": _render_relation_urls(dependency_page_ids or []),
         "Dependants": _render_relation_urls(dependant_page_ids or []),
         "Deadline": deadline or "",
-        "Start date & time": start_date_time or "",
-        "End date & time": end_date_time or "",
+        "Start": start or "",
+        "End": "",
+        "Duration": duration if duration is not None else "",
+        "Duration unit": duration_unit or "",
         "External coordination": external_coordination,
         "Uncertainty": uncertainty,
         "Friction": friction,

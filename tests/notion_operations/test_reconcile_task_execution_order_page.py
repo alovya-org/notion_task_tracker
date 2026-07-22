@@ -9,12 +9,14 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDANTS_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
-    TASK_DATABASE_END_DATE_TIME_PROPERTY,
+    TASK_DATABASE_DURATION_PROPERTY,
+    TASK_DATABASE_DURATION_UNIT_PROPERTY,
+    TASK_DATABASE_END_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
     TASK_DATABASE_PRIORITY_PROPERTY,
-    TASK_DATABASE_START_DATE_TIME_PROPERTY,
+    TASK_DATABASE_START_PROPERTY,
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
@@ -45,7 +47,7 @@ def test_reconcile_task_execution_order_page_creates_filtered_table_on_notions_e
             "Dependants", "External coordination", "Uncertainty", "Friction",
         ],
         "hidden_property_names": [
-            "Start date & time", "End date & time", "Task ID", "In execution order",
+            "Start", "End", "Duration", "Duration unit", "Task ID", "In execution order",
         ],
         "membership_property_name": "In execution order",
     }
@@ -144,7 +146,9 @@ class _ExecutionOrderClient:
             TASK_DATABASE_PARENT_PROPERTY, TASK_DATABASE_DEPENDENCIES_PROPERTY,
             TASK_DATABASE_DEPENDANTS_PROPERTY, TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
             TASK_DATABASE_UNCERTAINTY_PROPERTY, TASK_DATABASE_FRICTION_PROPERTY,
-            TASK_DATABASE_START_DATE_TIME_PROPERTY, TASK_DATABASE_END_DATE_TIME_PROPERTY,
+            TASK_DATABASE_START_PROPERTY, TASK_DATABASE_END_PROPERTY,
+            TASK_DATABASE_DURATION_PROPERTY,
+            TASK_DATABASE_DURATION_UNIT_PROPERTY,
             TASK_DATABASE_TICKET_ID_PROPERTY, TASK_DATABASE_EXECUTION_ORDER_PROPERTY,
         ]
         return ({name: {"id": f"property-{index}"} for index, name in enumerate(property_names)}, self.property_was_created)

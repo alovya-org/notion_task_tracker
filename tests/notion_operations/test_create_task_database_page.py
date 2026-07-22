@@ -122,8 +122,10 @@ def test_execute_create_task_database_page_command_creates_child_split_rows_then
     assert notion_client.calls[0].arguments["data_source_id"] == "configured-data-source-id"
     assert notion_client.calls[0].arguments["properties"] == {
         "Deadline": None,
-        "Start date & time": None,
-        "End date & time": None,
+        "Start": None,
+        "End": None,
+        "Duration": None,
+        "Duration unit": None,
         "External coordination": "No",
         "Friction": "None",
         "Task page": "Child task",

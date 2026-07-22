@@ -164,8 +164,9 @@ def test_child_action_builds_split_command_from_one_title(tmp_path):
                 "dependency_task_ids": [],
                 "dependant_task_ids": [],
                 "deadline": None,
-                "start_date_time": None,
-                "end_date_time": None,
+                "start": None,
+                "duration": None,
+                "duration_unit": None,
                 "external_coordination": "No",
                 "uncertainty": "Low",
                 "friction": "None",
@@ -236,8 +237,9 @@ def test_parent_action_builds_task_creation_command_with_dependencies():
             title="Create dependent task",
             dependency_ticket_number=[10, 12],
             deadline="2026-06-15",
-            start_date_time="2026-06-15",
-            end_date_time="2026-06-15 09:30",
+            start="2026-06-15",
+            duration=2,
+            duration_unit="Days",
             external_coordination="Yes",
             uncertainty="High",
             friction="Charged",
@@ -251,8 +253,9 @@ def test_parent_action_builds_task_creation_command_with_dependencies():
         "dependency_task_ids": ["ALOVYA-10", "ALOVYA-12"],
         "dependant_task_ids": [],
         "deadline": "2026-06-15",
-        "start_date_time": "2026-06-15T00:00:00+06:00",
-        "end_date_time": "2026-06-15T09:30:00+06:00",
+        "start": "2026-06-15",
+        "duration": 2,
+        "duration_unit": "Days",
         "external_coordination": "Yes",
         "uncertainty": "High",
         "friction": "Charged",
@@ -386,35 +389,6 @@ def test_set_deadline_actions_build_field_specific_commands():
     }
 
 
-def test_set_date_time_actions_build_field_specific_commands():
-    assert _build_tracker_command(
-        _arguments(set_start_date_time=True, ticket_number=[67], start_date_time="2026-06-15T09:30")
-    ) == {
-        "command": "set_task_start_date_time",
-        "task_id": "ALOVYA-67",
-        "start_date_time": "2026-06-15T09:30:00+06:00",
-    }
-    assert _build_tracker_command(
-        _arguments(clear_start_date_time=True, ticket_number=[67])
-    ) == {
-        "command": "clear_task_start_date_time",
-        "task_id": "ALOVYA-67",
-    }
-    assert _build_tracker_command(
-        _arguments(set_end_date_time=True, ticket_number=[67], end_date_time="2026-06-16")
-    ) == {
-        "command": "set_task_end_date_time",
-        "task_id": "ALOVYA-67",
-        "end_date_time": "2026-06-16T00:00:00+06:00",
-    }
-    assert _build_tracker_command(
-        _arguments(clear_end_date_time=True, ticket_number=[67])
-    ) == {
-        "command": "clear_task_end_date_time",
-        "task_id": "ALOVYA-67",
-    }
-
-
 def test_parse_date_time_arg_rejects_time_only_values():
     with pytest.raises(ValueError, match="requires a date"):
         _parse_date_time_arg("09:30", "--start-date-time")
@@ -542,10 +516,6 @@ def _arguments(**overrides):
         "set_dependants": False,
         "set_deadline": False,
         "clear_deadline": False,
-        "set_start_date_time": False,
-        "clear_start_date_time": False,
-        "set_end_date_time": False,
-        "clear_end_date_time": False,
         "set_external_coordination": False,
         "set_uncertainty": False,
         "set_friction": False,
@@ -564,8 +534,9 @@ def _arguments(**overrides):
         "dependency_ticket_number": [],
         "dependant_ticket_number": [],
         "deadline": None,
-        "start_date_time": None,
-        "end_date_time": None,
+        "start": None,
+        "duration": None,
+        "duration_unit": None,
         "external_coordination": None,
         "uncertainty": None,
         "friction": None,

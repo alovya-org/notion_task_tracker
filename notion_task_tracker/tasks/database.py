@@ -18,6 +18,7 @@ from notion_task_tracker.tasks.task import (
     DEFAULT_TASK_STATUS,
     DEFAULT_TASK_UNCERTAINTY,
     ExternalCoordination,
+    DurationUnit,
     Friction,
     PROPERTIES_BLOCK_PATTERN,
     TASK_DATABASE_PRIORITY_PROPERTY,
@@ -28,6 +29,7 @@ from notion_task_tracker.tasks.task import (
     TaskStatus,
     Uncertainty,
     task_id_sort_key,
+    derive_task_end,
 )
 from notion_task_tracker.tracked_pages import TrackedPage
 
@@ -37,8 +39,10 @@ TASK_DATABASE_PARENT_PROPERTY = "Parent"
 TASK_DATABASE_DEPENDENCIES_PROPERTY = "Dependencies"
 TASK_DATABASE_DEPENDANTS_PROPERTY = "Dependants"
 TASK_DATABASE_DEADLINE_PROPERTY = "Deadline"
-TASK_DATABASE_START_DATE_TIME_PROPERTY = "Start date & time"
-TASK_DATABASE_END_DATE_TIME_PROPERTY = "End date & time"
+TASK_DATABASE_START_PROPERTY = "Start"
+TASK_DATABASE_END_PROPERTY = "End"
+TASK_DATABASE_DURATION_PROPERTY = "Duration"
+TASK_DATABASE_DURATION_UNIT_PROPERTY = "Duration unit"
 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
 TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
 TASK_DATABASE_FRICTION_PROPERTY = "Friction"
@@ -90,8 +94,10 @@ class TaskDatabaseRow:
     dependency_notion_page_ids: list[str]
     dependant_notion_page_ids: list[str]
     deadline: str | None
-    start_date_time: str | None
-    end_date_time: str | None
+    start: str | None
+    end: str | None
+    duration: float | None
+    duration_unit: DurationUnit | None
     external_coordination: ExternalCoordination
     uncertainty: Uncertainty
     friction: Friction
@@ -216,8 +222,14 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
             for dependant_page_url in _relation_page_urls(query_result.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
         ],
         deadline=_optional_text_property(query_result, TASK_DATABASE_DEADLINE_PROPERTY),
-        start_date_time=_optional_text_property(query_result, TASK_DATABASE_START_DATE_TIME_PROPERTY),
-        end_date_time=_optional_text_property(query_result, TASK_DATABASE_END_DATE_TIME_PROPERTY),
+        start=_optional_text_property(query_result, TASK_DATABASE_START_PROPERTY),
+        end=_optional_text_property(query_result, TASK_DATABASE_END_PROPERTY),
+        duration=_optional_number_property(query_result, TASK_DATABASE_DURATION_PROPERTY),
+        duration_unit=_optional_enum_property(
+            query_result,
+            TASK_DATABASE_DURATION_UNIT_PROPERTY,
+            DurationUnit,
+        ),
         external_coordination=_enum_property_or_default(
             query_result,
             TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
@@ -254,8 +266,15 @@ def _task_from_database_row(
         links=list(previous_task.links) if previous_task else [],
         notion_page_id=database_row.notion_page_id,
         deadline=database_row.deadline,
-        start_date_time=database_row.start_date_time,
-        end_date_time=database_row.end_date_time,
+        start=database_row.start,
+        end=derive_task_end(
+            task_label=database_row.task_id,
+            start=database_row.start,
+            duration=database_row.duration,
+            duration_unit=database_row.duration_unit,
+        ),
+        duration=database_row.duration,
+        duration_unit=database_row.duration_unit,
         external_coordination=database_row.external_coordination,
         uncertainty=database_row.uncertainty,
         friction=database_row.friction,
@@ -428,6 +447,28 @@ def _optional_text_property(query_result: dict[str, Any], property_name: str) ->
         return f"https://www.notion.so/{notion_page_id_from_url(str(value))}"
 
     return str(value)
+
+
+def _optional_number_property(query_result: dict[str, Any], property_name: str) -> float | None:
+    value = query_result.get(property_name)
+    if value in {None, ""}:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise NotionPlanningError(
+            f"Task database row has invalid {property_name} {value!r}"
+        ) from error
+
+
+def _optional_enum_property(
+    query_result: dict[str, Any],
+    property_name: str,
+    enum_type: type[DurationUnit],
+) -> DurationUnit | None:
+    value = _optional_text_property(query_result, property_name)
+    return enum_type(value) if value is not None else None
 
 
 def _priority_from_database_property(query_result: dict[str, Any]) -> Priority:

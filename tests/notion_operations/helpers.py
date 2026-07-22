@@ -37,7 +37,7 @@ class FakeNotionClient:
         property_names = [
             "Task page", "Priority", "Deadline", "Status", "Parent", "Dependencies",
             "Dependants", "External coordination", "Uncertainty", "Friction",
-            "Start date & time", "End date & time", "Task ID", property_name,
+            "Start", "End", "Duration", "Duration unit", "Task ID", property_name,
         ]
         return ({name: {"id": name} for name in property_names}, False)
 
@@ -344,8 +344,10 @@ def _database_row_from_tracker_task(task: dict, tasks: dict[str, dict]) -> dict:
         "Dependencies": _relation_urls_from_task_ids(task["dependency_task_ids"], tasks),
         "Dependants": _relation_urls_from_task_ids(task["dependant_task_ids"], tasks),
         "Deadline": task.get("deadline") or "",
-        "Start date & time": task.get("start_date_time") or "",
-        "End date & time": task.get("end_date_time") or "",
+        "Start": task.get("start") or "",
+        "End": task.get("end") or "",
+        "Duration": task.get("duration") if task.get("duration") is not None else "",
+        "Duration unit": task.get("duration_unit") or "",
         "External coordination": task.get("external_coordination", "No"),
         "Uncertainty": task.get("uncertainty", "Low"),
         "Friction": task.get("friction", "None"),

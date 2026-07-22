@@ -435,43 +435,6 @@ class TestApplyCommandToTrackerState:
             "Deadline": "2026-06-15",
         }
 
-    def test_set_task_start_date_time_updates_start_date_time_field(self):
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "set_task_start_date_time",
-                "task_id": "ALOVYA-1",
-                "start_date_time": "2026-06-15T09:30:00+06:00",
-            },
-            tracker_state=_combined_tracker_state(),
-        )
-
-        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["start_date_time"] == (
-            "2026-06-15T09:30:00+06:00"
-        )
-        assert command_result.write_intents[0].operation_key == "update_start_date_time:task:ALOVYA-1"
-        assert command_result.write_intents[0].arguments["properties"] == {
-            "Start date & time": "2026-06-15T09:30:00+06:00",
-        }
-
-    def test_clear_task_end_date_time_clears_end_date_time_field(self):
-        tracker_state = _combined_tracker_state()
-        tracker_state["tasks"]["ALOVYA-1"]["end_date_time"] = "2026-06-15T09:30:00+06:00"
-
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "clear_task_end_date_time",
-                "task_id": "ALOVYA-1",
-            },
-            tracker_state=tracker_state,
-        )
-
-        assert command_result.tracker_state["tasks"]["ALOVYA-1"]["end_date_time"] is None
-        assert command_result.write_intents[0].operation_key == "update_end_date_time:task:ALOVYA-1"
-        assert command_result.write_intents[0].arguments["properties"] == {
-            "End date & time": None,
-        }
-
-
 def test_cancel_task_updates_status_and_produces_write_intents():
     tracker_state = _combined_tracker_state()
     tracker_state["completed_landing_page"]["notion_page_id"] = "33333333333333333333333333333333"

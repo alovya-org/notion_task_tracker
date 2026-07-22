@@ -7,12 +7,15 @@ from typing import Any
 
 from notion_task_tracker.tasks import TaskTree, Task, TimelineEntry
 from notion_task_tracker.tasks.task import (
+    DurationUnit,
     ExternalCoordination,
     Friction,
     Priority,
     TaskStatus,
     Uncertainty,
+    derive_task_end,
     generate_timeline_log_id,
+    validate_task_schedule,
 )
 from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
 
@@ -27,13 +30,22 @@ class TaskCreation:
     dependency_task_ids: list[str]
     dependant_task_ids: list[str]
     deadline: str | None
-    start_date_time: str | None
-    end_date_time: str | None
+    start: str | None
+    duration: float | None
+    duration_unit: DurationUnit | None
     external_coordination: ExternalCoordination
     uncertainty: Uncertainty
     friction: Friction
     initial_child_timeline_entry: dict[str, Any] | None
     parent_timeline_entry: dict[str, Any] | None
+
+    def __post_init__(self) -> None:
+        validate_task_schedule(
+            task_label=self.task_title,
+            start=self.start,
+            duration=self.duration,
+            duration_unit=self.duration_unit,
+        )
 
 
 def derive_split_task_page_creations(
@@ -70,8 +82,15 @@ def add_created_task_to_tracker_state(
             dependency_task_ids=list(task_creation.dependency_task_ids),
             dependant_task_ids=list(task_creation.dependant_task_ids),
             deadline=task_creation.deadline,
-            start_date_time=task_creation.start_date_time,
-            end_date_time=task_creation.end_date_time,
+            start=task_creation.start,
+            end=derive_task_end(
+                task_label=task_creation.task_title,
+                start=task_creation.start,
+                duration=task_creation.duration,
+                duration_unit=task_creation.duration_unit,
+            ),
+            duration=task_creation.duration,
+            duration_unit=task_creation.duration_unit,
             external_coordination=task_creation.external_coordination,
             uncertainty=task_creation.uncertainty,
             friction=task_creation.friction,
@@ -109,8 +128,9 @@ def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCr
         dependency_task_ids=list(task_command.get("dependency_task_ids", [])),
         dependant_task_ids=list(task_command.get("dependant_task_ids", [])),
         deadline=task_command.get("deadline"),
-        start_date_time=task_command.get("start_date_time"),
-        end_date_time=task_command.get("end_date_time"),
+        start=task_command.get("start"),
+        duration=task_command.get("duration"),
+        duration_unit=_duration_unit_from_task_command(task_command),
         external_coordination=ExternalCoordination(task_command["external_coordination"]),
         uncertainty=Uncertainty(task_command["uncertainty"]),
         friction=Friction(task_command["friction"]),
@@ -174,14 +194,20 @@ def _derive_split_child_task_creation(
         dependency_task_ids=list(dependency_task_ids),
         dependant_task_ids=list(dependant_task_ids),
         deadline=child_task_command.get("deadline"),
-        start_date_time=child_task_command.get("start_date_time"),
-        end_date_time=child_task_command.get("end_date_time"),
+        start=child_task_command.get("start"),
+        duration=child_task_command.get("duration"),
+        duration_unit=_duration_unit_from_task_command(child_task_command),
         external_coordination=ExternalCoordination(child_task_command["external_coordination"]),
         uncertainty=Uncertainty(child_task_command["uncertainty"]),
         friction=Friction(child_task_command["friction"]),
         initial_child_timeline_entry=parent_timeline_entry,
         parent_timeline_entry=_timeline_entry_date_shell(parent_timeline_entry),
     )
+
+
+def _duration_unit_from_task_command(task_command: dict[str, Any]) -> DurationUnit | None:
+    duration_unit = task_command.get("duration_unit")
+    return DurationUnit(duration_unit) if duration_unit is not None else None
 
 
 def _derive_child_priority_from_parent(task_tree: TaskTree, parent_task_id: str) -> Priority:
@@ -205,8 +231,9 @@ def _derive_sibling_task_creation_from_command(command: dict[str, Any], task_tre
         dependency_task_ids=split_relations["dependency_task_ids"],
         dependant_task_ids=split_relations["dependant_task_ids"],
         deadline=sibling_task_command.get("deadline"),
-        start_date_time=sibling_task_command.get("start_date_time"),
-        end_date_time=sibling_task_command.get("end_date_time"),
+        start=sibling_task_command.get("start"),
+        duration=sibling_task_command.get("duration"),
+        duration_unit=_duration_unit_from_task_command(sibling_task_command),
         external_coordination=ExternalCoordination(sibling_task_command["external_coordination"]),
         uncertainty=Uncertainty(sibling_task_command["uncertainty"]),
         friction=Friction(sibling_task_command["friction"]),

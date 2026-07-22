@@ -28,10 +28,6 @@ WRITE_ACTIONS = {
     "set_dependants",
     "set_deadline",
     "clear_deadline",
-    "set_start_date_time",
-    "clear_start_date_time",
-    "set_end_date_time",
-    "clear_end_date_time",
     "set_external_coordination",
     "set_uncertainty",
     "set_friction",
@@ -93,14 +89,6 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return _build_set_deadline_command(arguments, ticket_prefix)
     if action_name == "clear_deadline":
         return _build_clear_deadline_command(arguments, ticket_prefix)
-    if action_name == "set_start_date_time":
-        return _build_set_start_date_time_command(arguments, ticket_prefix)
-    if action_name == "clear_start_date_time":
-        return _build_clear_start_date_time_command(arguments, ticket_prefix)
-    if action_name == "set_end_date_time":
-        return _build_set_end_date_time_command(arguments, ticket_prefix)
-    if action_name == "clear_end_date_time":
-        return _build_clear_end_date_time_command(arguments, ticket_prefix)
     if action_name == "set_external_coordination":
         return _build_set_external_coordination_command(arguments, ticket_prefix)
     if action_name == "set_uncertainty":
@@ -264,42 +252,6 @@ def _build_clear_deadline_command(arguments: Namespace, ticket_prefix: str) -> d
     }
 
 
-def _build_set_start_date_time_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
-    if arguments.start_date_time is None:
-        raise ValueError("--set-start-date-time requires --start-date-time")
-
-    return {
-        "command": "set_task_start_date_time",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "start_date_time": _parse_date_time_arg(arguments.start_date_time, "--start-date-time"),
-    }
-
-
-def _build_clear_start_date_time_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
-    return {
-        "command": "clear_task_start_date_time",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-    }
-
-
-def _build_set_end_date_time_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
-    if arguments.end_date_time is None:
-        raise ValueError("--set-end-date-time requires --end-date-time")
-
-    return {
-        "command": "set_task_end_date_time",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-        "end_date_time": _parse_date_time_arg(arguments.end_date_time, "--end-date-time"),
-    }
-
-
-def _build_clear_end_date_time_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
-    return {
-        "command": "clear_task_end_date_time",
-        "task_id": _single_task_id_from_ticket_numbers(arguments.ticket_number, ticket_prefix),
-    }
-
-
 def _build_set_external_coordination_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
     if arguments.external_coordination is None:
         raise ValueError("--set-external-coordination requires --external-coordination")
@@ -459,8 +411,9 @@ def _new_task_database_fields_from_arguments(arguments: Namespace, ticket_prefix
         "dependency_task_ids": dependency_task_ids,
         "dependant_task_ids": dependant_task_ids,
         "deadline": arguments.deadline,
-        "start_date_time": _optional_date_time_arg(arguments.start_date_time, "--start-date-time"),
-        "end_date_time": _optional_date_time_arg(arguments.end_date_time, "--end-date-time"),
+        "start": _optional_start_arg(arguments.start),
+        "duration": arguments.duration,
+        "duration_unit": arguments.duration_unit,
         "external_coordination": arguments.external_coordination or DEFAULT_TASK_EXTERNAL_COORDINATION.value,
         "uncertainty": arguments.uncertainty or DEFAULT_TASK_UNCERTAINTY.value,
         "friction": arguments.friction or DEFAULT_TASK_FRICTION.value,
@@ -547,6 +500,14 @@ def _optional_date_time_arg(raw_date_time: str | None, argument_name: str) -> st
         return None
 
     return _parse_date_time_arg(raw_date_time, argument_name)
+
+
+def _optional_start_arg(raw_start: str | None) -> str | None:
+    if raw_start is None:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw_start):
+        return date.fromisoformat(raw_start).isoformat()
+    return _parse_date_time_arg(raw_start, "--start")
 
 
 def _read_json_object(source_path: str | Path | None) -> dict[str, Any]:

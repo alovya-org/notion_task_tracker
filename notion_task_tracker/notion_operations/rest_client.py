@@ -26,12 +26,14 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
     TASK_DATABASE_DEPENDANTS_PROPERTY,
-    TASK_DATABASE_END_DATE_TIME_PROPERTY,
+    TASK_DATABASE_DURATION_PROPERTY,
+    TASK_DATABASE_DURATION_UNIT_PROPERTY,
+    TASK_DATABASE_END_PROPERTY,
     TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY,
     TASK_DATABASE_FRICTION_PROPERTY,
     TASK_DATABASE_PARENT_PROPERTY,
     TASK_DATABASE_PRIORITY_PROPERTY,
-    TASK_DATABASE_START_DATE_TIME_PROPERTY,
+    TASK_DATABASE_START_PROPERTY,
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
@@ -605,11 +607,17 @@ def _task_database_row_from_rest_page(page: dict[str, Any]) -> dict[str, Any]:
             _relation_urls_from_property(properties.get(TASK_DATABASE_DEPENDANTS_PROPERTY))
         ),
         TASK_DATABASE_DEADLINE_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_DEADLINE_PROPERTY)),
-        TASK_DATABASE_START_DATE_TIME_PROPERTY: _plain_property_value(
-            properties.get(TASK_DATABASE_START_DATE_TIME_PROPERTY)
+        TASK_DATABASE_START_PROPERTY: _plain_property_value(
+            properties.get(TASK_DATABASE_START_PROPERTY)
         ),
-        TASK_DATABASE_END_DATE_TIME_PROPERTY: _plain_property_value(
-            properties.get(TASK_DATABASE_END_DATE_TIME_PROPERTY)
+        TASK_DATABASE_END_PROPERTY: _plain_property_value(
+            properties.get(TASK_DATABASE_END_PROPERTY)
+        ),
+        TASK_DATABASE_DURATION_PROPERTY: _plain_property_value(
+            properties.get(TASK_DATABASE_DURATION_PROPERTY)
+        ),
+        TASK_DATABASE_DURATION_UNIT_PROPERTY: _plain_property_value(
+            properties.get(TASK_DATABASE_DURATION_UNIT_PROPERTY)
         ),
         TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY: _plain_property_value(
             properties.get(TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY)
@@ -636,10 +644,16 @@ def _rest_database_properties(
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
         elif property_name == TASK_DATABASE_FRICTION_PROPERTY:
             rest_properties[property_name] = {"select": {"name": str(property_value)}}
+        elif property_name == TASK_DATABASE_DURATION_UNIT_PROPERTY:
+            rest_properties[property_name] = {
+                "select": None if property_value in {None, ""} else {"name": str(property_value)}
+            }
+        elif property_name == TASK_DATABASE_DURATION_PROPERTY:
+            rest_properties[property_name] = {"number": property_value}
         elif property_name in {
             TASK_DATABASE_DEADLINE_PROPERTY,
-            TASK_DATABASE_START_DATE_TIME_PROPERTY,
-            TASK_DATABASE_END_DATE_TIME_PROPERTY,
+            TASK_DATABASE_START_PROPERTY,
+            TASK_DATABASE_END_PROPERTY,
         }:
             rest_properties[property_name] = {
                 "date": None if property_value in {None, ""} else {"start": str(property_value)}

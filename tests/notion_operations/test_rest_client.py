@@ -156,8 +156,10 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
     assert rows == [
         {
             "Deadline": "2026-06-15",
-            "Start date & time": "",
-            "End date & time": "",
+            "Start": "2026-06-15T09:30:00+06:00",
+            "End": "2026-06-15T12:00:00+06:00",
+            "Duration": "2.5",
+            "Duration unit": "Hours",
             "Dependencies": '["https://www.notion.so/33333333333333333333333333333333"]',
             "Dependants": '["https://www.notion.so/44444444444444444444444444444444"]',
             "External coordination": "Yes",
@@ -195,8 +197,10 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "Dependencies": ["task:ALOVYA-2"],
                         "Dependants": ["task:ALOVYA-3"],
                         "Deadline": "2026-06-15",
-                        "Start date & time": "",
-                        "End date & time": "2026-06-15T12:30:00+06:00",
+                        "Start": "2026-06-15T09:30:00+06:00",
+                        "End": "2026-06-15T12:30:00+06:00",
+                        "Duration": 3.0,
+                        "Duration unit": "Hours",
                         "External coordination": "Yes",
                         "Uncertainty": "High",
                         "Friction": "Charged",
@@ -223,8 +227,10 @@ def test_update_properties_call_uses_rest_page_property_shape():
                         "relation": [{"id": "44444444444444444444444444444444"}],
                     },
                     "Deadline": {"date": {"start": "2026-06-15"}},
-                    "Start date & time": {"date": None},
-                    "End date & time": {"date": {"start": "2026-06-15T12:30:00+06:00"}},
+                    "Start": {"date": {"start": "2026-06-15T09:30:00+06:00"}},
+                    "End": {"date": {"start": "2026-06-15T12:30:00+06:00"}},
+                    "Duration": {"number": 3.0},
+                    "Duration unit": {"select": {"name": "Hours"}},
                     "External coordination": {"select": {"name": "Yes"}},
                     "Uncertainty": {"select": {"name": "High"}},
                     "Friction": {"select": {"name": "Charged"}},
@@ -547,6 +553,22 @@ def _task_properties(ticket_number: int) -> dict:
         "Deadline": {
             "type": "date",
             "date": {"start": "2026-06-15"},
+        },
+        "Start": {
+            "type": "date",
+            "date": {"start": "2026-06-15T09:30:00+06:00"},
+        },
+        "End": {
+            "type": "date",
+            "date": {"start": "2026-06-15T12:00:00+06:00"},
+        },
+        "Duration": {
+            "type": "number",
+            "number": 2.5,
+        },
+        "Duration unit": {
+            "type": "select",
+            "select": {"name": "Hours"},
         },
         "External coordination": {
             "type": "select",

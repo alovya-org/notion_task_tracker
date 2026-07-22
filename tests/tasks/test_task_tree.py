@@ -3,12 +3,14 @@ from __future__ import annotations
 import pytest
 
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
+from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     plan_completion_write_intents,
     plan_notion_writes_for_task_tree,
     build_timeline_log_write_intent,
 )
 from notion_task_tracker.tasks import (
+    DurationUnit,
     Priority,
     TaskTree,
     Task,
@@ -318,8 +320,10 @@ class TestTaskTreeBuildNotionWritePlan:
 
         assert title_refresh_intent.arguments["properties"] == {
             "Deadline": None,
-            "Start date & time": None,
-            "End date & time": None,
+            "Start": None,
+            "End": None,
+            "Duration": None,
+            "Duration unit": None,
             "External coordination": "No",
             "Friction": "None",
             "Priority": "P3",
@@ -607,6 +611,67 @@ class TestTaskTreeFromTrackerState:
             TaskTree.from_tracker_state(tracker_state)
 
 
+class TestTaskTreeValidateSchedulingFields:
+    def test_allows_duration_estimate_without_start(self):
+        task_tree = _task_tree_with_schedule(
+            start=None,
+            duration=2.5,
+            duration_unit=DurationUnit.HOURS,
+        )
+
+        task_tree.validate()
+
+    def test_requires_duration_and_unit_together(self):
+        task_tree = _task_tree_with_schedule(
+            start=None,
+            duration=2,
+            duration_unit=None,
+        )
+
+        with pytest.raises(NotionPlanningError, match="Duration and Duration unit together"):
+            task_tree.validate()
+
+    def test_timed_start_requires_hours(self):
+        task_tree = _task_tree_with_schedule(
+            start="2026-07-22T09:30:00+01:00",
+            duration=2,
+            duration_unit=DurationUnit.DAYS,
+        )
+
+        with pytest.raises(NotionPlanningError, match="timed Start requires Duration unit Hours"):
+            task_tree.validate()
+
+    def test_date_only_start_accepts_whole_weeks(self):
+        task_tree = _task_tree_with_schedule(
+            start="2026-07-22",
+            duration=2,
+            duration_unit=DurationUnit.WEEKS,
+            end="2026-08-05",
+        )
+
+        task_tree.validate()
+
+    def test_date_only_start_rejects_hours(self):
+        task_tree = _task_tree_with_schedule(
+            start="2026-07-22",
+            duration=2,
+            duration_unit=DurationUnit.HOURS,
+        )
+
+        with pytest.raises(NotionPlanningError, match="date-only Start requires"):
+            task_tree.validate()
+
+    def test_days_and_weeks_require_whole_numbers(self):
+        task_tree = _task_tree_with_schedule(
+            start=None,
+            duration=1.5,
+            duration_unit=DurationUnit.WEEKS,
+        )
+
+        with pytest.raises(NotionPlanningError, match="Weeks duration must be a whole number"):
+            task_tree.validate()
+
+
 def _build_dependency_task_tree() -> TaskTree:
     task_tree = TaskTree()
     task_tree.add_task(
@@ -627,4 +692,26 @@ def _build_dependency_task_tree() -> TaskTree:
         )
     )
     task_tree.derive_dependant_task_ids_from_dependencies()
+    return task_tree
+
+
+def _task_tree_with_schedule(
+    start: str | None,
+    duration: float | None,
+    duration_unit: DurationUnit | None,
+    end: str | None = None,
+) -> TaskTree:
+    task_tree = TaskTree()
+    task_tree.add_task(
+        Task(
+            task_id="ALOVYA-1",
+            title="Estimated or scheduled task",
+            configured_priority=Priority.P1,
+            status=TaskStatus.ACTIVE,
+            start=start,
+            end=end,
+            duration=duration,
+            duration_unit=duration_unit,
+        )
+    )
     return task_tree

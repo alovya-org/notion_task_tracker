@@ -51,9 +51,15 @@ Create these two objects in the Notion UI:
 | `Dependencies` | Relation | Same task database |
 | `Dependants` | Relation | Same task database |
 | `Deadline` | Date | Optional date |
+| `Start` | Date | Optional scheduled start, with or without a time |
+| `End` | Date | Optional end derived and maintained by NTT |
+| `Duration` | Number | Optional independent duration estimate |
+| `Duration unit` | Select | `Hours`, `Days`, `Weeks` |
 | `External coordination` | Select | `No`, `Yes` |
 | `Uncertainty` | Select | `Low`, `High` |
 | `Friction` | Select | `None`, `Insufficiently decomposed`, `Charged`, `Stale` |
+
+`Duration` and `Duration unit` are set together, but they do not require `Start`; a task may be estimated before it is scheduled. Timed starts use `Hours`. Date-only starts use whole `Days` or `Weeks`, where one week means seven calendar days. `End` is empty until the task has a complete schedule, then NTT derives and maintains it as `Start + Duration`. It is never an independently authored source value.
 
 Set `NOTION_API_KEY` to the integration token, then initialise with the two URLs:
 

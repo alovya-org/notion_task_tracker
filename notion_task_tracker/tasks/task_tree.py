@@ -20,6 +20,7 @@ from notion_task_tracker.fixed_pages import (
 from notion_task_tracker.tasks.landing_pages import CompletedTasksLandingPage, OngoingTasksLandingPage
 from notion_task_tracker.tasks.task import (
     ExternalCoordination,
+    DurationUnit,
     Friction,
     Priority,
     Task,
@@ -31,6 +32,8 @@ from notion_task_tracker.tasks.task import (
     Uncertainty,
     _PRIORITY_RANK_BY_VALUE,
     task_id_sort_key,
+    derive_task_end,
+    validate_task_schedule,
 )
 from notion_task_tracker.tracked_pages import (
     TrackedPage,
@@ -168,8 +171,9 @@ class TaskTree:
         dependency_task_ids: list[str],
         dependant_task_ids: list[str],
         deadline: str | None,
-        start_date_time: str | None,
-        end_date_time: str | None,
+        start: str | None,
+        duration: float | None,
+        duration_unit: DurationUnit | None,
         external_coordination: ExternalCoordination,
         uncertainty: Uncertainty,
         friction: Friction,
@@ -182,8 +186,15 @@ class TaskTree:
         task.dependency_task_ids = list(dependency_task_ids)
         self._replace_task_dependants(task_id, list(dependant_task_ids))
         task.deadline = deadline
-        task.start_date_time = start_date_time
-        task.end_date_time = end_date_time
+        task.start = start
+        task.duration = duration
+        task.duration_unit = duration_unit
+        task.end = derive_task_end(
+            task_label=task.task_id,
+            start=task.start,
+            duration=task.duration,
+            duration_unit=task.duration_unit,
+        )
         task.external_coordination = external_coordination
         task.uncertainty = uncertainty
         task.friction = friction
@@ -256,22 +267,6 @@ class TaskTree:
         self.tasks[task_id].deadline = None
         self._validate_after_task_field_change()
 
-    def set_task_start_date_time(self, task_id: str, start_date_time: str) -> None:
-        self.tasks[task_id].start_date_time = start_date_time
-        self._validate_after_task_field_change()
-
-    def clear_task_start_date_time(self, task_id: str) -> None:
-        self.tasks[task_id].start_date_time = None
-        self._validate_after_task_field_change()
-
-    def set_task_end_date_time(self, task_id: str, end_date_time: str) -> None:
-        self.tasks[task_id].end_date_time = end_date_time
-        self._validate_after_task_field_change()
-
-    def clear_task_end_date_time(self, task_id: str) -> None:
-        self.tasks[task_id].end_date_time = None
-        self._validate_after_task_field_change()
-
     def set_task_external_coordination(self, task_id: str, external_coordination: str) -> None:
         self.tasks[task_id].external_coordination = ExternalCoordination(external_coordination)
         self._validate_after_task_field_change()
@@ -333,6 +328,7 @@ class TaskTree:
         self._validate_parent_child_links()
         self._validate_dependency_dependant_links()
         self._validate_task_hierarchy_has_no_cycles()
+        self._validate_task_scheduling_fields()
 
     def recalculate_display_priorities(self) -> None:
         for task in self.tasks.values():
@@ -422,6 +418,25 @@ class TaskTree:
                 visited_task_ids.add(current_task_id)
                 current_task_id = self.tasks[current_task_id].parent_task_id
 
+    def _validate_task_scheduling_fields(self) -> None:
+        for task in self.tasks.values():
+            validate_task_schedule(
+                task_label=task.task_id,
+                start=task.start,
+                duration=task.duration,
+                duration_unit=task.duration_unit,
+            )
+            expected_end = derive_task_end(
+                task_label=task.task_id,
+                start=task.start,
+                duration=task.duration,
+                duration_unit=task.duration_unit,
+            )
+            if task.end != expected_end:
+                raise NotionPlanningError(
+                    f"Task {task.task_id} End must equal Start plus Duration"
+                )
+
     def _calculate_priority_visible_on_task(self, task: Task) -> Priority:
         if not task.child_task_ids:
             return task.configured_priority
@@ -499,8 +514,10 @@ def _changed_task_tree_fields(
         "dependency_task_ids",
         "dependant_task_ids",
         "deadline",
-        "start_date_time",
-        "end_date_time",
+        "start",
+        "end",
+        "duration",
+        "duration_unit",
         "external_coordination",
         "uncertainty",
         "friction",
@@ -529,8 +546,10 @@ def _task_to_tracker_state(task: Task) -> dict[str, Any]:
         "dependency_task_ids": list(task.dependency_task_ids),
         "dependant_task_ids": list(task.dependant_task_ids),
         "deadline": task.deadline,
-        "start_date_time": task.start_date_time,
-        "end_date_time": task.end_date_time,
+        "start": task.start,
+        "end": task.end,
+        "duration": task.duration,
+        "duration_unit": task.duration_unit.value if task.duration_unit else None,
         "external_coordination": task.external_coordination.value,
         "uncertainty": task.uncertainty.value,
         "friction": task.friction.value,
@@ -560,8 +579,14 @@ def _task_from_tracker_state(tracker_state: dict[str, Any]) -> Task:
         dependency_task_ids=list(tracker_state["dependency_task_ids"]),
         dependant_task_ids=list(tracker_state["dependant_task_ids"]),
         deadline=tracker_state["deadline"],
-        start_date_time=tracker_state["start_date_time"],
-        end_date_time=tracker_state["end_date_time"],
+        start=tracker_state["start"],
+        end=tracker_state["end"],
+        duration=tracker_state["duration"],
+        duration_unit=(
+            DurationUnit(tracker_state["duration_unit"])
+            if tracker_state["duration_unit"] is not None
+            else None
+        ),
         external_coordination=ExternalCoordination(tracker_state["external_coordination"]),
         uncertainty=Uncertainty(tracker_state["uncertainty"]),
         friction=Friction(tracker_state["friction"]),
