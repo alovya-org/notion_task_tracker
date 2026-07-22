@@ -505,22 +505,37 @@ async def _execute_command_writes_with_fresh_landing_page_render(
         command_result_without_landing_pages,
         notion_client,
     )
-    refreshed_result = await refresh_tracker_state_from_notion_task_database(
-        tracker_state_after_command_writes,
-        notion_client,
-    )
+    landing_source_tracker_state = tracker_state_after_command_writes
+    if not _command_changes_task_relations(command_result):
+        refreshed_result = await refresh_tracker_state_from_notion_task_database(
+            tracker_state_after_command_writes,
+            notion_client,
+        )
+        landing_source_tracker_state = refreshed_result.tracker_state
     landing_refresh_result = apply_command_to_tracker_state(
         command={
             "command": "refresh_task_pages",
             "operation_keys": landing_operation_keys,
         },
-        tracker_state=refreshed_result.tracker_state,
+        tracker_state=landing_source_tracker_state,
     )
     tracker_state_after_landing_pages, landing_operation_keys = await execute_command_result_writes(
         landing_refresh_result,
         notion_client,
     )
     return tracker_state_after_landing_pages, command_operation_keys + landing_operation_keys
+
+
+def _command_changes_task_relations(command_result: TrackerCommandResult) -> bool:
+    relation_operation_prefixes = (
+        "update_dependencies:task:",
+        "update_dependants:task:",
+        "update_parent:task:",
+    )
+    return any(
+        write_intent.operation_key.startswith(relation_operation_prefixes)
+        for write_intent in command_result.write_intents
+    )
 
 
 def _landing_page_replacement_keys_in_write_order(command_result: TrackerCommandResult) -> list[str]:

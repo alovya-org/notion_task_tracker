@@ -9,6 +9,7 @@ from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PA
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import ManagedPageUrls, TrackerConfig
 from notion_task_tracker.notion_operations.rest_client import NotionWriteExecutionResult
+from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from tests.notion_operations.helpers import FakeNotionClient
 from tests.tasks.build_task_command_fixtures import build_fetched_task_page, build_tracker_state_with_root_task
 from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
@@ -32,6 +33,7 @@ from notion_task_tracker.tasks.database import (
 from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
+    _command_changes_task_relations,
     _run_reconcile_tracker_from_notion_command,
     _run_write_tracker_command,
     _run_read_task_pages,
@@ -165,6 +167,22 @@ def test_main_exits_non_zero_when_reconciliation_refuses_unsafe_state(monkeypatc
 
     assert error.value.code == 2
     assert capsys.readouterr().err == f"{refusal_message}\n"
+
+
+def test_relation_command_uses_its_consistent_local_result_for_landing_pages():
+    command_result = TrackerCommandResult(
+        tracker_state={},
+        write_intents=[
+            NotionWriteIntent(
+                operation_key="update_dependencies:task:ALOVYA-2",
+                operation_name="update_page_properties",
+                target_page_key="task:ALOVYA-2",
+                arguments={"properties": {}},
+            )
+        ],
+    )
+
+    assert _command_changes_task_relations(command_result) is True
 
 
 def test_default_tracker_paths_are_constant_app_paths():
