@@ -40,6 +40,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     _action_name_from_tracker_command,
     _command_changes_task_relations,
     _fetch_calendar_changes_with_expired_token_recovery,
+    _deleted_event_ids_owned_by_tracker,
     _run_reconcile_tracker_from_notion_command,
     _run_project_tasks_into_google_calendar,
     _select_changed_events_owned_by_tracker,
@@ -69,7 +70,7 @@ def test_automatic_calendar_reconciliation_ignores_native_calendar_events():
     assert selected_events == [owned_event]
 
 
-def test_automatic_calendar_reconciliation_does_not_acknowledge_deleted_ntt_event():
+def test_automatic_calendar_reconciliation_reprojects_deleted_ntt_event():
     deleted_event = {
         "id": "deleted-event",
         "status": "cancelled",
@@ -78,8 +79,8 @@ def test_automatic_calendar_reconciliation_does_not_acknowledge_deleted_ntt_even
         },
     }
 
-    with pytest.raises(ValueError, match="recovery is required"):
-        _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA")
+    assert _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA") == []
+    assert _deleted_event_ids_owned_by_tracker([deleted_event], "ALOVYA") == ["deleted-event"]
 
 
 def test_calendar_reconciliation_rebuilds_incremental_state_after_google_expires_token():
