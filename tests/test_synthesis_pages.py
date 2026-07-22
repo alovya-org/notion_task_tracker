@@ -97,7 +97,7 @@ class TestSynthesisNotesMetadataBuildNotionWritePlan:
         ])
 
 
-class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
+class TestSynthesisNotesMetadataRefreshRootPageMentionsFromContent:
     def test_replaces_local_existing_mentions_with_the_fetched_root_page_order(self):
         synthesis_notes = SynthesisNotesMetadata()
         synthesis_notes.existing_page_mentions["stale"] = ExistingSynthesisPageMention(
@@ -111,7 +111,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
             notion_page_id="22222222222222222222222222222222",
         )
 
-        synthesis_notes.reconcile_root_page_mentions_from_content(
+        synthesis_notes.refresh_root_page_mentions_from_content(
             root_page_content=(
                 '<mention-page url="https://www.notion.so/wayve/New-title-'
                 '33333333333333333333333333333333">New title</mention-page>\n'
@@ -134,7 +134,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
     def test_preserves_child_page_entries_from_a_full_fetched_page(self):
         synthesis_notes = SynthesisNotesMetadata()
 
-        synthesis_notes.reconcile_root_page_mentions_from_content(
+        synthesis_notes.refresh_root_page_mentions_from_content(
             root_page_content=(
                 '<page url="https://www.notion.so/rootrootrootrootrootrootrootroot" icon="🧾">\n'
                 "<content>\n"
@@ -157,7 +157,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
     def test_uses_agent_supplied_titles_for_bare_new_page_mentions(self):
         synthesis_notes = SynthesisNotesMetadata()
 
-        synthesis_notes.reconcile_root_page_mentions_from_content(
+        synthesis_notes.refresh_root_page_mentions_from_content(
             root_page_content=(
                 '<mention-page url="https://www.notion.so/wayve/'
                 '44444444444444444444444444444444"/>'
@@ -173,7 +173,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
         synthesis_notes = SynthesisNotesMetadata()
 
         with pytest.raises(NotionPlanningError):
-            synthesis_notes.reconcile_root_page_mentions_from_content(
+            synthesis_notes.refresh_root_page_mentions_from_content(
                 root_page_content=(
                     '<mention-page url="https://www.notion.so/wayve/'
                     '55555555555555555555555555555555"/>'
@@ -184,7 +184,7 @@ class TestSynthesisNotesMetadataReconcileRootPageMentionsFromContent:
         synthesis_notes = SynthesisNotesMetadata()
 
         with pytest.raises(NotionPlanningError):
-            synthesis_notes.reconcile_root_page_mentions_from_content(
+            synthesis_notes.refresh_root_page_mentions_from_content(
                 root_page_content=(
                     '<mention-page url="https://www.notion.so/wayve/'
                     '66666666666666666666666666666666">Duplicate</mention-page>\n'

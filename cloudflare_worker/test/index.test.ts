@@ -211,7 +211,7 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("verifies channel identity and dispatches a calendar reconciliation", async () => {
+  it("verifies channel identity and dispatches Google Calendar changes", async () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal("fetch", fetchMock);
     const environment = _environmentWithCalendarChannel();
@@ -379,7 +379,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
     vi.unstubAllGlobals();
   });
 
-  it("dispatches incremental reconciliation from every durable sync token", async () => {
+  it("dispatches incremental changes from every durable sync token", async () => {
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
     vi.stubGlobal("fetch", fetchMock);
     const database = {

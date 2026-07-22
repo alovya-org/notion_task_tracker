@@ -24,7 +24,7 @@ async def refresh_tracker_state_from_notion_task_database(
     notion_client: NotionRestClient,
 ) -> TrackerCommandResult:
     if "task_database" not in tracker_state:
-        raise ValueError("Task reconciliation requires task_database in tracker state")
+        raise ValueError("Refreshing tasks requires task_database in tracker state")
 
     database_rows = await notion_client.query_task_database_rows(tracker_state)
     return refresh_tracker_state_from_database_rows(tracker_state, database_rows)

@@ -50,7 +50,7 @@ _HIDDEN_EXECUTION_ORDER_PROPERTIES = [
 ]
 
 
-async def reconcile_task_execution_order_page(
+async def refresh_task_execution_order_page(
     tracker_state: dict[str, Any],
     notion_client: NotionRestClient,
 ) -> list[str]:

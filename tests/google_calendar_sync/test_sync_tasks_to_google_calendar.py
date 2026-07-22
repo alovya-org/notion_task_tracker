@@ -7,7 +7,7 @@ from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerC
 from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
     DesiredCalendarEvent,
     derive_desired_calendar_events,
-    plan_calendar_event_reconciliation,
+    plan_google_calendar_updates,
     sync_tasks_to_google_calendar,
 )
 from notion_task_tracker.tasks import DurationUnit, Priority, Task, TaskStatus, TaskTree
@@ -95,7 +95,7 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
 
     async def preserve_refreshed_tracker_state(**arguments):
         return TrackerActionExecutionSummary(
-            action_name="reconcile_from_notion",
+            action_name="refresh_notion_task_tracker",
             output_path=Path(arguments["output_path"]),
             tracker_state_path=Path(arguments["tracker_state_path"]),
             warnings=[],
@@ -127,7 +127,9 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
         "create:calendar_event:ALOVYA-1"
     ]
     assert summary.to_json_summary()["desired_calendar_event_count"] == 1
-    assert json.loads(output_path.read_text(encoding="utf-8"))["action_name"] == "sync_calendar"
+    assert json.loads(output_path.read_text(encoding="utf-8"))["action_name"] == (
+        "sync_tasks_to_google_calendar"
+    )
 
 
 class _RecordingGoogleCalendarClient:
@@ -192,7 +194,7 @@ def test_plans_create_replace_and_unambiguously_orphaned_delete_changes():
         {"id": "foreign", **_timed_resource("OTHER-1", "Foreign", tracker_id="OTHER")},
     ]
 
-    plan = plan_calendar_event_reconciliation(
+    plan = plan_google_calendar_updates(
         desired_events,
         existing_events,
         tracker_id="ALOVYA",
@@ -219,7 +221,7 @@ def test_preserves_owned_events_when_task_identity_is_missing_or_duplicated():
         {"id": "duplicate-two", **_timed_resource("ALOVYA-8", "Duplicate")},
     ]
 
-    plan = plan_calendar_event_reconciliation(
+    plan = plan_google_calendar_updates(
         [_timed_event("ALOVYA-8", "Duplicate")],
         existing_events,
         tracker_id="ALOVYA",

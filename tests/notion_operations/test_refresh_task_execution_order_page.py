@@ -1,8 +1,8 @@
 import asyncio
 
-from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
+from notion_task_tracker.notion_operations.refresh_task_execution_order_page import (
     TASK_DATABASE_EXECUTION_ORDER_PROPERTY,
-    reconcile_task_execution_order_page,
+    refresh_task_execution_order_page,
 )
 from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskTree
 from notion_task_tracker.tasks.database import (
@@ -24,7 +24,7 @@ from notion_task_tracker.tasks.database import (
 )
 
 
-def test_reconcile_task_execution_order_page_creates_filtered_table_on_notions_empty_page():
+def test_refresh_task_execution_order_page_creates_filtered_table_on_notions_empty_page():
     task_tree = _task_tree_with_ready_blocked_and_container_tasks()
     notion_client = _ExecutionOrderClient(
         page_blocks=[
@@ -35,7 +35,7 @@ def test_reconcile_task_execution_order_page_creates_filtered_table_on_notions_e
     )
 
     operation_keys = asyncio.run(
-        reconcile_task_execution_order_page(_tracker_state(task_tree), notion_client)
+        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
     )
 
     assert notion_client.deleted_block_ids == ["empty-paragraph"]
@@ -65,7 +65,7 @@ def test_reconcile_task_execution_order_page_creates_filtered_table_on_notions_e
     ]
 
 
-def test_reconcile_task_execution_order_page_changes_membership_without_recreating_view():
+def test_refresh_task_execution_order_page_changes_membership_without_recreating_view():
     task_tree = _task_tree_with_ready_blocked_and_container_tasks()
     notion_client = _ExecutionOrderClient(
         page_blocks=[{"id": "linked-database", "type": "child_database"}],
@@ -79,7 +79,7 @@ def test_reconcile_task_execution_order_page_changes_membership_without_recreati
     )
 
     operation_keys = asyncio.run(
-        reconcile_task_execution_order_page(_tracker_state(task_tree), notion_client)
+        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
     )
 
     assert notion_client.created_view is None

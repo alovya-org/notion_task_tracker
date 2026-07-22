@@ -12,41 +12,41 @@ from notion_task_tracker.build_tracker_command import (
 from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
 
 
-def test_reconcile_action_builds_refresh_command():
-    command = _build_tracker_command(_arguments(reconcile_from_notion=True))
+def test_refresh_notion_task_tracker_action_builds_refresh_command():
+    command = _build_tracker_command(_arguments(refresh_notion_task_tracker=True))
 
-    assert command == {"command": "reconcile_from_notion"}
-
-
-def test_sync_calendar_action_builds_sync_command():
-    command = _build_tracker_command(_arguments(sync_calendar=True))
-
-    assert command == {"command": "sync_calendar"}
+    assert command == {"command": "refresh_notion_task_tracker"}
 
 
-def test_maintain_calendar_watch_action_preserves_renewal_identity():
+def test_sync_tasks_to_google_calendar_action_builds_sync_command():
+    command = _build_tracker_command(_arguments(sync_tasks_to_google_calendar=True))
+
+    assert command == {"command": "sync_tasks_to_google_calendar"}
+
+
+def test_maintain_google_calendar_watch_action_preserves_renewal_identity():
     command = _build_tracker_command(_arguments(
-        maintain_calendar_watch=True,
+        maintain_google_calendar_watch=True,
         tracker_user="al0vya",
         calendar_notification_url="https://worker.example/google-calendar-notifications",
     ))
 
     assert command == {
-        "command": "maintain_calendar_watch",
+        "command": "maintain_google_calendar_watch",
         "tracker_user": "al0vya",
         "notification_url": "https://worker.example/google-calendar-notifications",
     }
 
 
-def test_apply_calendar_changes_action_preserves_dispatch_identity():
+def test_apply_google_calendar_changes_to_tasks_action_preserves_dispatch_identity():
     command = _build_tracker_command(_arguments(
-        apply_calendar_changes=True,
+        apply_google_calendar_changes_to_tasks=True,
         google_change_cursor="current-sync-token",
         tracker_user="al0vya",
     ))
 
     assert command == {
-        "command": "apply_calendar_changes",
+        "command": "apply_google_calendar_changes_to_tasks",
         "google_change_cursor": "current-sync-token",
         "tracker_user": "al0vya",
     }
@@ -571,10 +571,10 @@ def _assert_uuid4_log_id(log_id: str, ticket_prefix: str = "ALOVYA") -> None:
 
 def _arguments(**overrides):
     values = {
-        "maintain_calendar_watch": False,
-        "sync_calendar": False,
-        "apply_calendar_changes": False,
-        "reconcile_from_notion": False,
+        "refresh_notion_task_tracker": False,
+        "sync_tasks_to_google_calendar": False,
+        "maintain_google_calendar_watch": False,
+        "apply_google_calendar_changes_to_tasks": False,
         "read": False,
         "read_all": False,
         "work": False,

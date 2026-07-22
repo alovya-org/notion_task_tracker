@@ -130,8 +130,8 @@ def apply_command_to_tracker_state(command: dict[str, Any], tracker_state: dict[
     if command_name == "create_synthesis_page":
         return _apply_synthesis_command(command, tracker_state)
 
-    if command_name == "reconcile_synthesis_root_page_mentions":
-        return _reconcile_synthesis_root_page_mentions(command, tracker_state)
+    if command_name == "refresh_synthesis_root_page_mentions":
+        return _refresh_synthesis_root_page_mentions(command, tracker_state)
 
     if command_name == "refresh_synthesis_pages":
         return _refresh_synthesis_pages(command, tracker_state)
@@ -513,9 +513,12 @@ def _apply_synthesis_command(command: dict[str, Any], tracker_state: dict[str, A
     )
 
 
-def _reconcile_synthesis_root_page_mentions(command: dict[str, Any], tracker_state: dict[str, Any]) -> TrackerCommandResult:
+def _refresh_synthesis_root_page_mentions(
+    command: dict[str, Any],
+    tracker_state: dict[str, Any],
+) -> TrackerCommandResult:
     synthesis_notes = SynthesisNotesMetadata.from_tracker_state(tracker_state["synthesis_notes"])
-    synthesis_notes.reconcile_root_page_mentions_from_content(
+    synthesis_notes.refresh_root_page_mentions_from_content(
         root_page_content=command["root_page_content"],
         page_titles_by_id=command.get("page_titles_by_id", {}),
     )

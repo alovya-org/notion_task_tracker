@@ -43,14 +43,14 @@ jobs:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
 
       - name: Build current tracker state from Notion
-        run: ntt --reconcile-from-notion --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
+        run: ntt --refresh-notion-task-tracker --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
 
       - name: Apply changed Google events to Notion tasks
         run: >-
-          ntt --apply-calendar-changes
+          ntt --apply-google-calendar-changes-to-tasks
           --google-change-cursor "$GOOGLE_CHANGE_CURSOR"
           --tracker-user "$TRACKER_USER"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"

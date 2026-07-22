@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from notion_task_tracker.notion_operations.reconcile_task_database import (
+from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion import (
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
 )

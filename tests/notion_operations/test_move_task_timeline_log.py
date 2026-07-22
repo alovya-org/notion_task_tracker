@@ -104,7 +104,7 @@ def test_move_task_timeline_log_copies_verifies_deletes_and_verifies_complete_to
     assert "icon" not in copied_toggle["toggle"]["children"][0]["paragraph"]
 
 
-def test_move_task_timeline_log_reconciles_existing_destination_copy_before_deleting_source():
+def test_move_task_timeline_log_reuses_existing_destination_copy_before_deleting_source():
     notion_client = _InMemoryNotionClient(
         source_blocks=_timeline_blocks(LOG_ID),
         destination_blocks=_timeline_blocks(LOG_ID),

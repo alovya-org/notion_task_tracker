@@ -122,9 +122,9 @@ Mutating action output contains:
 2. `action_name`: explicit CLI action that ran.
 3. `completed_operations`: operation keys successfully written to Notion.
 4. `tracker_state_path`: canonical tracker-state path written after Notion writes succeeded.
-5. `warnings`: non-fatal reconciliation warnings.
+5. `warnings`: non-fatal refresh or synchronisation warnings.
 
-The live path uses the Notion REST client for task creation, logging, completion, reconciliation, and landing-page rendering.
+The live path uses the Notion REST client for task creation, logging, completion, tracker refreshes, and landing-page rendering.
 
 ## Explicit CLI actions
 
@@ -201,17 +201,17 @@ Synthesis content files use this shape:
 }
 ```
 
-## Fetch and reconcile from Notion
+## Refresh the Notion task tracker
 
 Use this when the user edited task rows in the Notion UI:
 
 ```bash
-ntt --reconcile-from-notion
+ntt --refresh-notion-task-tracker
 ```
 
-This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds the local tree projection from row properties, and repairs derived landing pages or task titles when needed. If the tracker state JSON is missing, the command first creates local state from `config.toml`: it resolves the task database data-source id, derives managed page ids from the configured page URLs, writes an empty task projection, and then continues reconciliation. This bootstrap step does not create Notion pages.
+This command creates a timestamped backup under `/tmp`, queries the configured task database data source, rebuilds local tracker state from row properties, and repairs derived landing pages or task titles when needed. If the tracker state JSON is missing, the command first creates local state from `config.toml`: it resolves the task database data-source id, derives managed page ids from the configured page URLs, writes empty task state, and then continues the refresh. This bootstrap step does not create Notion pages.
 
-Reconciliation also maintains the task execution-order page as an unsorted linked table over the task database. A task appears there only when it is not complete or cancelled, has no children, and either has no dependencies or every dependency is complete. NTT records that derived membership in the `In execution order` checkbox; the view only filters for checked rows and does not contain readiness logic. The table shows `Task page`, `Priority`, `Deadline`, `Status`, `Parent`, `Dependencies`, `Dependants`, `External coordination`, `Uncertainty`, and `Friction`. Newly eligible rows appear at the bottom and can be dragged into the desired order in Notion.
+Refreshing the tracker also updates the task execution-order page as an unsorted linked table over the task database. A task appears there only when it is not complete or cancelled, has no children, and either has no dependencies or every dependency is complete. NTT records that derived membership in the `In execution order` checkbox; the view only filters for checked rows and does not contain readiness logic. The table shows `Task page`, `Priority`, `Deadline`, `Status`, `Parent`, `Dependencies`, `Dependants`, `External coordination`, `Uncertainty`, and `Friction`. Newly eligible rows appear at the bottom and can be dragged into the desired order in Notion.
 
 The managed execution-order page must be empty when NTT creates its linked table. After creation it may contain only that linked database. NTT fails clearly instead of interpreting or replacing other page content.
 
@@ -226,7 +226,7 @@ miscellaneous_notes_url = "https://www.notion.so/..."
 synthesis_notes_url = "https://www.notion.so/..."
 ```
 
-Calendar projection uses optional non-secret configuration:
+Google Calendar synchronisation uses optional non-secret configuration:
 
 ```toml
 [calendar]
@@ -237,10 +237,10 @@ colour_id = "8"
 
 Keep Google OAuth secrets outside this file. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REFRESH_TOKEN` in the process environment or deployment secret store. Obtain the refresh token through offline OAuth consent using only `https://www.googleapis.com/auth/calendar.events`; NTT does not request Gmail access. The Calendar client renews short-lived access tokens automatically.
 
-Sync scheduled active leaf tasks after reconciling the current Notion database:
+Sync scheduled active leaf tasks after refreshing the current Notion database:
 
 ```bash
-ntt --sync-calendar
+ntt --sync-tasks-to-google-calendar
 ```
 
 NTT identifies its events through private Google extended properties containing the configured ticket prefix and full task ID. It creates missing events, replaces changed events, and deletes only uniquely identified NTT events whose task is no longer eligible. Foreign, malformed, and duplicate events are preserved. Synced task slots use an `[NTT]` title, remain transparent so meetings may be booked over them, and may use the configured colour. Keep recurring daily routines as native recurring Google Calendar events; this command syncs only tasks stored in the NTT task database.
@@ -256,9 +256,9 @@ Normal commands are fast because they only refresh the task pages they touch. Th
 3. `split_task_with_sibling` fetches the source sibling and parent chain, creates one new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
 4. `create_top_level_task` creates a new top-level database row without fetching the full database.
 5. Miscellaneous and synthesis commands do not use the task database.
-6. `--reconcile-from-notion` is the only normal path that queries every task row and rebuilds the whole local task tree projection.
+6. `--refresh-notion-task-tracker` is the only normal path that queries every task row and rebuilds the whole local task tree.
 
-Run full reconciliation when a task was created only in Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
+Run a full tracker refresh when a task was created only in the Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
 
 Targeted preflight intentionally fails instead of guessing when the touched page has malformed task properties, reports a different `Task ID` than the requested task, has more than one parent, or points to a parent page that is absent from local tracker state.
 
@@ -266,7 +266,7 @@ Task ids are derived from Notion's `Task ID`. The visible Notion page title stay
 
 ## Refresh from GitHub Actions
 
-`.github/workflows/refresh-notion-task-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --reconcile-from-notion` with a temporary tracker state path.
+`.github/workflows/refresh-notion-task-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --refresh-notion-task-tracker` with a temporary tracker state path.
 
 Each tracker user is represented by one GitHub environment. The environment name is the `tracker_user` value passed to the workflow. Each environment must define:
 
@@ -508,11 +508,11 @@ Create a synthesis page with explicit sources:
 }
 ```
 
-Reconcile the synthesis root after editing page mentions in Notion:
+Refresh the synthesis root after editing page mentions in Notion:
 
 ```json
 {
-  "command": "reconcile_synthesis_root_page_mentions",
+  "command": "refresh_synthesis_root_page_mentions",
   "root_page_content": "<mention-page url=\"https://www.notion.so/Guide-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\">Guide</mention-page>",
   "page_titles_by_id": {
     "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "Title for a bare page mention"
@@ -525,7 +525,7 @@ This replaces the local existing-page mention list with exactly the page mention
 ## Supported commands
 
 - `append_task_timeline_log`: add one UUID4-identified toggle beneath a task's date heading with targeted page content. New dates are prepended under `Timeline log`; existing dates receive another toggle. It must not replace the task page or landing pages.
-- `move_task_timeline_log`: copy one identified toggle to another task page, verify the destination, delete its physical source block, then verify the source. Existing destination copies are reconciled by logical identifier.
+- `move_task_timeline_log`: copy one identified toggle to another task page, verify the destination, reuse an existing destination copy with the same logical identifier, delete its physical source block, then verify the source.
 - `complete_task`: mark one task complete, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
 - `cancel_task`: mark one task cancelled, append an identified dated timeline toggle, update database properties, and refresh the ongoing and completed landing pages.
 - `delete_task`: move one task page to trash, remove its local state and relationships, promote its children, and refresh both landing pages.
@@ -537,7 +537,7 @@ This replaces the local existing-page mention list with exactly the page mention
 - `append_miscellaneous_note`: add lines to a dated miscellaneous subpage.
 - `refresh_miscellaneous_pages`: regenerate the miscellaneous root and dated pages.
 - `create_synthesis_page`: create one synthesis subpage with sources and content.
-- `reconcile_synthesis_root_page_mentions`: update local synthesis-root references from fetched Notion page mentions without writing to Notion.
+- `refresh_synthesis_root_page_mentions`: update local synthesis-root references from fetched Notion page mentions without writing to Notion.
 - `refresh_synthesis_pages`: regenerate the synthesis root page and tracker-created synthesis pages.
 
 ## Package shape
@@ -549,10 +549,10 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `notion_task_tracker/build_tracker_command.py`: build deterministic tracker commands from explicit CLI flags.
 - `notion_task_tracker/config.py`: load and write per-user identity and Notion location configuration.
 - `notion_task_tracker/initialise_tracker.py`: validate the supplied database, create managed pages, and write initial local files.
-- `notion_task_tracker/run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full database reconciliation.
+- `notion_task_tracker/run_notion_task_tracker.py`: parse explicit CLI actions, build tracker commands, run reads, writes, and full tracker refreshes from Notion.
 - `notion_task_tracker/apply_tracker_command.py`: apply one already-built tracker command to local state and derive Notion write intents.
 - `notion_task_tracker/tasks/task_tree.py`: task tree validation, priority rollup, and task-write orchestration.
-- `notion_task_tracker/tasks/database.py`: task database projection and database-row parsing.
+- `notion_task_tracker/tasks/database.py`: task database rows and their parsing.
 - `notion_task_tracker/tasks/task.py`: task, priority, status, timeline-entry data, task property refresh intents, and timeline-log update intents.
 - `notion_task_tracker/tasks/landing_pages.py`: ongoing and completed task landing-page rendering and refresh intents.
 - `notion_task_tracker/tasks/timeline_log.py`: task page body parsing for timeline logs.

@@ -84,7 +84,7 @@ class TestTaskTreeFromDatabaseQueryResults:
             ValueError,
             match=(
                 "Notion page 11111111111111111111111111111111 changed task identity "
-                "from ALOVYA-118 to ALOVYA-127; refusing to reconcile"
+                "from ALOVYA-118 to ALOVYA-127; refusing to refresh"
             ),
         ):
             _build_task_tree(

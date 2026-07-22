@@ -41,7 +41,7 @@ Logs should preserve the facts needed to resume work without rereading the chat.
 - For `read`, answer from the CLI summary plus fetched task context; treat it as read-only.
 - For `work`, use the task page for intent, status, blockers, links, and recent timeline before editing any repo.
 - If the task points to repo work, obey the repo's local instructions and decision records before changing code.
-- If local state is missing a task or related page, reconcile from Notion before continuing.
+- If local state is missing a task or related page, refresh the tracker from Notion before continuing.
 
 ## Miscellaneous And Synthesis
 

@@ -34,7 +34,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
     _command_changes_task_relations,
-    _run_reconcile_tracker_from_notion_command,
+    _run_refresh_notion_task_tracker_command,
     _run_write_tracker_command,
     _run_read_task_pages,
     main,
@@ -64,36 +64,36 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
-def test_parse_args_reads_sync_calendar_action():
-    args = parse_args(["--sync-calendar"])
+def test_parse_args_reads_sync_tasks_to_google_calendar_action():
+    args = parse_args(["--sync-tasks-to-google-calendar"])
 
-    assert args.sync_calendar is True
+    assert args.sync_tasks_to_google_calendar is True
 
 
 def test_parse_args_reads_calendar_watch_maintenance_identity():
     args = parse_args([
-        "--maintain-calendar-watch",
+        "--maintain-google-calendar-watch",
         "--tracker-user",
         "al0vya",
         "--calendar-notification-url",
         "https://worker.example/google-calendar-notifications",
     ])
 
-    assert args.maintain_calendar_watch is True
+    assert args.maintain_google_calendar_watch is True
     assert args.tracker_user == "al0vya"
     assert args.calendar_notification_url.endswith("/google-calendar-notifications")
 
 
 def test_parse_args_reads_google_calendar_change_identity():
     args = parse_args([
-        "--apply-calendar-changes",
+        "--apply-google-calendar-changes-to-tasks",
         "--google-change-cursor",
         "current-sync-token",
         "--tracker-user",
         "al0vya",
     ])
 
-    assert args.apply_calendar_changes is True
+    assert args.apply_google_calendar_changes_to_tasks is True
     assert args.google_change_cursor == "current-sync-token"
     assert args.tracker_user == "al0vya"
 
@@ -184,20 +184,20 @@ def test_main_rejects_unknown_flag():
     assert error.value.code == 2
 
 
-def test_main_exits_non_zero_when_reconciliation_refuses_unsafe_state(monkeypatch, capsys):
-    refusal_message = "Notion page changed task identity; refusing to reconcile"
+def test_main_exits_non_zero_when_refresh_refuses_unsafe_state(monkeypatch, capsys):
+    refusal_message = "Notion page changed task identity; refusing to refresh"
 
-    def _refuse_unsafe_reconciliation(args):
+    def _refuse_unsafe_refresh(args):
         raise ValueError(refusal_message)
 
     monkeypatch.setattr(
         run_notion_task_tracker,
         "_run_requested_cli_action",
-        _refuse_unsafe_reconciliation,
+        _refuse_unsafe_refresh,
     )
 
     with pytest.raises(SystemExit) as error:
-        main(["--reconcile-from-notion"])
+        main(["--refresh-notion-task-tracker"])
 
     assert error.value.code == 2
     assert capsys.readouterr().err == f"{refusal_message}\n"
@@ -267,7 +267,7 @@ def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_tas
         "replace:ongoing_landing_page",
     ]
     assert refresh_summary.to_json_summary() == {
-        "action_name": "reconcile_from_notion",
+        "action_name": "refresh_notion_task_tracker",
         "backup_path": str(backup_path),
         "completed_operations": [
             "update_properties:task:ALOVYA-1",
@@ -328,7 +328,7 @@ def test_repair_and_write_refreshed_tracker_state_refreshes_landing_pages_when_n
     assert refresh_summary.to_json_summary()["repair_operation_count"] == 1
 
 
-def test_write_command_renders_landing_pages_from_full_fresh_database_projection(tmp_path: Path):
+def test_write_command_renders_landing_pages_from_fully_refreshed_database_state(tmp_path: Path):
     notion_client = FakeNotionClient(
         database_rows=[
             {
@@ -417,14 +417,14 @@ def test_write_command_renders_landing_pages_from_full_fresh_database_projection
     ]
 
 
-def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(tmp_path: Path):
-    notion_client = _ConfiguredTrackerReconcileClient()
+def test_refresh_notion_task_tracker_creates_missing_tracker_state_from_configuration(tmp_path: Path):
+    notion_client = _ConfiguredTrackerRefreshClient()
     tracker_state_path = tmp_path / "notion_tasks_tree.json"
     output_path = tmp_path / "output.json"
     backup_path = tmp_path / "backup.json"
 
     refresh_summary = asyncio.run(
-        _run_reconcile_tracker_from_notion_command(
+        _run_refresh_notion_task_tracker_command(
             config=_configured_tracker(),
             tracker_state_path=tracker_state_path,
             output_path=output_path,
@@ -462,15 +462,15 @@ def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(
     assert json.loads(output_path.read_text(encoding="utf-8"))["task_count"] == 0
 
 
-def test_reconcile_from_notion_rejects_missing_configured_page_url(tmp_path: Path):
+def test_refresh_notion_task_tracker_rejects_missing_configured_page_url(tmp_path: Path):
     with pytest.raises(ValueError, match="synthesis_notes_url"):
         asyncio.run(
-            _run_reconcile_tracker_from_notion_command(
+            _run_refresh_notion_task_tracker_command(
                 config=_configured_tracker(synthesis_notes_url=None),
                 tracker_state_path=tmp_path / "notion_tasks_tree.json",
                 output_path=tmp_path / "output.json",
                 backup_path=tmp_path / "backup.json",
-                notion_client=_ConfiguredTrackerReconcileClient(),
+                notion_client=_ConfiguredTrackerRefreshClient(),
             )
         )
 
@@ -617,7 +617,7 @@ class _FakeNotionClient:
         return {"22222222222222222222222222222222"}
 
 
-class _ConfiguredTrackerReconcileClient:
+class _ConfiguredTrackerRefreshClient:
     def __init__(self) -> None:
         self.created_pages: list[dict] = []
         self.write_intents = []
@@ -666,7 +666,7 @@ class _ConfiguredTrackerReconcileClient:
         self.created_pages.append(
             {"parent": parent, "properties": properties, "markdown": markdown}
         )
-        raise AssertionError("Reconciliation must not create managed pages")
+        raise AssertionError("Refreshing tracker state must not create managed pages")
 
 
 def _tracker_state(title: str, priority: str) -> dict:

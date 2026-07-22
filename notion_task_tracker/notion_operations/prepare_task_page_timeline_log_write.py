@@ -14,7 +14,7 @@ from notion_task_tracker.tasks.derive_task_timeline_log import (
     derive_task_timeline_log_from_fetched_page_content,
 )
 from notion_task_tracker.tasks import TaskTree
-from notion_task_tracker.notion_operations.reconcile_task_database import plan_repairs_for_task_tree_changes
+from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion import plan_repairs_for_task_tree_changes
 
 
 def plan_context_repair_result(

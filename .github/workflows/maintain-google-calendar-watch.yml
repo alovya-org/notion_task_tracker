@@ -36,7 +36,7 @@ jobs:
 
       - name: Maintain the Google Calendar watch
         run: >-
-          ntt --maintain-calendar-watch
+          ntt --maintain-google-calendar-watch
           --tracker-user al0vya
           --calendar-notification-url "$NTT_CALENDAR_NOTIFICATION_URL"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"

@@ -6,7 +6,7 @@ This package preserves three Notion page families:
 2. A dated miscellaneous-notes inbox.
 3. A flat synthesis-notes index with reusable synthesis subpages.
 
-The tracker is deterministic. Agents provide semantic input; Python owns tree projection, priority rollup, rendering, REST requests, and write ordering.
+The tracker is deterministic. Agents provide semantic input; Python owns the derived task tree, priority rollup, rendering, REST requests, and write ordering.
 
 ## Task Pages
 
@@ -41,7 +41,7 @@ Task ids are always derived from Notion's `Task ID`.
 
 ## Task Tree
 
-Tasks form a parent-child tree. The database `Parent` relation is authoritative during reconciliation.
+Tasks form a parent-child tree. The database `Parent` relation is authoritative when refreshing tracker state.
 
 Priority rolls upward only through `Active` and `Blocked` descendants:
 
@@ -101,16 +101,16 @@ ALOVYA-2
 
 ALOVYA-2 directly owns ALOVYA-3 and ALOVYA-4 through database relations. ALOVYA-5 belongs on ALOVYA-3 unless it changes top-level state.
 
-## Task Reconciliation
+## Refreshing tracker tasks
 
-Task reconciliation runs before every task, miscellaneous, or synthesis command. It updates the local tracker state from database rows, then regenerates derived views only when it detects task tree changes.
+The relevant tasks are refreshed before every task, miscellaneous, or synthesis command. This updates local tracker state from database rows, then regenerates derived views only when it detects task tree changes.
 
 1. Query the saved `Alovya's task database` view.
 2. Convert rows into task metadata.
 3. Rebuild parent-child links from database `Parent` relations.
 4. Preserve local timeline metadata where the row maps to a known page.
 5. Validate the tree and recalculate displayed priorities.
-6. Repair derived landing pages and task titles when the tree projection changes.
+6. Repair derived landing pages and task titles when the task tree changes.
 
 If no change is detected, no repair write is sent. If repairs are needed, the CLI writes them before applying the user's requested command.
 
@@ -166,7 +166,7 @@ Google doc: Export notes: https://example.invalid/doc
 Reusable synthesis content.
 ```
 
-Synthesis reconciliation reads the root page, preserves root order, preserves child-page tags as child-page tags, and replaces the local existing-page mention list with exactly what the root contains. It emits no Notion write calls.
+Refreshing synthesis-page mentions reads the root page, preserves root order, preserves child-page tags as child-page tags, and replaces the local existing-page mention list with exactly what the root contains. It emits no Notion write calls.
 
 ## Agent Boundary
 

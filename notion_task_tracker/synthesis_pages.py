@@ -116,18 +116,18 @@ class SynthesisNotesMetadata:
         self.validate()
         return synthesis_page
 
-    def reconcile_root_page_mentions_from_content(
+    def refresh_root_page_mentions_from_content(
         self,
         root_page_content: str,
         page_titles_by_id: dict[str, str] | None = None,
     ) -> None:
         root_page_mentions = parse_synthesis_root_page_mentions(root_page_content)
-        self.reconcile_root_page_mentions(
+        self.refresh_root_page_mentions(
             root_page_mentions=root_page_mentions,
             page_titles_by_id=page_titles_by_id or {},
         )
 
-    def reconcile_root_page_mentions(
+    def refresh_root_page_mentions(
         self,
         root_page_mentions: list[SynthesisRootPageMention],
         page_titles_by_id: dict[str, str] | None = None,
@@ -136,7 +136,7 @@ class SynthesisNotesMetadata:
         title_lookup.update(_canonical_title_lookup(page_titles_by_id or {}))
 
         managed_page_ids = self._managed_synthesis_page_ids()
-        reconciled_existing_page_mentions = {}
+        refreshed_existing_page_mentions = {}
 
         for display_order, root_page_mention in enumerate(root_page_mentions):
             notion_page_id = canonical_notion_page_id(root_page_mention.notion_page_id)
@@ -150,12 +150,12 @@ class SynthesisNotesMetadata:
             )
             mention_key = _mention_key_from_notion_page_id(notion_page_id)
 
-            if mention_key in reconciled_existing_page_mentions:
+            if mention_key in refreshed_existing_page_mentions:
                 raise NotionPlanningError(
                     f"Synthesis root mentions page {notion_page_id!r} more than once"
                 )
 
-            reconciled_existing_page_mentions[mention_key] = ExistingSynthesisPageMention(
+            refreshed_existing_page_mentions[mention_key] = ExistingSynthesisPageMention(
                 mention_key=mention_key,
                 title=title,
                 notion_page_id=notion_page_id,
@@ -163,7 +163,7 @@ class SynthesisNotesMetadata:
                 root_block_type=root_page_mention.root_block_type,
             )
 
-        self.existing_page_mentions = reconciled_existing_page_mentions
+        self.existing_page_mentions = refreshed_existing_page_mentions
         self.validate()
 
     def validate(self) -> None:

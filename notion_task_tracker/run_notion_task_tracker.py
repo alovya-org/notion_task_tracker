@@ -39,14 +39,14 @@ from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write 
     merge_context_repairs_into_command_result,
     plan_context_repair_result,
 )
-from notion_task_tracker.notion_operations.reconcile_task_database import (
+from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion import (
     plan_repairs_for_task_tree_changes,
     refresh_tracker_state_for_task_ids,
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
 )
-from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
-    reconcile_task_execution_order_page,
+from notion_task_tracker.notion_operations.refresh_task_execution_order_page import (
+    refresh_task_execution_order_page,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
@@ -107,10 +107,10 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--init", action="store_true")
     action_group.add_argument("--install-skill", action="store_true")
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
-    action_group.add_argument("--reconcile-from-notion", action="store_true")
-    action_group.add_argument("--sync-calendar", action="store_true")
-    action_group.add_argument("--maintain-calendar-watch", action="store_true")
-    action_group.add_argument("--apply-calendar-changes", action="store_true")
+    action_group.add_argument("--refresh-notion-task-tracker", action="store_true")
+    action_group.add_argument("--sync-tasks-to-google-calendar", action="store_true")
+    action_group.add_argument("--maintain-google-calendar-watch", action="store_true")
+    action_group.add_argument("--apply-google-calendar-changes-to-tasks", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--read-all", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -247,7 +247,7 @@ def refresh_task_tracker_from_notion(
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
 ) -> "TrackerActionExecutionSummary":
-    return asyncio.run(_run_reconcile_tracker_from_notion_command(
+    return asyncio.run(_run_refresh_notion_task_tracker_command(
         config=config,
         tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
@@ -295,7 +295,7 @@ async def _run_tracker_command(
     google_calendar_client: GoogleCalendarClient | None,
     calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
 ) -> "TrackerActionExecutionSummary":
-    if command["command"] == "maintain_calendar_watch":
+    if command["command"] == "maintain_google_calendar_watch":
         return await maintain_google_calendar_watch(
             tracker_user=command["tracker_user"],
             notification_url=command["notification_url"],
@@ -308,10 +308,10 @@ async def _run_tracker_command(
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
             calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
-            refresh_tasks_from_notion=_run_reconcile_tracker_from_notion_command,
+            refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
         )
 
-    if command["command"] == "sync_calendar":
+    if command["command"] == "sync_tasks_to_google_calendar":
         return await sync_tasks_to_google_calendar(
             config=config,
             tracker_state_path=tracker_state_path,
@@ -319,10 +319,10 @@ async def _run_tracker_command(
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
-            refresh_tasks_from_notion=_run_reconcile_tracker_from_notion_command,
+            refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
         )
 
-    if command["command"] == "apply_calendar_changes":
+    if command["command"] == "apply_google_calendar_changes_to_tasks":
         return await apply_google_calendar_changes_to_tasks(
             tracker_user=command["tracker_user"],
             google_change_cursor=command["google_change_cursor"],
@@ -334,8 +334,8 @@ async def _run_tracker_command(
             calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
         )
 
-    if command["command"] == "reconcile_from_notion":
-        return await _run_reconcile_tracker_from_notion_command(
+    if command["command"] == "refresh_notion_task_tracker":
+        return await _run_refresh_notion_task_tracker_command(
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
@@ -411,7 +411,7 @@ def _task_notion_page_id(tracker_state: dict[str, Any], task_id: str) -> str:
     return notion_page_id
 
 
-async def _run_reconcile_tracker_from_notion_command(
+async def _run_refresh_notion_task_tracker_command(
     config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
@@ -423,7 +423,7 @@ async def _run_reconcile_tracker_from_notion_command(
     destination_backup_path = Path(backup_path) if backup_path else _timestamped_backup_path()
     client = _notion_rest_client_from_optional_instance(notion_client)
 
-    tracker_state = await _read_or_create_reconcile_tracker_state(
+    tracker_state = await _read_or_create_refreshable_tracker_state(
         source_tracker_state_path=source_tracker_state_path,
         config=config,
         notion_client=client,
@@ -441,7 +441,7 @@ async def _run_reconcile_tracker_from_notion_command(
     )
 
 
-async def _read_or_create_reconcile_tracker_state(
+async def _read_or_create_refreshable_tracker_state(
     source_tracker_state_path: Path,
     config: TrackerConfig | None,
     notion_client: NotionRestClient,
@@ -538,7 +538,7 @@ async def _run_notion_writes_for_write_command(
             notion_client=notion_client,
         )
         command_operation_keys.extend(
-            await reconcile_task_execution_order_page(command_tracker_state, notion_client)
+            await refresh_task_execution_order_page(command_tracker_state, notion_client)
         )
         return command_tracker_state, command_operation_keys, []
 
@@ -557,7 +557,7 @@ async def _run_notion_writes_for_write_command(
         notion_client,
     )
     command_operation_keys.extend(
-        await reconcile_task_execution_order_page(command_result.tracker_state, notion_client)
+        await refresh_task_execution_order_page(command_result.tracker_state, notion_client)
     )
     return command_tracker_state, command_operation_keys, command_result.warnings or []
 
@@ -773,12 +773,12 @@ async def repair_and_write_refreshed_tracker_state(
     )
     repaired_tracker_state, completed_operation_keys = await execute_command_result_writes(repair_result, notion_client)
     completed_operation_keys.extend(
-        await reconcile_task_execution_order_page(repaired_tracker_state, notion_client)
+        await refresh_task_execution_order_page(repaired_tracker_state, notion_client)
     )
     _write_json(source_tracker_state_path, repaired_tracker_state)
 
     refresh_summary = TrackerActionExecutionSummary(
-        action_name="reconcile_from_notion",
+        action_name="refresh_notion_task_tracker",
         backup_path=destination_backup_path,
         completed_operation_keys=completed_operation_keys,
         output_path=destination_output_path,
@@ -794,10 +794,10 @@ async def repair_and_write_refreshed_tracker_state(
 
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
-        "sync_calendar": "sync_calendar",
-        "maintain_calendar_watch": "maintain_calendar_watch",
-        "apply_calendar_changes": "apply_calendar_changes",
-        "reconcile_from_notion": "reconcile_from_notion",
+        "sync_tasks_to_google_calendar": "sync_tasks_to_google_calendar",
+        "maintain_google_calendar_watch": "maintain_google_calendar_watch",
+        "apply_google_calendar_changes_to_tasks": "apply_google_calendar_changes_to_tasks",
+        "refresh_notion_task_tracker": "refresh_notion_task_tracker",
         "read_tasks": "read",
         "read_all_tasks": "read_all",
         "work_task": "work",

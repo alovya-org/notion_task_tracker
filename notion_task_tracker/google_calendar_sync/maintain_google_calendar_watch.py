@@ -101,7 +101,7 @@ async def maintain_google_calendar_watch(
         )
 
     execution_summary = TrackerActionExecutionSummary(
-        action_name="maintain_calendar_watch",
+        action_name="maintain_google_calendar_watch",
         output_path=Path(output_path),
         tracker_state_path=Path(tracker_state_path),
         warnings=[],

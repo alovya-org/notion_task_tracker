@@ -46,7 +46,7 @@ class TestApplyCommandToTrackerState:
             {
                 "entry_date": "2026-05-24",
                 "heading": '<mention-date start="2026-05-24"/>',
-                "lines": ["Existing handwritten or reconciled line."],
+                "lines": ["Existing handwritten or refreshed line."],
             }
         ]
 
@@ -263,7 +263,7 @@ class TestApplyCommandToTrackerState:
         assert command_result.write_intents[0].arguments["page"]["local_page_key"] == "synthesis:onnx_qdq"
         assert command_result.write_intents[0].arguments["markdown"].startswith("## Sources")
 
-    def test_reconcile_synthesis_root_page_mentions_updates_tracker_state_without_rest_writes(self):
+    def test_refresh_synthesis_root_page_mentions_updates_tracker_state_without_rest_writes(self):
         tracker_state = _combined_tracker_state()
         tracker_state["synthesis_notes"]["existing_page_mentions"] = {
             "stale": {
@@ -275,7 +275,7 @@ class TestApplyCommandToTrackerState:
 
         command_result = apply_command_to_tracker_state(
             command={
-                "command": "reconcile_synthesis_root_page_mentions",
+                "command": "refresh_synthesis_root_page_mentions",
                 "root_page_content": (
                     '<mention-page url="https://www.notion.so/wayve/Useful-guide-'
                     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">Useful guide</mention-page>'

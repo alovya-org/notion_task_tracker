@@ -20,7 +20,7 @@ from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     GoogleCalendarSyncTokenExpiredError,
 )
 from notion_task_tracker.json_file import write_json_file
-from notion_task_tracker.notion_operations.reconcile_task_database import (
+from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion import (
     refresh_tracker_state_for_task_ids,
 )
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
@@ -99,7 +99,7 @@ async def apply_google_calendar_changes_to_tasks(
     )
 
     execution_summary = TrackerActionExecutionSummary(
-        action_name="apply_calendar_changes",
+        action_name="apply_google_calendar_changes_to_tasks",
         output_path=Path(output_path),
         tracker_state_path=Path(tracker_state_path),
         warnings=applied_changes.warnings,
@@ -140,7 +140,7 @@ async def _apply_changed_google_calendar_events_to_tasks(
     notion_client: NotionRestClient,
 ) -> AppliedGoogleCalendarChanges:
     if config.calendar is None:
-        raise ValueError("Configure [calendar] before reconciling Google Calendar edits")
+        raise ValueError("Configure [calendar] before applying Google Calendar changes to tasks")
 
     source_tracker_state_path = Path(tracker_state_path)
     tracker_state = json.loads(source_tracker_state_path.read_text(encoding="utf-8"))

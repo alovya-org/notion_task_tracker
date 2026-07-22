@@ -39,7 +39,7 @@ class CalendarEventReplacement:
 
 
 @dataclass(frozen=True)
-class CalendarReconciliationPlan:
+class GoogleCalendarUpdatePlan:
     events_to_create: list[dict[str, Any]]
     events_to_replace: list[CalendarEventReplacement]
     event_ids_to_delete: list[str]
@@ -68,7 +68,7 @@ async def sync_tasks_to_google_calendar(
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
     if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before projecting tasks into Google Calendar")
+        raise ValueError("Configure [calendar] before syncing tasks to Google Calendar")
 
     refresh_summary = await refresh_tasks_from_notion(
         config=configured_tracker,
@@ -89,23 +89,23 @@ async def sync_tasks_to_google_calendar(
         "privateExtendedProperty": f"ntt_tracker={configured_tracker.ticket_prefix}",
         "showDeleted": "false",
     })
-    reconciliation_plan = plan_calendar_event_reconciliation(
+    update_plan = plan_google_calendar_updates(
         desired_events=desired_events,
         existing_events=existing_events,
         tracker_id=configured_tracker.ticket_prefix,
         timezone_name=configured_tracker.calendar.timezone_name,
         colour_id=configured_tracker.calendar.colour_id,
     )
-    calendar_operation_keys = await _execute_calendar_reconciliation_plan(
-        reconciliation_plan,
+    calendar_operation_keys = await _execute_google_calendar_updates(
+        update_plan,
         calendar_client,
     )
 
     execution_summary = TrackerActionExecutionSummary(
-        action_name="sync_calendar",
+        action_name="sync_tasks_to_google_calendar",
         output_path=Path(output_path),
         tracker_state_path=Path(tracker_state_path),
-        warnings=[*refresh_summary.warnings, *reconciliation_plan.warnings],
+        warnings=[*refresh_summary.warnings, *update_plan.warnings],
         backup_path=refresh_summary.backup_path,
         completed_operation_keys=refresh_summary.completed_operation_keys,
         task_tree_changes=refresh_summary.task_tree_changes,
@@ -127,13 +127,13 @@ def derive_desired_calendar_events(
     return [_derive_calendar_event_for_task(task, timezone) for task in eligible_tasks]
 
 
-def plan_calendar_event_reconciliation(
+def plan_google_calendar_updates(
     desired_events: list[DesiredCalendarEvent],
     existing_events: list[dict[str, Any]],
     tracker_id: str,
     timezone_name: str,
     colour_id: str | None = None,
-) -> CalendarReconciliationPlan:
+) -> GoogleCalendarUpdatePlan:
     desired_resources_by_task_id = {
         event.task_id: _google_event_resource(event, tracker_id, timezone_name, colour_id)
         for event in desired_events
@@ -161,7 +161,7 @@ def plan_calendar_event_reconciliation(
         existing_event["id"]
         for existing_event in existing_events_by_task_id.values()
     )
-    return CalendarReconciliationPlan(
+    return GoogleCalendarUpdatePlan(
         events_to_create=events_to_create,
         events_to_replace=events_to_replace,
         event_ids_to_delete=event_ids_to_delete,
@@ -169,8 +169,8 @@ def plan_calendar_event_reconciliation(
     )
 
 
-async def _execute_calendar_reconciliation_plan(
-    plan: CalendarReconciliationPlan,
+async def _execute_google_calendar_updates(
+    plan: GoogleCalendarUpdatePlan,
     calendar_client: GoogleCalendarClient,
 ) -> list[str]:
     completed_operation_keys = []

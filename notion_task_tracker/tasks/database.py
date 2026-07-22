@@ -166,7 +166,7 @@ def _require_stable_task_ids_for_known_notion_pages(
 
         raise NotionPlanningError(
             f"Notion page {database_row.notion_page_id} changed task identity from "
-            f"{previous_task.task_id} to {database_row.task_id}; refusing to reconcile"
+            f"{previous_task.task_id} to {database_row.task_id}; refusing to refresh"
         )
 
 
