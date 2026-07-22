@@ -5,12 +5,12 @@ import asyncio
 import httpx
 import pytest
 
-from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
-    GoogleCalendarStateClient,
+from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
+    CloudflareGoogleCalendarStateClient,
 )
 
 
-def test_registers_a_google_notification_channel_without_exposing_the_state_api_token():
+def test_records_a_google_calendar_notification_channel_without_exposing_the_api_token():
     requests = []
 
     async def record_request(request: httpx.Request) -> httpx.Response:
@@ -19,7 +19,7 @@ def test_registers_a_google_notification_channel_without_exposing_the_state_api_
 
     state_client = _state_client(
         record_request,
-        state_api_url="https://worker.example/google-calendar/",
+        google_calendar_state_api_url="https://worker.example/google-calendar/",
     )
     channel = {
         "channel_id": "channel-one",
@@ -31,7 +31,7 @@ def test_registers_a_google_notification_channel_without_exposing_the_state_api_
         "expires_at": 1786000000000,
     }
 
-    result = asyncio.run(state_client.register_google_notification_channel(channel))
+    result = asyncio.run(state_client.record_google_calendar_notification_channel(channel))
 
     assert result == {"registered": True, "channel_id": "channel-one"}
     assert requests[0].url == "https://worker.example/google-calendar/notification-channels"
@@ -48,7 +48,7 @@ def test_advances_the_google_change_cursor_with_its_consumed_predecessor():
 
     state_client = _state_client(record_request)
 
-    result = asyncio.run(state_client.advance_google_change_cursor(
+    result = asyncio.run(state_client.advance_google_calendar_change_cursor(
         tracker_user="al0vya",
         calendar_id="calendar@example.com",
         previous_google_change_cursor="previous-sync-token",
@@ -76,7 +76,7 @@ def test_reads_the_latest_notification_channel_and_google_change_cursor():
 
     state_client = _state_client(return_channel)
 
-    channel = asyncio.run(state_client.find_latest_google_notification_channel(
+    channel = asyncio.run(state_client.read_latest_google_calendar_notification_channel(
         tracker_user="al0vya",
         calendar_id="calendar@example.com",
     ))
@@ -91,16 +91,19 @@ def test_requires_google_calendar_state_api_environment(monkeypatch):
     monkeypatch.delenv("NTT_GOOGLE_CALENDAR_STATE_API_TOKEN", raising=False)
 
     with pytest.raises(ValueError) as error:
-        GoogleCalendarStateClient.from_environment()
+        CloudflareGoogleCalendarStateClient.from_environment()
 
     assert str(error.value) == (
         "Missing environment variable: NTT_GOOGLE_CALENDAR_STATE_API_URL"
     )
 
 
-def _state_client(record_request, state_api_url="https://worker.example/google-calendar"):
-    return GoogleCalendarStateClient(
-        state_api_url=state_api_url,
-        state_api_token="state-api-secret",
+def _state_client(
+    record_request,
+    google_calendar_state_api_url="https://worker.example/google-calendar",
+):
+    return CloudflareGoogleCalendarStateClient(
+        google_calendar_state_api_url=google_calendar_state_api_url,
+        google_calendar_state_api_token="state-api-secret",
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(record_request)),
     )

@@ -12,8 +12,8 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
-    GoogleCalendarStateClient,
+from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
+    CloudflareGoogleCalendarStateClient,
 )
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
@@ -229,7 +229,7 @@ def execute_tracker_command(
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
-    google_calendar_state_client: GoogleCalendarStateClient | None = None,
+    google_calendar_state_client: CloudflareGoogleCalendarStateClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
@@ -296,7 +296,7 @@ async def _run_tracker_command(
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
-    google_calendar_state_client: GoogleCalendarStateClient | None,
+    google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
 ) -> "TrackerActionExecutionSummary":
     if command["command"] == "maintain_google_calendar_notification_channel":
         return await maintain_google_calendar_notification_channel(

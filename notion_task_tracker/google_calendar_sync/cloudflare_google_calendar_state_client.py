@@ -1,4 +1,4 @@
-"""Call the Google Calendar state API hosted by the Cloudflare Worker."""
+"""Read and change durable Google Calendar state through the Cloudflare Worker."""
 
 from __future__ import annotations
 
@@ -14,40 +14,40 @@ GOOGLE_CALENDAR_STATE_API_TOKEN_ENVIRONMENT_VARIABLE = "NTT_GOOGLE_CALENDAR_STAT
 
 
 @dataclass(frozen=True)
-class GoogleNotificationChannelStatus:
+class GoogleCalendarNotificationChannelState:
     channel_id: str
     resource_id: str
     expires_at: int
     google_change_cursor: str
 
 
-class GoogleCalendarStateClient:
+class CloudflareGoogleCalendarStateClient:
     def __init__(
         self,
-        state_api_url: str,
-        state_api_token: str,
+        google_calendar_state_api_url: str,
+        google_calendar_state_api_token: str,
         http_client: AsyncClient | None = None,
     ) -> None:
-        self.state_api_url = state_api_url.rstrip("/")
-        self.state_api_token = state_api_token
+        self.google_calendar_state_api_url = google_calendar_state_api_url.rstrip("/")
+        self.google_calendar_state_api_token = google_calendar_state_api_token
         self.http_client = http_client or AsyncClient()
 
     @classmethod
     def from_environment(
         cls,
         http_client: AsyncClient | None = None,
-    ) -> "GoogleCalendarStateClient":
+    ) -> "CloudflareGoogleCalendarStateClient":
         return cls(
-            state_api_url=_required_environment_value(
+            google_calendar_state_api_url=_required_environment_value(
                 GOOGLE_CALENDAR_STATE_API_URL_ENVIRONMENT_VARIABLE,
             ),
-            state_api_token=_required_environment_value(
+            google_calendar_state_api_token=_required_environment_value(
                 GOOGLE_CALENDAR_STATE_API_TOKEN_ENVIRONMENT_VARIABLE,
             ),
             http_client=http_client,
         )
 
-    async def register_google_notification_channel(
+    async def record_google_calendar_notification_channel(
         self,
         channel: dict[str, Any],
     ) -> dict[str, Any]:
@@ -57,13 +57,13 @@ class GoogleCalendarStateClient:
             channel,
         )
 
-    async def find_latest_google_notification_channel(
+    async def read_latest_google_calendar_notification_channel(
         self,
         tracker_user: str,
         calendar_id: str,
-    ) -> GoogleNotificationChannelStatus | None:
+    ) -> GoogleCalendarNotificationChannelState | None:
         response = await self.http_client.get(
-            f"{self.state_api_url}/notification-channels",
+            f"{self.google_calendar_state_api_url}/notification-channels",
             headers=self._authorisation_headers(),
             params={"tracker_user": tracker_user, "calendar_id": calendar_id},
         )
@@ -71,14 +71,14 @@ class GoogleCalendarStateClient:
         if response.status_code == 204:
             return None
         channel = response.json()
-        return GoogleNotificationChannelStatus(
+        return GoogleCalendarNotificationChannelState(
             channel_id=channel["channel_id"],
             resource_id=channel["resource_id"],
             expires_at=channel["expires_at"],
             google_change_cursor=channel["google_change_cursor"],
         )
 
-    async def advance_google_change_cursor(
+    async def advance_google_calendar_change_cursor(
         self,
         tracker_user: str,
         calendar_id: str,
@@ -104,7 +104,7 @@ class GoogleCalendarStateClient:
     ) -> dict[str, Any]:
         response = await self.http_client.request(
             method,
-            f"{self.state_api_url}/{resource_name}",
+            f"{self.google_calendar_state_api_url}/{resource_name}",
             headers=self._authorisation_headers(),
             json=body,
         )
@@ -112,7 +112,9 @@ class GoogleCalendarStateClient:
         return response.json()
 
     def _authorisation_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.state_api_token}"}
+        return {
+            "Authorization": f"Bearer {self.google_calendar_state_api_token}",
+        }
 
 
 def _required_environment_value(variable_name: str) -> str:

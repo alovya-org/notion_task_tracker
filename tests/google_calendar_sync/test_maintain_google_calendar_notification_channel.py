@@ -5,8 +5,8 @@ import asyncio
 import pytest
 
 from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerConfig
-from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
-    GoogleNotificationChannelStatus,
+from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
+    GoogleCalendarNotificationChannelState,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import CalendarEventChanges
 from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notification_channel import (
@@ -71,7 +71,7 @@ def test_refuses_google_response_for_another_notification_channel():
 def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
     google_calendar_client = _RecordingGoogleCalendarClient()
     google_calendar_state_client = _RecordingGoogleCalendarStateClient(
-        current_channel=GoogleNotificationChannelStatus(
+        current_channel=GoogleCalendarNotificationChannelState(
             channel_id="current-channel",
             resource_id="current-resource",
             expires_at=1_800_000,
@@ -96,7 +96,7 @@ def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
 
 def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
     google_calendar_state_client = _RecordingGoogleCalendarStateClient(
-        current_channel=GoogleNotificationChannelStatus(
+        current_channel=GoogleCalendarNotificationChannelState(
             channel_id="expired-channel",
             resource_id="expired-resource",
             expires_at=900_000,
@@ -121,7 +121,7 @@ def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
 def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
     google_calendar_client = _RecordingGoogleCalendarClient(returned_channel_id=None)
     google_calendar_state_client = _RecordingGoogleCalendarStateClient(
-        current_channel=GoogleNotificationChannelStatus(
+        current_channel=GoogleCalendarNotificationChannelState(
             channel_id="current-channel",
             resource_id="current-resource",
             expires_at=1_400_000,
@@ -171,10 +171,14 @@ class _RecordingGoogleCalendarStateClient:
         self.registered_channel = None
         self.current_channel = current_channel
 
-    async def find_latest_google_notification_channel(self, tracker_user, calendar_id):
+    async def read_latest_google_calendar_notification_channel(
+        self,
+        tracker_user,
+        calendar_id,
+    ):
         return self.current_channel
 
-    async def register_google_notification_channel(self, channel):
+    async def record_google_calendar_notification_channel(self, channel):
         self.registered_channel = channel
         return {"registered": True, "channel_id": channel["channel_id"]}
 
