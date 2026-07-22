@@ -96,6 +96,42 @@ class CloudflareGoogleCalendarStateClient:
             },
         )
 
+    async def record_active_google_calendar_event(
+        self,
+        tracker_user: str,
+        calendar_id: str,
+        google_event_id: str,
+        ntt_task_id: str,
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "PUT",
+            "event-ledger/active-events",
+            {
+                "tracker_user": tracker_user,
+                "calendar_id": calendar_id,
+                "google_event_id": google_event_id,
+                "ntt_task_id": ntt_task_id,
+            },
+        )
+
+    async def mark_google_calendar_event_deleted_by_ntt(
+        self,
+        tracker_user: str,
+        calendar_id: str,
+        google_event_id: str,
+        ntt_task_id: str,
+    ) -> dict[str, Any]:
+        return await self._send_google_calendar_state_request(
+            "PUT",
+            "event-ledger/ntt-deletions",
+            {
+                "tracker_user": tracker_user,
+                "calendar_id": calendar_id,
+                "google_event_id": google_event_id,
+                "ntt_task_id": ntt_task_id,
+            },
+        )
+
     async def _send_google_calendar_state_request(
         self,
         method: str,

@@ -19,9 +19,23 @@ def test_refresh_notion_task_tracker_action_builds_refresh_command():
 
 
 def test_sync_tasks_to_google_calendar_action_builds_sync_command():
-    command = _build_tracker_command(_arguments(sync_tasks_to_google_calendar=True))
+    command = _build_tracker_command(_arguments(
+        sync_tasks_to_google_calendar=True,
+        tracker_user="al0vya",
+    ))
 
-    assert command == {"command": "sync_tasks_to_google_calendar"}
+    assert command == {
+        "command": "sync_tasks_to_google_calendar",
+        "tracker_user": "al0vya",
+    }
+
+
+def test_sync_tasks_to_google_calendar_requires_tracker_identity():
+    with pytest.raises(
+        ValueError,
+        match="--sync-tasks-to-google-calendar requires --tracker-user",
+    ):
+        _build_tracker_command(_arguments(sync_tasks_to_google_calendar=True))
 
 
 def test_maintain_google_calendar_notification_channel_action_preserves_identity():

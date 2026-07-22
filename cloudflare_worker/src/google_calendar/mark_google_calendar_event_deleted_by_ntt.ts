@@ -26,7 +26,7 @@ export async function markGoogleCalendarEventDeletedByNttRoute(
     readRequiredString(eventIdentity, "ntt_task_id"),
   );
   if (!markedDeleted) {
-    return createJsonResponse({ error: "Active Google Calendar event mapping not found." }, 409);
+    return createJsonResponse({ error: "Google Calendar event mapping not found." }, 409);
   }
   return createJsonResponse({ marked_deleted: true, google_event_id: googleEventId }, 200);
 }

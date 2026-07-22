@@ -105,7 +105,7 @@ export async function markGoogleCalendarEventDeletedByNtt(
        AND calendar_id = ?
        AND google_event_id = ?
        AND ntt_task_id = ?
-       AND lifecycle_state = 'active'`,
+       AND lifecycle_state IN ('active', 'deleted_by_ntt')`,
   ).bind(
     new Date().toISOString(),
     trackerUser,

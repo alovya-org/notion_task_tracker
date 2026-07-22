@@ -71,7 +71,12 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
     if action_name is None:
         raise ValueError("Choose one tracker action")
     if action_name == "sync_tasks_to_google_calendar":
-        return {"command": "sync_tasks_to_google_calendar"}
+        if not arguments.tracker_user:
+            raise ValueError("--sync-tasks-to-google-calendar requires --tracker-user")
+        return {
+            "command": "sync_tasks_to_google_calendar",
+            "tracker_user": arguments.tracker_user,
+        }
     if action_name == "maintain_google_calendar_notification_channel":
         if not arguments.tracker_user:
             raise ValueError(

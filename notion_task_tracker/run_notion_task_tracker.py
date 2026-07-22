@@ -316,12 +316,14 @@ async def _run_tracker_command(
 
     if command["command"] == "sync_tasks_to_google_calendar":
         return await sync_tasks_to_google_calendar(
+            tracker_user=command["tracker_user"],
             config=config,
             tracker_state_path=tracker_state_path,
             output_path=output_path,
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
+            google_calendar_state_client=google_calendar_state_client,
             refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
         )
 

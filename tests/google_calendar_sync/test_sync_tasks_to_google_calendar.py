@@ -80,6 +80,7 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
     backup_path = tmp_path / "backup.json"
     tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
     google_calendar_client = _RecordingGoogleCalendarClient()
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient()
     config = TrackerConfig(
         display_name="Alovya",
         ticket_prefix="ALOVYA",
@@ -102,12 +103,14 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
         )
 
     summary = asyncio.run(sync_tasks_to_google_calendar(
+        tracker_user="al0vya",
         config=config,
         tracker_state_path=tracker_state_path,
         output_path=output_path,
         backup_path=backup_path,
         notion_client=None,
         google_calendar_client=google_calendar_client,
+        google_calendar_state_client=google_calendar_state_client,
         refresh_tasks_from_notion=preserve_refreshed_tracker_state,
     ))
 
@@ -127,9 +130,73 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
         "create:calendar_event:ALOVYA-1"
     ]
     assert summary.to_json_summary()["desired_calendar_event_count"] == 1
+    assert google_calendar_state_client.active_events == [
+        ("al0vya", "test-calendar", "created-event", "ALOVYA-1")
+    ]
     assert json.loads(output_path.read_text(encoding="utf-8"))["action_name"] == (
         "sync_tasks_to_google_calendar"
     )
+
+
+def test_marks_an_orphaned_event_as_ntt_deleted_before_removing_it_from_google(
+    tmp_path: Path,
+):
+    tracker_state_path = tmp_path / "tracker_state.json"
+    output_path = tmp_path / "output.json"
+    tracker_state_path.write_text(json.dumps({
+        "identity": {"display_name": "Alovya", "ticket_prefix": "ALOVYA"},
+        **TaskTree().to_tracker_state(),
+    }), encoding="utf-8")
+    operations = []
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient(operations)
+
+    class CalendarWithOrphanedEvent:
+        async def list_all_calendar_events(self, query):
+            return [{"id": "event-one", **_timed_resource("ALOVYA-42", "Removed task")}]
+
+        async def create_calendar_event(self, event):
+            raise AssertionError("No event should be created")
+
+        async def replace_calendar_event(self, event_id, event):
+            raise AssertionError("No event should be replaced")
+
+        async def delete_calendar_event(self, event_id):
+            operations.append(("delete_from_google", event_id))
+
+    async def preserve_refreshed_tracker_state(**arguments):
+        return TrackerActionExecutionSummary(
+            action_name="refresh_notion_task_tracker",
+            output_path=Path(arguments["output_path"]),
+            tracker_state_path=Path(arguments["tracker_state_path"]),
+            warnings=[],
+        )
+
+    asyncio.run(sync_tasks_to_google_calendar(
+        tracker_user="al0vya",
+        config=TrackerConfig(
+            display_name="Alovya",
+            ticket_prefix="ALOVYA",
+            parent_page_url="https://notion.so/parent",
+            task_database_url="https://notion.so/tasks",
+            calendar=CalendarConfig(
+                calendar_id="test-calendar",
+                timezone_name="Europe/London",
+            ),
+        ),
+        tracker_state_path=tracker_state_path,
+        output_path=output_path,
+        backup_path=None,
+        notion_client=None,
+        google_calendar_client=CalendarWithOrphanedEvent(),
+        google_calendar_state_client=google_calendar_state_client,
+        refresh_tasks_from_notion=preserve_refreshed_tracker_state,
+    ))
+
+    assert operations == [
+        ("record_active", "event-one", "ALOVYA-42"),
+        ("mark_deleted_by_ntt", "event-one", "ALOVYA-42"),
+        ("delete_from_google", "event-one"),
+    ]
 
 
 class _RecordingGoogleCalendarClient:
@@ -150,6 +217,37 @@ class _RecordingGoogleCalendarClient:
 
     async def delete_calendar_event(self, event_id):
         raise AssertionError("No event should be deleted")
+
+
+class _RecordingGoogleCalendarStateClient:
+    def __init__(self, operations=None):
+        self.active_events = []
+        self.ntt_deletions = []
+        self.operations = operations
+
+    async def record_active_google_calendar_event(
+        self,
+        tracker_user,
+        calendar_id,
+        google_event_id,
+        ntt_task_id,
+    ):
+        identity = (tracker_user, calendar_id, google_event_id, ntt_task_id)
+        self.active_events.append(identity)
+        if self.operations is not None:
+            self.operations.append(("record_active", google_event_id, ntt_task_id))
+
+    async def mark_google_calendar_event_deleted_by_ntt(
+        self,
+        tracker_user,
+        calendar_id,
+        google_event_id,
+        ntt_task_id,
+    ):
+        identity = (tracker_user, calendar_id, google_event_id, ntt_task_id)
+        self.ntt_deletions.append(identity)
+        if self.operations is not None:
+            self.operations.append(("mark_deleted_by_ntt", google_event_id, ntt_task_id))
 
 
 def _scheduled_task(
@@ -208,7 +306,13 @@ def test_plans_create_replace_and_unambiguously_orphaned_delete_changes():
     assert [(replacement.event_id, replacement.event["summary"]) for replacement in plan.events_to_replace] == [
         ("replace", "[NTT] Replace changed")
     ]
-    assert plan.event_ids_to_delete == ["delete"]
+    assert [(deletion.event_id, deletion.task_id) for deletion in plan.events_to_delete] == [
+        ("delete", "ALOVYA-4")
+    ]
+    assert [(identity.event_id, identity.task_id) for identity in plan.existing_event_identities] == [
+        ("keep", "ALOVYA-1"),
+        ("replace", "ALOVYA-2"),
+    ]
     assert plan.warnings == []
     assert plan.events_to_create[0]["start"] == {"date": "2026-08-03"}
     assert plan.events_to_create[0]["end"] == {"date": "2026-08-04"}
@@ -230,7 +334,7 @@ def test_preserves_owned_events_when_task_identity_is_missing_or_duplicated():
 
     assert plan.events_to_create == []
     assert plan.events_to_replace == []
-    assert plan.event_ids_to_delete == []
+    assert plan.events_to_delete == []
     assert [warning["kind"] for warning in plan.warnings] == [
         "ambiguous_calendar_event",
         "ambiguous_calendar_event",

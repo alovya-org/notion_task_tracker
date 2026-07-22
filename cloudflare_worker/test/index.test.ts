@@ -461,7 +461,7 @@ describe("Cloudflare Worker Google Calendar state API", () => {
     ]);
   });
 
-  it("rejects an NTT deletion when the active event identity does not exist", async () => {
+  it("rejects an NTT deletion when the event identity does not exist", async () => {
     const database = _googleCalendarStateDatabaseRecordingRuns([], 0);
     const response = await worker.fetch(
       _eventLedgerRequest("ntt-deletions"),
@@ -470,7 +470,7 @@ describe("Cloudflare Worker Google Calendar state API", () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: "Active Google Calendar event mapping not found.",
+      error: "Google Calendar event mapping not found.",
     });
   });
 });

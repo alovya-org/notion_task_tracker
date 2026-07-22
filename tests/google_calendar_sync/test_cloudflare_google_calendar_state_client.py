@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -63,6 +64,41 @@ def test_advances_the_google_change_cursor_with_its_consumed_predecessor():
         '"previous_google_change_cursor":"previous-sync-token",'
         '"next_google_change_cursor":"next-sync-token"}'
     )
+
+
+def test_records_active_event_identity_and_ntt_deletion_provenance():
+    requests = []
+
+    async def record_request(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"recorded": True})
+
+    state_client = _state_client(record_request)
+
+    asyncio.run(state_client.record_active_google_calendar_event(
+        tracker_user="al0vya",
+        calendar_id="calendar@example.com",
+        google_event_id="event-one",
+        ntt_task_id="ALOVYA-42",
+    ))
+    asyncio.run(state_client.mark_google_calendar_event_deleted_by_ntt(
+        tracker_user="al0vya",
+        calendar_id="calendar@example.com",
+        google_event_id="event-one",
+        ntt_task_id="ALOVYA-42",
+    ))
+
+    assert [request.url for request in requests] == [
+        "https://worker.example/google-calendar/event-ledger/active-events",
+        "https://worker.example/google-calendar/event-ledger/ntt-deletions",
+    ]
+    assert all(request.method == "PUT" for request in requests)
+    assert json.loads(requests[0].read()) == {
+        "tracker_user": "al0vya",
+        "calendar_id": "calendar@example.com",
+        "google_event_id": "event-one",
+        "ntt_task_id": "ALOVYA-42",
+    }
 
 
 def test_reads_the_latest_notification_channel_and_google_change_cursor():

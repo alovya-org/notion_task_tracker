@@ -11,6 +11,9 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from notion_task_tracker.config import TrackerConfig, load_config
+from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
+    CloudflareGoogleCalendarStateClient,
+)
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import GoogleCalendarClient
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.tasks import DurationUnit, Task, TaskStatus, TaskTree
@@ -39,10 +42,23 @@ class CalendarEventReplacement:
 
 
 @dataclass(frozen=True)
+class ExistingCalendarEventIdentity:
+    event_id: str
+    task_id: str
+
+
+@dataclass(frozen=True)
+class CalendarEventDeletion:
+    event_id: str
+    task_id: str
+
+
+@dataclass(frozen=True)
 class GoogleCalendarUpdatePlan:
     events_to_create: list[dict[str, Any]]
     events_to_replace: list[CalendarEventReplacement]
-    event_ids_to_delete: list[str]
+    existing_event_identities: list[ExistingCalendarEventIdentity]
+    events_to_delete: list[CalendarEventDeletion]
     warnings: list[dict[str, str]]
 
 
@@ -58,12 +74,14 @@ class _RefreshTasksFromNotion(Protocol):
 
 
 async def sync_tasks_to_google_calendar(
+    tracker_user: str,
     config: TrackerConfig | None,
     tracker_state_path: str | Path,
     output_path: str | Path,
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
+    google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
     refresh_tasks_from_notion: _RefreshTasksFromNotion,
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
@@ -96,9 +114,16 @@ async def sync_tasks_to_google_calendar(
         timezone_name=configured_tracker.calendar.timezone_name,
         colour_id=configured_tracker.calendar.colour_id,
     )
+    state_client = (
+        google_calendar_state_client
+        or CloudflareGoogleCalendarStateClient.from_environment()
+    )
     calendar_operation_keys = await _execute_google_calendar_updates(
         update_plan,
         calendar_client,
+        state_client,
+        tracker_user,
+        configured_tracker.calendar.calendar_id,
     )
 
     execution_summary = TrackerActionExecutionSummary(
@@ -145,26 +170,32 @@ def plan_google_calendar_updates(
 
     events_to_create = []
     events_to_replace = []
-    event_ids_to_delete = []
+    existing_event_identities = []
+    events_to_delete = []
     for task_id, desired_resource in desired_resources_by_task_id.items():
         existing_event = existing_events_by_task_id.pop(task_id, None)
         if existing_event is None:
             if task_id not in ambiguous_task_ids:
                 events_to_create.append(desired_resource)
             continue
+        existing_event_identities.append(ExistingCalendarEventIdentity(
+            event_id=existing_event["id"],
+            task_id=task_id,
+        ))
         if _calendar_fields_from_existing_event(existing_event) != desired_resource:
             events_to_replace.append(
                 CalendarEventReplacement(event_id=existing_event["id"], event=desired_resource)
             )
 
-    event_ids_to_delete.extend(
-        existing_event["id"]
-        for existing_event in existing_events_by_task_id.values()
+    events_to_delete.extend(
+        CalendarEventDeletion(event_id=existing_event["id"], task_id=task_id)
+        for task_id, existing_event in existing_events_by_task_id.items()
     )
     return GoogleCalendarUpdatePlan(
         events_to_create=events_to_create,
         events_to_replace=events_to_replace,
-        event_ids_to_delete=event_ids_to_delete,
+        existing_event_identities=existing_event_identities,
+        events_to_delete=events_to_delete,
         warnings=warnings,
     )
 
@@ -172,20 +203,55 @@ def plan_google_calendar_updates(
 async def _execute_google_calendar_updates(
     plan: GoogleCalendarUpdatePlan,
     calendar_client: GoogleCalendarClient,
+    state_client: CloudflareGoogleCalendarStateClient,
+    tracker_user: str,
+    calendar_id: str,
 ) -> list[str]:
     completed_operation_keys = []
+    for identity in plan.existing_event_identities:
+        await state_client.record_active_google_calendar_event(
+            tracker_user,
+            calendar_id,
+            identity.event_id,
+            identity.task_id,
+        )
     for event in plan.events_to_create:
-        await calendar_client.create_calendar_event(event)
+        created_event = await calendar_client.create_calendar_event(event)
         task_id = event["extendedProperties"]["private"]["ntt_task_id"]
+        await state_client.record_active_google_calendar_event(
+            tracker_user,
+            calendar_id,
+            _required_created_event_id(created_event, task_id),
+            task_id,
+        )
         completed_operation_keys.append(f"create:calendar_event:{task_id}")
     for replacement in plan.events_to_replace:
         await calendar_client.replace_calendar_event(replacement.event_id, replacement.event)
         task_id = replacement.event["extendedProperties"]["private"]["ntt_task_id"]
         completed_operation_keys.append(f"replace:calendar_event:{task_id}")
-    for event_id in plan.event_ids_to_delete:
-        await calendar_client.delete_calendar_event(event_id)
-        completed_operation_keys.append(f"delete:calendar_event:{event_id}")
+    for deletion in plan.events_to_delete:
+        await state_client.record_active_google_calendar_event(
+            tracker_user,
+            calendar_id,
+            deletion.event_id,
+            deletion.task_id,
+        )
+        await state_client.mark_google_calendar_event_deleted_by_ntt(
+            tracker_user,
+            calendar_id,
+            deletion.event_id,
+            deletion.task_id,
+        )
+        await calendar_client.delete_calendar_event(deletion.event_id)
+        completed_operation_keys.append(f"delete:calendar_event:{deletion.event_id}")
     return completed_operation_keys
+
+
+def _required_created_event_id(created_event: dict[str, Any], task_id: str) -> str:
+    event_id = created_event.get("id")
+    if not isinstance(event_id, str) or not event_id:
+        raise ValueError(f"Created Google Calendar event for {task_id} has no id")
+    return event_id
 
 
 def _select_calendar_eligible_leaf_tasks(task_tree: TaskTree) -> list[Task]:
