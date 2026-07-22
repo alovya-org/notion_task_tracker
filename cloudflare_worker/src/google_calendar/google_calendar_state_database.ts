@@ -5,12 +5,12 @@ export interface GoogleCalendarNotificationChannelState {
   tracker_user: string;
   calendar_id: string;
   expiration: number;
-  sync_token: string;
+  google_change_cursor: string;
 }
 
 export interface GoogleCalendarChangeCursorState {
   tracker_user: string;
-  sync_token: string;
+  google_change_cursor: string;
 }
 
 export interface GoogleCalendarNotificationChannelRegistration {
@@ -27,7 +27,7 @@ export async function listGoogleCalendarChangeCursors(
   database: D1Database,
 ): Promise<GoogleCalendarChangeCursorState[]> {
   const cursors = await database.prepare(
-    `SELECT tracker_user, sync_token
+    `SELECT tracker_user, sync_token AS google_change_cursor
      FROM calendar_sync_cursors
      ORDER BY tracker_user, calendar_id`,
   ).all<GoogleCalendarChangeCursorState>();
@@ -76,7 +76,7 @@ export async function findLatestGoogleCalendarNotificationChannel(
     `SELECT channels.channel_id,
             channels.resource_id,
             channels.expires_at,
-            cursors.sync_token
+            cursors.sync_token AS google_change_cursor
      FROM calendar_channels AS channels
      JOIN calendar_sync_cursors AS cursors
        ON cursors.tracker_user = channels.tracker_user
@@ -98,7 +98,7 @@ export async function findGoogleCalendarNotificationChannelById(
             channels.tracker_user,
             channels.calendar_id,
             channels.expires_at AS expiration,
-            cursors.sync_token
+            cursors.sync_token AS google_change_cursor
      FROM calendar_channels AS channels
      JOIN calendar_sync_cursors AS cursors
        ON cursors.tracker_user = channels.tracker_user

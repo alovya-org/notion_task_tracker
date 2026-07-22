@@ -11,8 +11,8 @@ from zoneinfo import ZoneInfo
 
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import TrackerConfig, load_config
-from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
-    CalendarSyncCloudflareWorker,
+from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
+    GoogleCalendarStateClient,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     CalendarEventChanges,
@@ -63,7 +63,7 @@ async def apply_google_calendar_changes_to_tasks(
     output_path: str | Path,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
+    google_calendar_state_client: GoogleCalendarStateClient | None,
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
     if configured_tracker.calendar is None:
@@ -88,10 +88,10 @@ async def apply_google_calendar_changes_to_tasks(
         tracker_state_path=tracker_state_path,
         notion_client=notion_client or NotionRestClient.from_environment(),
     )
-    cloudflare_worker = (
-        calendar_sync_cloudflare_worker or CalendarSyncCloudflareWorker.from_environment()
+    state_client = (
+        google_calendar_state_client or GoogleCalendarStateClient.from_environment()
     )
-    await cloudflare_worker.advance_google_change_cursor(
+    await state_client.advance_google_change_cursor(
         tracker_user=tracker_user,
         calendar_id=configured_tracker.calendar.calendar_id,
         previous_google_change_cursor=google_change_cursor,

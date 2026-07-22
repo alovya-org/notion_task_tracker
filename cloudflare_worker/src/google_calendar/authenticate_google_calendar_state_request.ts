@@ -6,8 +6,8 @@ export function requireGoogleCalendarEnvironment(environment: WorkerEnvironment)
     "GITHUB_OWNER",
     "GITHUB_REPOSITORY",
     "GITHUB_API_VERSION",
-    "GITHUB_CALENDAR_DISPATCH_EVENT_TYPE",
-    "GITHUB_DISPATCH_TOKEN",
+    "GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE",
+    "GITHUB_REPOSITORY_DISPATCH_TOKEN",
   ]);
   if (!environment.CALENDAR_SYNC_STATE) {
     throw new Error("Missing Worker environment binding: CALENDAR_SYNC_STATE");
@@ -19,11 +19,16 @@ export function authenticateGoogleCalendarStateRequest(
   environment: WorkerEnvironment,
 ): Response | null {
   requireGoogleCalendarEnvironment(environment);
-  if (!environment.CALENDAR_SYNC_ADMIN_TOKEN) {
-    throw new Error("Missing Worker environment variable: CALENDAR_SYNC_ADMIN_TOKEN");
+  if (!environment.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN) {
+    throw new Error(
+      "Missing Worker environment variable: NTT_GOOGLE_CALENDAR_STATE_API_TOKEN",
+    );
   }
-  if (request.headers.get("Authorization") !== `Bearer ${environment.CALENDAR_SYNC_ADMIN_TOKEN}`) {
-    return createJsonResponse({ error: "Calendar sync state administration rejected." }, 401);
+  if (
+    request.headers.get("Authorization")
+    !== `Bearer ${environment.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN}`
+  ) {
+    return createJsonResponse({ error: "Google Calendar state API token rejected." }, 401);
   }
   return null;
 }

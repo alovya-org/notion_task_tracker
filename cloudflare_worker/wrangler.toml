@@ -9,8 +9,8 @@ crons = ["0 0 * * *"]
 GITHUB_OWNER = "alovya"
 GITHUB_REPOSITORY = "notion_task_tracker"
 GITHUB_API_VERSION = "2022-11-28"
-GITHUB_DISPATCH_EVENT_TYPE = "refresh-notion-task-tracker"
-GITHUB_CALENDAR_DISPATCH_EVENT_TYPE = "apply-google-calendar-changes-to-notion-task-tracker"
+GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE = "refresh-notion-task-tracker"
+GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE = "apply-google-calendar-changes-to-notion-task-tracker"
 
 [[d1_databases]]
 binding = "CALENDAR_SYNC_STATE"

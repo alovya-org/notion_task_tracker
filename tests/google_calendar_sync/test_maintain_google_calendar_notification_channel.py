@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerConfig
-from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
+from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
     GoogleNotificationChannelStatus,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import CalendarEventChanges
@@ -17,7 +17,7 @@ from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notificat
 
 def test_creates_google_notification_channel_with_initial_change_cursor_in_durable_state():
     google_calendar_client = _RecordingGoogleCalendarClient()
-    calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker()
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient()
 
     channel = asyncio.run(_create_google_calendar_notification_channel(
         tracker_user="al0vya",
@@ -26,7 +26,7 @@ def test_creates_google_notification_channel_with_initial_change_cursor_in_durab
         channel_token="channel-secret",
         config=_configured_tracker(),
         google_calendar_client=google_calendar_client,
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
     ))
 
     assert channel.channel_id == "channel-one"
@@ -38,13 +38,13 @@ def test_creates_google_notification_channel_with_initial_change_cursor_in_durab
         "address": "https://worker.example/google-calendar-notifications",
         "token": "channel-secret",
     }
-    assert calendar_sync_cloudflare_worker.registered_channel == {
+    assert google_calendar_state_client.registered_channel == {
         "channel_id": "channel-one",
         "tracker_user": "al0vya",
         "calendar_id": "calendar@example.com",
         "resource_id": "resource-one",
         "channel_token": "channel-secret",
-        "sync_token": "initial-sync-token",
+        "google_change_cursor": "initial-sync-token",
         "expires_at": 1786000000000,
     }
 
@@ -60,7 +60,7 @@ def test_refuses_google_response_for_another_notification_channel():
             channel_token="channel-secret",
             config=_configured_tracker(),
             google_calendar_client=google_calendar_client,
-            calendar_sync_cloudflare_worker=_RecordingCalendarSyncCloudflareWorker(),
+            google_calendar_state_client=_RecordingGoogleCalendarStateClient(),
         ))
 
     assert str(error.value) == (
@@ -70,7 +70,7 @@ def test_refuses_google_response_for_another_notification_channel():
 
 def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
     google_calendar_client = _RecordingGoogleCalendarClient()
-    calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient(
         current_channel=GoogleNotificationChannelStatus(
             channel_id="current-channel",
             resource_id="current-resource",
@@ -86,7 +86,7 @@ def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
         replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=google_calendar_client,
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
     ))
 
     assert maintenance.registered_replacement is False
@@ -95,7 +95,7 @@ def test_keeps_a_channel_that_remains_active_beyond_the_replacement_window():
 
 
 def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
-    calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient(
         current_channel=GoogleNotificationChannelStatus(
             channel_id="expired-channel",
             resource_id="expired-resource",
@@ -111,7 +111,7 @@ def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
         replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=_RecordingGoogleCalendarClient(returned_channel_id=None),
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
     ))
 
     assert maintenance.registered_replacement is True
@@ -120,7 +120,7 @@ def test_replaces_an_expired_channel_and_requests_incremental_catch_up():
 
 def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
     google_calendar_client = _RecordingGoogleCalendarClient(returned_channel_id=None)
-    calendar_sync_cloudflare_worker = _RecordingCalendarSyncCloudflareWorker(
+    google_calendar_state_client = _RecordingGoogleCalendarStateClient(
         current_channel=GoogleNotificationChannelStatus(
             channel_id="current-channel",
             resource_id="current-resource",
@@ -136,13 +136,15 @@ def test_replaces_a_nearly_expired_channel_without_fetching_calendar_events():
         replace_within_milliseconds=500_000,
         config=_configured_tracker(),
         google_calendar_client=google_calendar_client,
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
     ))
 
     assert maintenance.registered_replacement is True
     assert maintenance.catch_up_google_change_cursor is None
     assert google_calendar_client.change_fetch_count == 0
-    assert calendar_sync_cloudflare_worker.registered_channel["sync_token"] == "current-sync-token"
+    assert google_calendar_state_client.registered_channel["google_change_cursor"] == (
+        "current-sync-token"
+    )
 
 
 class _RecordingGoogleCalendarClient:
@@ -164,7 +166,7 @@ class _RecordingGoogleCalendarClient:
         }
 
 
-class _RecordingCalendarSyncCloudflareWorker:
+class _RecordingGoogleCalendarStateClient:
     def __init__(self, current_channel=None) -> None:
         self.registered_channel = None
         self.current_channel = current_channel

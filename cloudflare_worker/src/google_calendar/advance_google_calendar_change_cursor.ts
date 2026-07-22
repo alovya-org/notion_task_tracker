@@ -21,11 +21,11 @@ export async function advanceGoogleCalendarChangeCursor(
     environment.CALENDAR_SYNC_STATE,
     readRequiredString(cursorChange, "tracker_user"),
     readRequiredString(cursorChange, "calendar_id"),
-    readRequiredString(cursorChange, "previous_sync_token"),
-    readRequiredString(cursorChange, "next_sync_token"),
+    readRequiredString(cursorChange, "previous_google_change_cursor"),
+    readRequiredString(cursorChange, "next_google_change_cursor"),
   );
   if (!cursorAdvanced) {
-    return createJsonResponse({ error: "Calendar sync cursor has already advanced." }, 409);
+    return createJsonResponse({ error: "Google Calendar change cursor has already advanced." }, 409);
   }
   return createJsonResponse({ advanced: true }, 200);
 }

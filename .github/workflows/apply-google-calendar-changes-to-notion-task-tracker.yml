@@ -22,7 +22,7 @@ jobs:
           test -n "$GOOGLE_CHANGE_CURSOR"
         env:
           TRACKER_USER: ${{ github.event.client_payload.tracker_user }}
-          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.sync_token }}
+          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.google_change_cursor }}
 
       - name: Check out tracker
         uses: actions/checkout@v4
@@ -59,8 +59,8 @@ jobs:
           GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
           GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN }}
-          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL: ${{ vars.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL }}
+          NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: ${{ secrets.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN }}
+          NTT_GOOGLE_CALENDAR_STATE_API_URL: ${{ vars.NTT_GOOGLE_CALENDAR_STATE_API_URL }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml
-          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.sync_token }}
+          GOOGLE_CHANGE_CURSOR: ${{ github.event.client_payload.google_change_cursor }}
           TRACKER_USER: ${{ github.event.client_payload.tracker_user }}

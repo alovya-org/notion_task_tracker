@@ -8,8 +8,8 @@ import { recordGoogleCalendarNotificationChannel } from "./google_calendar/recor
 import { dispatchNotionTaskChangeToGitHub } from "./notion/dispatch_notion_task_change_to_github";
 
 const GOOGLE_CALENDAR_NOTIFICATION_PATH = "/google-calendar-notifications";
-const CALENDAR_CHANNEL_REGISTRATION_PATH = "/calendar-sync-state/channels";
-const CALENDAR_CURSOR_ADVANCEMENT_PATH = "/calendar-sync-state/cursors";
+const GOOGLE_CALENDAR_NOTIFICATION_CHANNELS_PATH = "/google-calendar/notification-channels";
+const GOOGLE_CALENDAR_CHANGE_CURSORS_PATH = "/google-calendar/change-cursors";
 const NOTION_TASK_CHANGES_PATH = "/notion-task-changes";
 
 export default {
@@ -19,7 +19,7 @@ export default {
     if (requestPath === GOOGLE_CALENDAR_NOTIFICATION_PATH) {
       return await receiveGoogleCalendarNotification(request, environment);
     }
-    if (requestPath === CALENDAR_CHANNEL_REGISTRATION_PATH) {
+    if (requestPath === GOOGLE_CALENDAR_NOTIFICATION_CHANNELS_PATH) {
       if (request.method === "GET") {
         return await readLatestGoogleCalendarNotificationChannel(request, environment);
       }
@@ -28,7 +28,7 @@ export default {
       }
       return createJsonResponse({ error: "Use GET or POST." }, 405, { Allow: "GET, POST" });
     }
-    if (requestPath === CALENDAR_CURSOR_ADVANCEMENT_PATH) {
+    if (requestPath === GOOGLE_CALENDAR_CHANGE_CURSORS_PATH) {
       return await advanceGoogleCalendarChangeCursor(request, environment);
     }
     if (requestPath === NOTION_TASK_CHANGES_PATH) {

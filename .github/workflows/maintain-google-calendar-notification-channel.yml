@@ -38,14 +38,14 @@ jobs:
         run: >-
           ntt --maintain-google-calendar-notification-channel
           --tracker-user al0vya
-          --calendar-notification-url "$NTT_CALENDAR_NOTIFICATION_URL"
+          --calendar-notification-url "$NTT_GOOGLE_CALENDAR_NOTIFICATION_URL"
           --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
         env:
           GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
           GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}
           GOOGLE_CALENDAR_REFRESH_TOKEN: ${{ secrets.GOOGLE_CALENDAR_REFRESH_TOKEN }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
-          NTT_CALENDAR_NOTIFICATION_URL: ${{ vars.NTT_CALENDAR_NOTIFICATION_URL }}
-          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN: ${{ secrets.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN }}
-          NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL: ${{ vars.NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL }}
+          NTT_GOOGLE_CALENDAR_NOTIFICATION_URL: ${{ vars.NTT_GOOGLE_CALENDAR_NOTIFICATION_URL }}
+          NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: ${{ secrets.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN }}
+          NTT_GOOGLE_CALENDAR_STATE_API_URL: ${{ vars.NTT_GOOGLE_CALENDAR_STATE_API_URL }}
           NTT_CONFIG_PATH: ${{ runner.temp }}/ntt/config.toml

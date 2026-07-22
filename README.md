@@ -318,17 +318,25 @@ Configure the Worker secrets with the pinned local Wrangler installation:
 
 ```bash
 cd cloudflare_worker
-npx wrangler secret put GITHUB_DISPATCH_TOKEN
+npx wrangler secret put GITHUB_REPOSITORY_DISPATCH_TOKEN
 npx wrangler secret put NOTION_WEBHOOK_SECRET
+npx wrangler secret put NTT_GOOGLE_CALENDAR_STATE_API_TOKEN
 ```
 
-`GITHUB_DISPATCH_TOKEN` is a GitHub token that can create repository dispatch events for this repository. `NOTION_WEBHOOK_SECRET` is any strong shared value that Notion will send to the Worker.
+`GITHUB_REPOSITORY_DISPATCH_TOKEN` is a GitHub token that can create repository dispatch events for this repository. `NOTION_WEBHOOK_SECRET` is any strong shared value that Notion will send to the Worker. `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN` authenticates GitHub when it reads notification channels or advances change cursors through the Worker. Store the same randomly generated value under that exact name in both Cloudflare and the GitHub environment.
 
 Deploy the Worker:
 
 ```bash
 cd cloudflare_worker
 npm run deploy
+```
+
+Configure these GitHub environment variables with URLs from the deployed Worker:
+
+```text
+NTT_GOOGLE_CALENDAR_NOTIFICATION_URL=https://<worker>/google-calendar-notifications
+NTT_GOOGLE_CALENDAR_STATE_API_URL=https://<worker>/google-calendar
 ```
 
 Configure Notion's `Send webhook` action to call the deployed Worker's `/notion-task-changes` URL with `POST`. Add these custom headers:

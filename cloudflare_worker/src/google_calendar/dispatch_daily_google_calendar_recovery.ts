@@ -14,16 +14,15 @@ export async function dispatchDailyGoogleCalendarRecovery(
 
   for (const cursor of cursors) {
     const dispatchPayload = createGitHubDispatchPayload(
-      environment.GITHUB_CALENDAR_DISPATCH_EVENT_TYPE,
+      environment.GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE,
       cursor.tracker_user,
-      undefined,
-      cursor.sync_token,
+      cursor.google_change_cursor,
     );
     const githubResponse = await sendGitHubRepositoryDispatch(
       environment.GITHUB_OWNER,
       environment.GITHUB_REPOSITORY,
       environment.GITHUB_API_VERSION,
-      environment.GITHUB_DISPATCH_TOKEN,
+      environment.GITHUB_REPOSITORY_DISPATCH_TOKEN,
       dispatchPayload,
     );
     if (!githubResponse.ok) {

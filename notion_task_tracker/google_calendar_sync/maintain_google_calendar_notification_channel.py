@@ -12,8 +12,8 @@ from notion_task_tracker.config import TrackerConfig, load_config
 from notion_task_tracker.google_calendar_sync.apply_google_calendar_changes_to_tasks import (
     apply_google_calendar_changes_to_tasks,
 )
-from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
-    CalendarSyncCloudflareWorker,
+from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
+    GoogleCalendarStateClient,
     GoogleNotificationChannelStatus,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import GoogleCalendarClient
@@ -59,7 +59,7 @@ async def maintain_google_calendar_notification_channel(
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
+    google_calendar_state_client: GoogleCalendarStateClient | None,
     refresh_tasks_from_notion: _RefreshTasksFromNotion,
 ) -> TrackerActionExecutionSummary:
     configured_tracker = config or load_config()
@@ -71,8 +71,8 @@ async def maintain_google_calendar_notification_channel(
     calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
         configured_tracker.calendar.calendar_id,
     )
-    cloudflare_worker = (
-        calendar_sync_cloudflare_worker or CalendarSyncCloudflareWorker.from_environment()
+    state_client = (
+        google_calendar_state_client or GoogleCalendarStateClient.from_environment()
     )
     maintenance = await _maintain_google_calendar_notification_channel(
         tracker_user=tracker_user,
@@ -81,7 +81,7 @@ async def maintain_google_calendar_notification_channel(
         replace_within_milliseconds=replace_within_milliseconds,
         config=configured_tracker,
         google_calendar_client=calendar_client,
-        calendar_sync_cloudflare_worker=cloudflare_worker,
+        google_calendar_state_client=state_client,
     )
     if maintenance.catch_up_google_change_cursor is not None:
         await refresh_tasks_from_notion(
@@ -99,7 +99,7 @@ async def maintain_google_calendar_notification_channel(
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=calendar_client,
-            calendar_sync_cloudflare_worker=cloudflare_worker,
+            google_calendar_state_client=state_client,
         )
 
     execution_summary = TrackerActionExecutionSummary(
@@ -127,10 +127,10 @@ async def _maintain_google_calendar_notification_channel(
     replace_within_milliseconds: int,
     config: TrackerConfig,
     google_calendar_client: GoogleCalendarClient,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker,
+    google_calendar_state_client: GoogleCalendarStateClient,
 ) -> GoogleCalendarNotificationChannelMaintenance:
     calendar_id = _configured_calendar_id(config)
-    current_channel = await calendar_sync_cloudflare_worker.find_latest_google_notification_channel(
+    current_channel = await google_calendar_state_client.find_latest_google_notification_channel(
         tracker_user,
         calendar_id,
     )
@@ -154,7 +154,7 @@ async def _maintain_google_calendar_notification_channel(
         channel_token=secrets.token_urlsafe(32),
         config=config,
         google_calendar_client=google_calendar_client,
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
         initial_google_change_cursor=(
             current_channel.google_change_cursor if current_channel is not None else None
         ),
@@ -179,7 +179,7 @@ async def _create_google_calendar_notification_channel(
     channel_token: str,
     config: TrackerConfig,
     google_calendar_client: GoogleCalendarClient,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker,
+    google_calendar_state_client: GoogleCalendarStateClient,
     initial_google_change_cursor: str | None = None,
 ) -> GoogleCalendarNotificationChannel:
     calendar_id = _configured_calendar_id(config)
@@ -194,13 +194,13 @@ async def _create_google_calendar_notification_channel(
         "token": channel_token,
     })
     registered_channel = _read_registered_google_channel(google_channel, channel_id)
-    await calendar_sync_cloudflare_worker.register_google_notification_channel({
+    await google_calendar_state_client.register_google_notification_channel({
         "channel_id": registered_channel.channel_id,
         "tracker_user": tracker_user,
         "calendar_id": calendar_id,
         "resource_id": registered_channel.resource_id,
         "channel_token": channel_token,
-        "sync_token": google_change_cursor,
+        "google_change_cursor": google_change_cursor,
         "expires_at": registered_channel.expires_at,
     })
     return registered_channel

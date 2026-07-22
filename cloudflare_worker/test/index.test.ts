@@ -5,11 +5,11 @@ const workerEnvironment = {
   GITHUB_OWNER: "alovya",
   GITHUB_REPOSITORY: "notion_task_tracker",
   GITHUB_API_VERSION: "2022-11-28",
-  GITHUB_DISPATCH_EVENT_TYPE: "refresh-notion-task-tracker",
-  GITHUB_CALENDAR_DISPATCH_EVENT_TYPE: "apply-google-calendar-changes-to-notion-task-tracker",
-  GITHUB_DISPATCH_TOKEN: "github-token",
+  GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE: "refresh-notion-task-tracker",
+  GITHUB_GOOGLE_CALENDAR_CHANGE_EVENT_TYPE: "apply-google-calendar-changes-to-notion-task-tracker",
+  GITHUB_REPOSITORY_DISPATCH_TOKEN: "github-token",
   NOTION_WEBHOOK_SECRET: "notion-secret",
-  CALENDAR_SYNC_ADMIN_TOKEN: "calendar-admin-token",
+  NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: "calendar-state-api-token",
   CALENDAR_SYNC_STATE: _calendarSyncDatabaseReturning(null),
 };
 
@@ -48,10 +48,12 @@ describe("Cloudflare Worker refresh dispatcher", () => {
         new Request("https://example.com/notion-task-changes", { method: "POST" }),
         {
           ...workerEnvironment,
-          GITHUB_DISPATCH_TOKEN: "",
+          GITHUB_REPOSITORY_DISPATCH_TOKEN: "",
         },
       ),
-    ).rejects.toThrow("Missing Worker environment variable: GITHUB_DISPATCH_TOKEN");
+    ).rejects.toThrow(
+      "Missing Worker environment variable: GITHUB_REPOSITORY_DISPATCH_TOKEN",
+    );
   });
 
   it("rejects requests with the wrong Notion webhook secret", async () => {
@@ -245,8 +247,7 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
           event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
-            channel_id: "channel-one",
-            sync_token: "current-sync-token",
+            google_change_cursor: "current-sync-token",
           },
         }),
       }),
@@ -279,18 +280,18 @@ function _environmentWithCalendarChannel() {
       tracker_user: "al0vya",
       calendar_id: "calendar@example.com",
       expiration: 1785000000000,
-      sync_token: "current-sync-token",
+      google_change_cursor: "current-sync-token",
     }),
   };
 }
 
-describe("Cloudflare Worker calendar sync state administration", () => {
+describe("Cloudflare Worker Google Calendar state API", () => {
   it("returns the latest channel and current sync token for renewal decisions", async () => {
     const environment = _environmentWithCalendarChannel();
     const response = await worker.fetch(
       new Request(
-        "https://example.com/calendar-sync-state/channels?tracker_user=al0vya&calendar_id=calendar%40example.com",
-        { headers: { Authorization: "Bearer calendar-admin-token" } },
+        "https://example.com/google-calendar/notification-channels?tracker_user=al0vya&calendar_id=calendar%40example.com",
+        { headers: { Authorization: "Bearer calendar-state-api-token" } },
       ),
       environment,
     );
@@ -298,7 +299,7 @@ describe("Cloudflare Worker calendar sync state administration", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({
       channel_id: "channel-one",
-      sync_token: "current-sync-token",
+      google_change_cursor: "current-sync-token",
     }));
   });
 
@@ -306,10 +307,10 @@ describe("Cloudflare Worker calendar sync state administration", () => {
     const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
     const database = _calendarSyncDatabaseRecording(preparedStatements);
     const response = await worker.fetch(
-      new Request("https://example.com/calendar-sync-state/channels", {
+      new Request("https://example.com/google-calendar/notification-channels", {
         method: "POST",
         headers: {
-          Authorization: "Bearer calendar-admin-token",
+          Authorization: "Bearer calendar-state-api-token",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -318,7 +319,7 @@ describe("Cloudflare Worker calendar sync state administration", () => {
           calendar_id: "calendar@example.com",
           resource_id: "resource-two",
           channel_token: "new-channel-secret",
-          sync_token: "initial-sync-token",
+          google_change_cursor: "initial-sync-token",
           expires_at: 1786000000000,
         }),
       }),
@@ -343,15 +344,17 @@ describe("Cloudflare Worker calendar sync state administration", () => {
     expect(preparedStatements[1].values[4]).not.toBe("new-channel-secret");
   });
 
-  it("rejects channel registration without the administrative token", async () => {
+  it("rejects channel registration without the state API token", async () => {
     const response = await worker.fetch(
-      new Request("https://example.com/calendar-sync-state/channels", { method: "POST" }),
+      new Request("https://example.com/google-calendar/notification-channels", {
+        method: "POST",
+      }),
       workerEnvironment,
     );
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: "Calendar sync state administration rejected.",
+      error: "Google Calendar state API token rejected.",
     });
   });
 
@@ -379,7 +382,7 @@ describe("Cloudflare Worker calendar sync state administration", () => {
 
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: "Calendar sync cursor has already advanced.",
+      error: "Google Calendar change cursor has already advanced.",
     });
   });
 });
@@ -396,7 +399,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
       prepare: vi.fn(() => ({
         all: vi.fn(() => Promise.resolve({
           results: [
-            { tracker_user: "al0vya", sync_token: "current-sync-token" },
+            { tracker_user: "al0vya", google_change_cursor: "current-sync-token" },
           ],
         })),
       })),
@@ -415,7 +418,7 @@ describe("Cloudflare Worker daily Calendar recovery", () => {
           event_type: "apply-google-calendar-changes-to-notion-task-tracker",
           client_payload: {
             tracker_user: "al0vya",
-            sync_token: "current-sync-token",
+            google_change_cursor: "current-sync-token",
           },
         }),
       }),
@@ -457,17 +460,17 @@ function _calendarSyncDatabaseRunning(runMock: ReturnType<typeof vi.fn>) {
 }
 
 function _calendarCursorAdvancementRequest() {
-  return new Request("https://example.com/calendar-sync-state/cursors", {
+  return new Request("https://example.com/google-calendar/change-cursors", {
     method: "PATCH",
     headers: {
-      Authorization: "Bearer calendar-admin-token",
+      Authorization: "Bearer calendar-state-api-token",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       tracker_user: "al0vya",
       calendar_id: "calendar@example.com",
-      previous_sync_token: "previous-sync-token",
-      next_sync_token: "next-sync-token",
+      previous_google_change_cursor: "previous-sync-token",
+      next_google_change_cursor: "next-sync-token",
     }),
   });
 }

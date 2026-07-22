@@ -23,7 +23,7 @@ export async function recordGoogleCalendarNotificationChannel(
       calendarId: readRequiredString(channel, "calendar_id"),
       resourceId: readRequiredString(channel, "resource_id"),
       channelToken: readRequiredString(channel, "channel_token"),
-      syncToken: readRequiredString(channel, "sync_token"),
+      syncToken: readRequiredString(channel, "google_change_cursor"),
       expiresAt: readRequiredNumber(channel, "expires_at"),
     },
   );

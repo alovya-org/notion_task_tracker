@@ -21,8 +21,8 @@ export async function dispatchNotionTaskChangeToGitHub(
     "GITHUB_OWNER",
     "GITHUB_REPOSITORY",
     "GITHUB_API_VERSION",
-    "GITHUB_DISPATCH_EVENT_TYPE",
-    "GITHUB_DISPATCH_TOKEN",
+    "GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE",
+    "GITHUB_REPOSITORY_DISPATCH_TOKEN",
     "NOTION_WEBHOOK_SECRET",
   ]);
 
@@ -42,14 +42,14 @@ export async function dispatchNotionTaskChangeToGitHub(
   }
 
   const dispatchPayload = createGitHubDispatchPayload(
-    environment.GITHUB_DISPATCH_EVENT_TYPE,
+    environment.GITHUB_NOTION_TASK_CHANGE_EVENT_TYPE,
     trackerUser,
   );
   const githubResponse = await sendGitHubRepositoryDispatch(
     environment.GITHUB_OWNER,
     environment.GITHUB_REPOSITORY,
     environment.GITHUB_API_VERSION,
-    environment.GITHUB_DISPATCH_TOKEN,
+    environment.GITHUB_REPOSITORY_DISPATCH_TOKEN,
     dispatchPayload,
   );
 

@@ -1,4 +1,4 @@
-"""Call the deployed Cloudflare Worker that stores Calendar sync state in D1."""
+"""Call the Google Calendar state API hosted by the Cloudflare Worker."""
 
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ from typing import Any
 from httpx import AsyncClient
 
 
-CALENDAR_SYNC_CLOUDFLARE_WORKER_URL_ENVIRONMENT_VARIABLE = "NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_URL"
-CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN_ENVIRONMENT_VARIABLE = (
-    "NTT_CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN"
-)
+GOOGLE_CALENDAR_STATE_API_URL_ENVIRONMENT_VARIABLE = "NTT_GOOGLE_CALENDAR_STATE_API_URL"
+GOOGLE_CALENDAR_STATE_API_TOKEN_ENVIRONMENT_VARIABLE = "NTT_GOOGLE_CALENDAR_STATE_API_TOKEN"
 
 
 @dataclass(frozen=True)
@@ -23,28 +21,28 @@ class GoogleNotificationChannelStatus:
     google_change_cursor: str
 
 
-class CalendarSyncCloudflareWorker:
+class GoogleCalendarStateClient:
     def __init__(
         self,
-        worker_url: str,
-        administration_token: str,
+        state_api_url: str,
+        state_api_token: str,
         http_client: AsyncClient | None = None,
     ) -> None:
-        self.worker_url = worker_url.rstrip("/")
-        self.administration_token = administration_token
+        self.state_api_url = state_api_url.rstrip("/")
+        self.state_api_token = state_api_token
         self.http_client = http_client or AsyncClient()
 
     @classmethod
     def from_environment(
         cls,
         http_client: AsyncClient | None = None,
-    ) -> "CalendarSyncCloudflareWorker":
+    ) -> "GoogleCalendarStateClient":
         return cls(
-            worker_url=_required_environment_value(
-                CALENDAR_SYNC_CLOUDFLARE_WORKER_URL_ENVIRONMENT_VARIABLE,
+            state_api_url=_required_environment_value(
+                GOOGLE_CALENDAR_STATE_API_URL_ENVIRONMENT_VARIABLE,
             ),
-            administration_token=_required_environment_value(
-                CALENDAR_SYNC_CLOUDFLARE_WORKER_ADMIN_TOKEN_ENVIRONMENT_VARIABLE,
+            state_api_token=_required_environment_value(
+                GOOGLE_CALENDAR_STATE_API_TOKEN_ENVIRONMENT_VARIABLE,
             ),
             http_client=http_client,
         )
@@ -53,7 +51,11 @@ class CalendarSyncCloudflareWorker:
         self,
         channel: dict[str, Any],
     ) -> dict[str, Any]:
-        return await self._send_worker_request("POST", "channels", channel)
+        return await self._send_google_calendar_state_request(
+            "POST",
+            "notification-channels",
+            channel,
+        )
 
     async def find_latest_google_notification_channel(
         self,
@@ -61,7 +63,7 @@ class CalendarSyncCloudflareWorker:
         calendar_id: str,
     ) -> GoogleNotificationChannelStatus | None:
         response = await self.http_client.get(
-            f"{self.worker_url}/channels",
+            f"{self.state_api_url}/notification-channels",
             headers=self._authorisation_headers(),
             params={"tracker_user": tracker_user, "calendar_id": calendar_id},
         )
@@ -73,7 +75,7 @@ class CalendarSyncCloudflareWorker:
             channel_id=channel["channel_id"],
             resource_id=channel["resource_id"],
             expires_at=channel["expires_at"],
-            google_change_cursor=channel["sync_token"],
+            google_change_cursor=channel["google_change_cursor"],
         )
 
     async def advance_google_change_cursor(
@@ -83,18 +85,18 @@ class CalendarSyncCloudflareWorker:
         previous_google_change_cursor: str,
         next_google_change_cursor: str,
     ) -> dict[str, Any]:
-        return await self._send_worker_request(
+        return await self._send_google_calendar_state_request(
             "PATCH",
-            "cursors",
+            "change-cursors",
             {
                 "tracker_user": tracker_user,
                 "calendar_id": calendar_id,
-                "previous_sync_token": previous_google_change_cursor,
-                "next_sync_token": next_google_change_cursor,
+                "previous_google_change_cursor": previous_google_change_cursor,
+                "next_google_change_cursor": next_google_change_cursor,
             },
         )
 
-    async def _send_worker_request(
+    async def _send_google_calendar_state_request(
         self,
         method: str,
         resource_name: str,
@@ -102,7 +104,7 @@ class CalendarSyncCloudflareWorker:
     ) -> dict[str, Any]:
         response = await self.http_client.request(
             method,
-            f"{self.worker_url}/{resource_name}",
+            f"{self.state_api_url}/{resource_name}",
             headers=self._authorisation_headers(),
             json=body,
         )
@@ -110,7 +112,7 @@ class CalendarSyncCloudflareWorker:
         return response.json()
 
     def _authorisation_headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.administration_token}"}
+        return {"Authorization": f"Bearer {self.state_api_token}"}
 
 
 def _required_environment_value(variable_name: str) -> str:

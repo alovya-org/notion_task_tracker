@@ -12,8 +12,8 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
-from notion_task_tracker.google_calendar_sync.call_calendar_sync_cloudflare_worker import (
-    CalendarSyncCloudflareWorker,
+from notion_task_tracker.google_calendar_sync.call_google_calendar_state_api import (
+    GoogleCalendarStateClient,
 )
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
@@ -229,7 +229,7 @@ def execute_tracker_command(
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None = None,
+    google_calendar_state_client: GoogleCalendarStateClient | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_tracker_command(
         command=command,
@@ -239,7 +239,7 @@ def execute_tracker_command(
         backup_path=backup_path,
         notion_client=notion_client,
         google_calendar_client=google_calendar_client,
-        calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+        google_calendar_state_client=google_calendar_state_client,
     ))
 
 
@@ -296,7 +296,7 @@ async def _run_tracker_command(
     backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
-    calendar_sync_cloudflare_worker: CalendarSyncCloudflareWorker | None,
+    google_calendar_state_client: GoogleCalendarStateClient | None,
 ) -> "TrackerActionExecutionSummary":
     if command["command"] == "maintain_google_calendar_notification_channel":
         return await maintain_google_calendar_notification_channel(
@@ -310,7 +310,7 @@ async def _run_tracker_command(
             backup_path=backup_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
-            calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+            google_calendar_state_client=google_calendar_state_client,
             refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
         )
 
@@ -334,7 +334,7 @@ async def _run_tracker_command(
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
-            calendar_sync_cloudflare_worker=calendar_sync_cloudflare_worker,
+            google_calendar_state_client=google_calendar_state_client,
         )
 
     if command["command"] == "refresh_notion_task_tracker":
