@@ -46,6 +46,7 @@ WRITE_ACTIONS = {
 
 READ_ACTIONS = {
     "read",
+    "read_all",
     "work",
 }
 
@@ -70,6 +71,8 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return {"command": "reconcile_from_notion"}
     if action_name == "read":
         return _build_read_command(arguments, ticket_prefix)
+    if action_name == "read_all":
+        return _build_read_all_command(arguments, ticket_prefix)
     if action_name == "work":
         return _build_work_command(arguments, ticket_prefix)
     if action_name == "log":
@@ -151,6 +154,16 @@ def _build_read_command(arguments: Namespace, ticket_prefix: str) -> dict[str, A
 
     return {
         "command": "read_tasks",
+        "task_ids": ticket_ids_from_numbers(arguments.ticket_number, ticket_prefix),
+    }
+
+
+def _build_read_all_command(arguments: Namespace, ticket_prefix: str) -> dict[str, Any]:
+    if not arguments.ticket_number:
+        raise ValueError("--read-all requires at least one --ticket-number")
+
+    return {
+        "command": "read_all_tasks",
         "task_ids": ticket_ids_from_numbers(arguments.ticket_number, ticket_prefix),
     }
 

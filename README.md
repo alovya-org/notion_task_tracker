@@ -126,6 +126,7 @@ Use these actions for normal CLI operation. The action flag freezes the accepted
 
 ```bash
 python -m notion_task_tracker --read --ticket-number 67 --ticket-number 80
+python -m notion_task_tracker --read-all --ticket-number 67
 python -m notion_task_tracker --work --ticket-number 67
 python -m notion_task_tracker --log --ticket-number 67 --content-path /tmp/log.json
 python -m notion_task_tracker --complete --ticket-number 67 --content-path /tmp/complete.json
@@ -139,7 +140,7 @@ python -m notion_task_tracker --synth --synthesis-key explicit_tracker_cli --tit
 python -m notion_task_tracker --move-logs --ticket-number 67 --destination-ticket-number 68 --log-id ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0
 ```
 
-`--read` and `--work` are read-only with respect to Notion. They fetch live task pages, refresh local task metadata, write a JSON summary to `--output-path`, and perform no Notion writes.
+`--read`, `--read-all`, and `--work` are read-only with respect to Notion. They fetch live task pages, refresh local task metadata, write JSON to `--output-path`, and perform no Notion writes. `--read` and `--work` include a five-line page summary; `--read-all` additionally includes the complete fetched page markup in each task's `full_page_content` field.
 
 Timeline content files for `--log`, `--complete`, `--cancel`, `--parent`, `--child`, and `--sibling` use this shape:
 

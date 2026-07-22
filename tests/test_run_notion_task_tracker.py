@@ -46,6 +46,13 @@ def test_parse_args_reads_explicit_read_action():
     assert args.ticket_number == [67, 68]
 
 
+def test_parse_args_reads_full_page_action():
+    args = parse_args(["--read-all", "--ticket-number", "67"])
+
+    assert args.read_all is True
+    assert args.ticket_number == [67]
+
+
 def test_parse_args_reads_install_skill_action():
     args = parse_args(["--install-skill"])
 
@@ -446,6 +453,69 @@ def test_read_task_pages_fetches_live_pages_and_writes_summary_without_notion_wr
     assert summary["tasks"][0]["recent_timeline_headings"] == ['<mention-date start="2026-05-30"/>']
     assert summary["tasks"][0]["summary"] == ["Added read-only summary behaviour."]
     assert json.loads(output_path.read_text(encoding="utf-8")) == summary
+    assert notion_client.calls == []
+
+
+def test_read_all_task_pages_includes_complete_fetched_page_content(tmp_path: Path):
+    tracker_state = build_tracker_state_with_root_task()
+    tracker_state_path = tmp_path / "tracker_state.json"
+    output_path = tmp_path / "read_all.json"
+    tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
+    full_page_content = "\n".join([
+        "<page>",
+        "<properties>",
+        json.dumps({
+            "Task page": "Read complete task page",
+            "Task ID": "1",
+            "Priority": "P2",
+            "Status": "Active",
+            "Parent": "[]",
+            "Dependencies": "[]",
+            "Deadline": "",
+            "External coordination": "No",
+            "Uncertainty": "Low",
+            "Friction": "None",
+            "url": "https://www.notion.so/Read-complete-task-page-22222222222222222222222222222222",
+        }),
+        "</properties>",
+        "<content>",
+        "First line.",
+        "Second line.",
+        "Third line.",
+        "Fourth line.",
+        "Fifth line.",
+        "Decided to target Google Calendar API directly.",
+        "</content>",
+        "</page>",
+    ])
+    notion_client = FakeNotionClient(
+        fetched_page_content_by_id={
+            "22222222222222222222222222222222": full_page_content,
+        }
+    )
+
+    read_summary = asyncio.run(
+        _run_read_task_pages(
+            action_name="read_all",
+            task_ids=["ALOVYA-1"],
+            tracker_state_path=tracker_state_path,
+            output_path=output_path,
+            notion_client=notion_client,
+            include_full_page_content=True,
+        )
+    )
+
+    task_summary = read_summary.to_json_summary()["tasks"][0]
+    assert task_summary["summary"] == [
+        "First line.",
+        "Second line.",
+        "Third line.",
+        "Fourth line.",
+        "Fifth line.",
+    ]
+    assert task_summary["full_page_content"] == full_page_content
+    written_task_summary = json.loads(output_path.read_text(encoding="utf-8"))["tasks"][0]
+    assert written_task_summary["full_page_content"] == full_page_content
     assert notion_client.calls == []
 
 

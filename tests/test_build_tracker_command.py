@@ -36,6 +36,15 @@ def test_read_action_uses_configured_ticket_prefix():
     assert command["task_ids"] == ["PERSONAL-67"]
 
 
+def test_read_all_action_builds_full_page_read_command_for_all_ticket_numbers():
+    command = _build_tracker_command(_arguments(read_all=True, ticket_number=[67, 68]))
+
+    assert command == {
+        "command": "read_all_tasks",
+        "task_ids": ["ALOVYA-67", "ALOVYA-68"],
+    }
+
+
 def test_work_action_builds_work_command_for_one_ticket_number():
     command = _build_tracker_command(_arguments(work=True, ticket_number=[67]))
 
@@ -522,6 +531,7 @@ def _arguments(**overrides):
     values = {
         "reconcile_from_notion": False,
         "read": False,
+        "read_all": False,
         "work": False,
         "log": False,
         "complete": False,

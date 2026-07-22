@@ -87,6 +87,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--reconcile-from-notion", action="store_true")
     action_group.add_argument("--read", action="store_true")
+    action_group.add_argument("--read-all", action="store_true")
     action_group.add_argument("--work", action="store_true")
     action_group.add_argument("--log", action="store_true")
     action_group.add_argument("--complete", action="store_true")
@@ -268,7 +269,7 @@ async def _run_tracker_command(
             notion_client=notion_client,
         )
 
-    if command["command"] in {"read_tasks", "work_task"}:
+    if command["command"] in {"read_tasks", "read_all_tasks", "work_task"}:
         return await _run_read_task_pages_command(
             command=command,
             tracker_state_path=tracker_state_path,
@@ -399,6 +400,7 @@ async def _run_read_task_pages_command(
     return await _run_read_task_pages(
         action_name=_action_name_from_tracker_command(command),
         task_ids=list(command["task_ids"]),
+        include_full_page_content=command["command"] == "read_all_tasks",
         tracker_state_path=tracker_state_path,
         output_path=output_path,
         notion_client=notion_client,
@@ -545,6 +547,7 @@ async def _run_read_task_pages(
     tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient | None,
+    include_full_page_content: bool = False,
 ) -> "TrackerActionExecutionSummary":
     source_tracker_state_path = Path(tracker_state_path)
     destination_output_path = Path(output_path)
@@ -573,6 +576,7 @@ async def _run_read_task_pages(
                 task_id=task_id,
                 tracker_state=refreshed_tracker_state,
                 fetched_page_content=page_content_by_task_id[task_id],
+                include_full_page_content=include_full_page_content,
             )
             for task_id in task_ids
         ],
@@ -600,10 +604,11 @@ def _task_read_item_from_tracker_state(
     task_id: str,
     tracker_state: dict[str, Any],
     fetched_page_content: str,
+    include_full_page_content: bool,
 ) -> dict[str, Any]:
     task = tracker_state["tasks"][task_id]
     timeline_entries = parse_timeline_entries_from_fetched_task_page_content(fetched_page_content)
-    return {
+    task_read_item = {
         "task_id": task_id,
         "ticket_number": _ticket_number_from_task_id(task_id),
         "title": task["title"],
@@ -619,6 +624,9 @@ def _task_read_item_from_tracker_state(
         ],
         "summary": _summarise_fetched_page_content(fetched_page_content),
     }
+    if include_full_page_content:
+        task_read_item["full_page_content"] = fetched_page_content
+    return task_read_item
 
 
 def _task_notion_url(task: dict[str, Any]) -> str | None:
@@ -737,6 +745,7 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
         "reconcile_from_notion": "reconcile_from_notion",
         "read_tasks": "read",
+        "read_all_tasks": "read_all",
         "work_task": "work",
         "append_task_timeline_log": "log",
         "complete_task": "complete",
