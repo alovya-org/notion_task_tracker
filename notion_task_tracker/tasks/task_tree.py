@@ -283,6 +283,19 @@ class TaskTree:
         task.duration_unit = DurationUnit(duration_unit)
         self._derive_end_after_schedule_change(task)
 
+    def replace_task_schedule(
+        self,
+        task_id: str,
+        start: str,
+        duration: float,
+        duration_unit: DurationUnit,
+    ) -> None:
+        task = self.tasks[task_id]
+        task.start = start
+        task.duration = duration
+        task.duration_unit = duration_unit
+        self._derive_end_after_schedule_change(task)
+
     def clear_task_duration(self, task_id: str) -> None:
         task = self.tasks[task_id]
         task.duration = None
