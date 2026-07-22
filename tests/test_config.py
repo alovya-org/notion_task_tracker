@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from notion_task_tracker.config import (
+    CalendarConfig,
     ManagedPageUrls,
     TrackerConfig,
     default_config_path,
@@ -24,6 +25,11 @@ def test_write_config_then_load_config_preserves_user_and_notion_configuration(t
             ready_priority_page_url="https://www.notion.so/priorities-77777777777777777777777777777777",
             miscellaneous_notes_url="https://www.notion.so/miscellaneous-55555555555555555555555555555555",
             synthesis_notes_url="https://www.notion.so/synthesis-66666666666666666666666666666666",
+        ),
+        calendar=CalendarConfig(
+            calendar_id="work@example.com",
+            timezone_name="Europe/London",
+            colour_id="8",
         ),
     )
 
@@ -62,3 +68,19 @@ def test_default_config_path_honours_explicit_environment_override(
     monkeypatch.setenv("NTT_CONFIG_PATH", str(configured_path))
 
     assert default_config_path() == configured_path
+
+
+def test_tracker_config_rejects_unknown_calendar_timezone() -> None:
+    config = TrackerConfig(
+        display_name="Alovya",
+        ticket_prefix="ALOVYA",
+        parent_page_url="https://www.notion.so/11111111111111111111111111111111",
+        task_database_url="https://www.notion.so/22222222222222222222222222222222",
+        calendar=CalendarConfig(
+            calendar_id="primary",
+            timezone_name="Not/A-Timezone",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="IANA timezone"):
+        config.validate()

@@ -6,6 +6,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 try:
     import tomllib
@@ -30,12 +31,28 @@ class ManagedPageUrls:
 
 
 @dataclass(frozen=True)
+class CalendarConfig:
+    calendar_id: str
+    timezone_name: str
+    colour_id: str | None = None
+
+    def validate(self) -> None:
+        if not self.calendar_id.strip():
+            raise ValueError("calendar_id must not be empty")
+        try:
+            ZoneInfo(self.timezone_name)
+        except ZoneInfoNotFoundError as error:
+            raise ValueError(f"timezone_name must be an IANA timezone: {self.timezone_name}") from error
+
+
+@dataclass(frozen=True)
 class TrackerConfig:
     display_name: str
     ticket_prefix: str
     parent_page_url: str
     task_database_url: str
     pages: ManagedPageUrls = field(default_factory=ManagedPageUrls)
+    calendar: CalendarConfig | None = None
 
     def validate(self) -> None:
         if not self.display_name.strip():
@@ -48,6 +65,8 @@ class TrackerConfig:
         }.items():
             if not value.startswith("https://"):
                 raise ValueError(f"{field_name} must be an https:// Notion URL")
+        if self.calendar is not None:
+            self.calendar.validate()
 
 
 def default_config_path() -> Path:
@@ -69,6 +88,7 @@ def load_config(config_path: str | Path | None = None) -> TrackerConfig:
     identity = raw_config.get("identity", {})
     notion = raw_config.get("notion", {})
     pages = raw_config.get("pages", {})
+    calendar = raw_config.get("calendar")
     config = TrackerConfig(
         display_name=identity.get("display_name", ""),
         ticket_prefix=identity.get("ticket_prefix", ""),
@@ -80,6 +100,15 @@ def load_config(config_path: str | Path | None = None) -> TrackerConfig:
             ready_priority_page_url=pages.get("ready_priority_page_url"),
             miscellaneous_notes_url=pages.get("miscellaneous_notes_url"),
             synthesis_notes_url=pages.get("synthesis_notes_url"),
+        ),
+        calendar=(
+            CalendarConfig(
+                calendar_id=calendar.get("calendar_id", ""),
+                timezone_name=calendar.get("timezone_name", ""),
+                colour_id=calendar.get("colour_id"),
+            )
+            if calendar is not None
+            else None
         ),
     )
     config.validate()
@@ -110,6 +139,15 @@ def write_config(config: TrackerConfig, config_path: str | Path | None = None) -
     }.items():
         if value is not None:
             lines.append(f"{key} = {_toml_string(value)}")
+    if config.calendar is not None:
+        lines.extend([
+            "",
+            "[calendar]",
+            f"calendar_id = {_toml_string(config.calendar.calendar_id)}",
+            f"timezone_name = {_toml_string(config.calendar.timezone_name)}",
+        ])
+        if config.calendar.colour_id is not None:
+            lines.append(f"colour_id = {_toml_string(config.calendar.colour_id)}")
     destination_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return destination_path
 

@@ -226,6 +226,17 @@ miscellaneous_notes_url = "https://www.notion.so/..."
 synthesis_notes_url = "https://www.notion.so/..."
 ```
 
+Calendar projection uses optional non-secret configuration:
+
+```toml
+[calendar]
+calendar_id = "primary"
+timezone_name = "Europe/London"
+colour_id = "8"
+```
+
+Keep Google OAuth secrets outside this file. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REFRESH_TOKEN` in the process environment or deployment secret store. Obtain the refresh token through offline OAuth consent using only `https://www.googleapis.com/auth/calendar.events`; NTT does not request Gmail access. The Calendar client renews short-lived access tokens automatically.
+
 Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
 ### Targeted preflight footguns

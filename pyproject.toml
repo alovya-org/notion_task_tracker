@@ -9,6 +9,7 @@ description = "CLI tools for turning explicit task-tracker actions into Notion w
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "httpx>=0.28,<1",
     "notion-client==3.1.0",
     "platformdirs>=4.0,<5",
     "tomli>=2.0,<3; python_version < '3.11'",
