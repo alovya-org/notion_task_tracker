@@ -9,6 +9,7 @@ const workerEnvironment = {
   GITHUB_CALENDAR_DISPATCH_EVENT_TYPE: "reconcile-google-calendar",
   GITHUB_DISPATCH_TOKEN: "github-token",
   NOTION_WEBHOOK_SECRET: "notion-secret",
+  CALENDAR_SYNC_ADMIN_TOKEN: "calendar-admin-token",
   CALENDAR_SYNC_STATE: _calendarSyncDatabaseReturning(null),
 };
 
@@ -235,6 +236,7 @@ describe("Cloudflare Worker Google Calendar dispatcher", () => {
           client_payload: {
             tracker_user: "al0vya",
             channel_id: "channel-one",
+            sync_token: "current-sync-token",
           },
         }),
       }),
@@ -267,9 +269,93 @@ function _environmentWithCalendarChannel() {
       tracker_user: "al0vya",
       calendar_id: "calendar@example.com",
       expiration: 1785000000000,
+      sync_token: "current-sync-token",
     }),
   };
 }
+
+describe("Cloudflare Worker calendar sync state administration", () => {
+  it("registers a channel while preserving an existing cursor", async () => {
+    const preparedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _calendarSyncDatabaseRecording(preparedStatements);
+    const response = await worker.fetch(
+      new Request("https://example.com/calendar-sync-state/channels", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer calendar-admin-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          channel_id: "channel-two",
+          tracker_user: "al0vya",
+          calendar_id: "calendar@example.com",
+          resource_id: "resource-two",
+          channel_token: "new-channel-secret",
+          sync_token: "initial-sync-token",
+          expires_at: 1786000000000,
+        }),
+      }),
+      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ registered: true, channel_id: "channel-two" });
+    expect(preparedStatements).toHaveLength(2);
+    expect(preparedStatements[0].query).toContain("ON CONFLICT (tracker_user, calendar_id) DO NOTHING");
+    expect(preparedStatements[0].values.slice(0, 3)).toEqual([
+      "al0vya",
+      "calendar@example.com",
+      "initial-sync-token",
+    ]);
+    expect(preparedStatements[1].values.slice(0, 4)).toEqual([
+      "channel-two",
+      "al0vya",
+      "calendar@example.com",
+      "resource-two",
+    ]);
+    expect(preparedStatements[1].values[4]).not.toBe("new-channel-secret");
+  });
+
+  it("rejects channel registration without the administrative token", async () => {
+    const response = await worker.fetch(
+      new Request("https://example.com/calendar-sync-state/channels", { method: "POST" }),
+      workerEnvironment,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: "Calendar sync state administration rejected.",
+    });
+  });
+
+  it("advances the cursor only from the token consumed by the caller", async () => {
+    const runMock = vi.fn(() => Promise.resolve({ meta: { changes: 1 } }));
+    const database = _calendarSyncDatabaseRunning(runMock);
+    const response = await worker.fetch(
+      _calendarCursorAdvancementRequest(),
+      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ advanced: true });
+    expect(runMock).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a stale cursor advancement", async () => {
+    const database = _calendarSyncDatabaseRunning(
+      vi.fn(() => Promise.resolve({ meta: { changes: 0 } })),
+    );
+    const response = await worker.fetch(
+      _calendarCursorAdvancementRequest(),
+      { ...workerEnvironment, CALENDAR_SYNC_STATE: database },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "Calendar sync cursor has already advanced.",
+    });
+  });
+});
 
 function _calendarSyncDatabaseReturning(channelState: object | null) {
   return {
@@ -279,6 +365,45 @@ function _calendarSyncDatabaseReturning(channelState: object | null) {
       })),
     })),
   } as unknown as D1Database;
+}
+
+function _calendarSyncDatabaseRecording(
+  preparedStatements: Array<{ query: string; values: unknown[] }>,
+) {
+  return {
+    prepare: vi.fn((query: string) => ({
+      bind: vi.fn((...values: unknown[]) => {
+        const statement = { query, values };
+        preparedStatements.push(statement);
+        return statement;
+      }),
+    })),
+    batch: vi.fn(() => Promise.resolve([])),
+  } as unknown as D1Database;
+}
+
+function _calendarSyncDatabaseRunning(runMock: ReturnType<typeof vi.fn>) {
+  return {
+    prepare: vi.fn(() => ({
+      bind: vi.fn(() => ({ run: runMock })),
+    })),
+  } as unknown as D1Database;
+}
+
+function _calendarCursorAdvancementRequest() {
+  return new Request("https://example.com/calendar-sync-state/cursors", {
+    method: "PATCH",
+    headers: {
+      Authorization: "Bearer calendar-admin-token",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      tracker_user: "al0vya",
+      calendar_id: "calendar@example.com",
+      previous_sync_token: "previous-sync-token",
+      next_sync_token: "next-sync-token",
+    }),
+  });
 }
 
 function _googleCalendarNotificationRequest(
