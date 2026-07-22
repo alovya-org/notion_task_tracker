@@ -17,7 +17,11 @@ from notion_task_tracker.calendar_sync_state import CalendarSyncStateClient
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
 from notion_task_tracker.derive_calendar_events import derive_desired_calendar_events
-from notion_task_tracker.google_calendar import GoogleCalendarClient
+from notion_task_tracker.google_calendar import (
+    CalendarEventChanges,
+    GoogleCalendarClient,
+    GoogleCalendarSyncTokenExpiredError,
+)
 from notion_task_tracker.initialise_tracker import (
     add_configured_ready_priority_page_to_tracker_state,
     create_tracker_state_from_configured_pages,
@@ -435,8 +439,11 @@ async def _run_reconcile_google_calendar_changes(
     calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
         configured_tracker.calendar.calendar_id,
     )
-    changed_calendar_events = await calendar_client.fetch_calendar_event_changes(
-        command["sync_token"],
+    changed_calendar_events, recovered_expired_sync_token = (
+        await _fetch_calendar_changes_with_expired_token_recovery(
+            calendar_client,
+            command["sync_token"],
+        )
     )
     owned_calendar_events = _select_changed_events_owned_by_tracker(
         changed_calendar_events.events,
@@ -462,9 +469,20 @@ async def _run_reconcile_google_calendar_changes(
         tracker_state_path=Path(tracker_state_path),
         warnings=reconciliation.warnings,
         completed_operation_keys=reconciliation.completed_operation_keys,
+        recovered_expired_calendar_sync_token=recovered_expired_sync_token,
     )
     _write_json(Path(output_path), execution_summary.to_json_summary())
     return execution_summary
+
+
+async def _fetch_calendar_changes_with_expired_token_recovery(
+    calendar_client: GoogleCalendarClient,
+    sync_token: str,
+) -> tuple[CalendarEventChanges, bool]:
+    try:
+        return await calendar_client.fetch_calendar_event_changes(sync_token), False
+    except GoogleCalendarSyncTokenExpiredError:
+        return await calendar_client.fetch_calendar_event_changes(), True
 
 
 def _select_changed_events_owned_by_tracker(
@@ -999,6 +1017,7 @@ class TrackerActionExecutionSummary:
     calendar_operation_keys: list[str] | None = None
     desired_calendar_event_count: int | None = None
     calendar_watch: dict[str, Any] | None = None
+    recovered_expired_calendar_sync_token: bool | None = None
 
     def to_json_summary(self) -> dict[str, Any]:
         summary = {
@@ -1027,6 +1046,10 @@ class TrackerActionExecutionSummary:
             summary["desired_calendar_event_count"] = self.desired_calendar_event_count
         if self.calendar_watch is not None:
             summary["calendar_watch"] = dict(self.calendar_watch)
+        if self.recovered_expired_calendar_sync_token is not None:
+            summary["recovered_expired_calendar_sync_token"] = (
+                self.recovered_expired_calendar_sync_token
+            )
         return summary
 
 

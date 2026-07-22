@@ -6,7 +6,7 @@ on:
       - reconcile-google-calendar
 
 concurrency:
-  group: reconcile-google-calendar-${{ github.event.client_payload.tracker_user }}
+  group: synchronise-notion-google-calendar-${{ github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
 jobs:

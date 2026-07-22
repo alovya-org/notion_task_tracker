@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote
 
 from httpx import AsyncClient
+from httpx import HTTPStatusError
 
 from notion_task_tracker.google_calendar.authenticate_with_google import (
     GoogleOAuthAccessTokenProvider,
@@ -20,6 +21,10 @@ GOOGLE_CALENDAR_API_URL = "https://www.googleapis.com/calendar/v3"
 class CalendarEventChanges:
     events: list[dict[str, Any]]
     next_sync_token: str
+
+
+class GoogleCalendarSyncTokenExpiredError(Exception):
+    pass
 
 
 class GoogleCalendarClient:
@@ -70,7 +75,12 @@ class GoogleCalendarClient:
 
         events = []
         while True:
-            response = await self.list_calendar_events(query)
+            try:
+                response = await self.list_calendar_events(query)
+            except HTTPStatusError as error:
+                if error.response.status_code == 410 and sync_token is not None:
+                    raise GoogleCalendarSyncTokenExpiredError from error
+                raise
             events.extend(response.get("items", []))
             next_page_token = response.get("nextPageToken")
             if next_page_token is not None:

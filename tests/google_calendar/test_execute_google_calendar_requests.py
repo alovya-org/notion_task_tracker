@@ -2,9 +2,11 @@ import asyncio
 import json
 
 from httpx import AsyncClient, MockTransport, Request, Response
+import pytest
 
 from notion_task_tracker.google_calendar.execute_google_calendar_requests import (
     GoogleCalendarClient,
+    GoogleCalendarSyncTokenExpiredError,
 )
 
 
@@ -136,3 +138,17 @@ def test_initial_calendar_sync_uses_the_same_unfiltered_query_shape():
 
     assert changes.next_sync_token == "initial-sync-token"
     assert dict(requests[0].url.params) == {"showDeleted": "true"}
+
+
+def test_identifies_an_expired_incremental_sync_token():
+    def reject_expired_token(request: Request) -> Response:
+        return Response(410, json={"error": {"message": "Sync token is no longer valid"}})
+
+    client = GoogleCalendarClient(
+        calendar_id="primary",
+        access_token_provider=FixedAccessTokenProvider(),
+        http_client=AsyncClient(transport=MockTransport(reject_expired_token)),
+    )
+
+    with pytest.raises(GoogleCalendarSyncTokenExpiredError):
+        asyncio.run(client.fetch_calendar_event_changes("expired-sync-token"))

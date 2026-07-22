@@ -9,6 +9,10 @@ import notion_task_tracker.run_notion_task_tracker as run_notion_task_tracker
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerConfig
+from notion_task_tracker.google_calendar import (
+    CalendarEventChanges,
+    GoogleCalendarSyncTokenExpiredError,
+)
 from notion_task_tracker.notion_operations.rest_client import NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from tests.notion_operations.helpers import FakeNotionClient
@@ -35,6 +39,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     DEFAULT_TRACKER_STATE_PATH,
     _action_name_from_tracker_command,
     _command_changes_task_relations,
+    _fetch_calendar_changes_with_expired_token_recovery,
     _run_reconcile_tracker_from_notion_command,
     _run_project_tasks_into_google_calendar,
     _select_changed_events_owned_by_tracker,
@@ -75,6 +80,32 @@ def test_automatic_calendar_reconciliation_does_not_acknowledge_deleted_ntt_even
 
     with pytest.raises(ValueError, match="recovery is required"):
         _select_changed_events_owned_by_tracker([deleted_event], "ALOVYA")
+
+
+def test_calendar_reconciliation_rebuilds_incremental_state_after_google_expires_token():
+    class ExpiredThenInitialCalendarClient:
+        def __init__(self):
+            self.sync_tokens = []
+
+        async def fetch_calendar_event_changes(self, sync_token=None):
+            self.sync_tokens.append(sync_token)
+            if sync_token is not None:
+                raise GoogleCalendarSyncTokenExpiredError
+            return CalendarEventChanges(
+                events=[{"id": "current-event"}],
+                next_sync_token="rebuilt-sync-token",
+            )
+
+    calendar_client = ExpiredThenInitialCalendarClient()
+
+    changes, recovered = asyncio.run(_fetch_calendar_changes_with_expired_token_recovery(
+        calendar_client,
+        "expired-sync-token",
+    ))
+
+    assert recovered is True
+    assert calendar_client.sync_tokens == ["expired-sync-token", None]
+    assert changes.next_sync_token == "rebuilt-sync-token"
 
 
 def test_parse_args_reads_explicit_read_action():
