@@ -385,6 +385,94 @@ describe("Cloudflare Worker Google Calendar state API", () => {
       error: "Google Calendar change cursor has already advanced.",
     });
   });
+
+  it("reads the durable cursor and event ledger as one synchronisation state", async () => {
+    const database = _googleCalendarSynchronisationStateDatabase();
+    const response = await worker.fetch(
+      new Request(
+        "https://example.com/google-calendar/synchronisation-state?tracker_user=al0vya&calendar_id=calendar%40example.com",
+        { headers: { Authorization: "Bearer calendar-state-api-token" } },
+      ),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      tracker_user: "al0vya",
+      calendar_id: "calendar@example.com",
+      google_change_cursor: "current-sync-token",
+      event_ledger: [
+        {
+          google_event_id: "event-one",
+          ntt_task_id: "ALOVYA-42",
+          lifecycle_state: "active",
+        },
+        {
+          google_event_id: "event-two",
+          ntt_task_id: "ALOVYA-43",
+          lifecycle_state: "deleted_by_ntt",
+        },
+      ],
+    });
+  });
+
+  it("records the current event identity without creating edit history", async () => {
+    const recordedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _googleCalendarStateDatabaseRecordingRuns(recordedStatements, 1);
+    const response = await worker.fetch(
+      _eventLedgerRequest("active-events"),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ recorded: true, google_event_id: "event-one" });
+    expect(recordedStatements).toHaveLength(1);
+    expect(recordedStatements[0].query).toContain(
+      "ON CONFLICT (tracker_user, calendar_id, google_event_id) DO UPDATE",
+    );
+    expect(recordedStatements[0].values.slice(0, 4)).toEqual([
+      "al0vya",
+      "calendar@example.com",
+      "event-one",
+      "ALOVYA-42",
+    ]);
+  });
+
+  it("marks an active event as deleted by NTT with matching event and task identity", async () => {
+    const recordedStatements: Array<{ query: string; values: unknown[] }> = [];
+    const database = _googleCalendarStateDatabaseRecordingRuns(recordedStatements, 1);
+    const response = await worker.fetch(
+      _eventLedgerRequest("ntt-deletions"),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      marked_deleted: true,
+      google_event_id: "event-one",
+    });
+    expect(recordedStatements).toHaveLength(1);
+    expect(recordedStatements[0].query).toContain("lifecycle_state = 'deleted_by_ntt'");
+    expect(recordedStatements[0].values.slice(1)).toEqual([
+      "al0vya",
+      "calendar@example.com",
+      "event-one",
+      "ALOVYA-42",
+    ]);
+  });
+
+  it("rejects an NTT deletion when the active event identity does not exist", async () => {
+    const database = _googleCalendarStateDatabaseRecordingRuns([], 0);
+    const response = await worker.fetch(
+      _eventLedgerRequest("ntt-deletions"),
+      { ...workerEnvironment, GOOGLE_CALENDAR_STATE_DATABASE: database },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "Active Google Calendar event mapping not found.",
+    });
+  });
 });
 
 describe("Cloudflare Worker daily Calendar recovery", () => {
@@ -459,6 +547,48 @@ function _googleCalendarStateDatabaseRunning(runMock: ReturnType<typeof vi.fn>) 
   } as unknown as D1Database;
 }
 
+function _googleCalendarSynchronisationStateDatabase() {
+  return {
+    prepare: vi.fn((query: string) => ({
+      bind: vi.fn(() => ({
+        first: vi.fn(() => Promise.resolve({ google_change_cursor: "current-sync-token" })),
+        all: vi.fn(() => Promise.resolve({
+          results: query.includes("google_calendar_event_ledger")
+            ? [
+                {
+                  google_event_id: "event-one",
+                  ntt_task_id: "ALOVYA-42",
+                  lifecycle_state: "active",
+                },
+                {
+                  google_event_id: "event-two",
+                  ntt_task_id: "ALOVYA-43",
+                  lifecycle_state: "deleted_by_ntt",
+                },
+              ]
+            : [],
+        })),
+      })),
+    })),
+  } as unknown as D1Database;
+}
+
+function _googleCalendarStateDatabaseRecordingRuns(
+  recordedStatements: Array<{ query: string; values: unknown[] }>,
+  changedRows: number,
+) {
+  return {
+    prepare: vi.fn((query: string) => ({
+      bind: vi.fn((...values: unknown[]) => {
+        recordedStatements.push({ query, values });
+        return {
+          run: vi.fn(() => Promise.resolve({ meta: { changes: changedRows } })),
+        };
+      }),
+    })),
+  } as unknown as D1Database;
+}
+
 function _calendarCursorAdvancementRequest() {
   return new Request("https://example.com/google-calendar/change-cursors", {
     method: "PATCH",
@@ -471,6 +601,22 @@ function _calendarCursorAdvancementRequest() {
       calendar_id: "calendar@example.com",
       previous_google_change_cursor: "previous-sync-token",
       next_google_change_cursor: "next-sync-token",
+    }),
+  });
+}
+
+function _eventLedgerRequest(resourceName: "active-events" | "ntt-deletions") {
+  return new Request(`https://example.com/google-calendar/event-ledger/${resourceName}`, {
+    method: "PUT",
+    headers: {
+      Authorization: "Bearer calendar-state-api-token",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      tracker_user: "al0vya",
+      calendar_id: "calendar@example.com",
+      google_event_id: "event-one",
+      ntt_task_id: "ALOVYA-42",
     }),
   });
 }

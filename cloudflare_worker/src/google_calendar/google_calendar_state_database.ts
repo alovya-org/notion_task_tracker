@@ -13,6 +13,12 @@ export interface GoogleCalendarChangeCursorState {
   google_change_cursor: string;
 }
 
+export interface GoogleCalendarEventLedgerEntry {
+  google_event_id: string;
+  ntt_task_id: string;
+  lifecycle_state: "active" | "deleted_by_ntt";
+}
+
 export interface GoogleCalendarNotificationChannelRegistration {
   channelId: string;
   trackerUser: string;
@@ -32,6 +38,82 @@ export async function listGoogleCalendarChangeCursors(
      ORDER BY tracker_user, calendar_id`,
   ).all<GoogleCalendarChangeCursorState>();
   return cursors.results;
+}
+
+export async function readGoogleCalendarChangeCursor(
+  database: D1Database,
+  trackerUser: string,
+  calendarId: string,
+): Promise<string | null> {
+  const cursor = await database.prepare(
+    `SELECT google_change_cursor
+     FROM google_calendar_change_cursors
+     WHERE tracker_user = ? AND calendar_id = ?`,
+  ).bind(trackerUser, calendarId).first<{ google_change_cursor: string }>();
+  return cursor?.google_change_cursor ?? null;
+}
+
+export async function listGoogleCalendarEventLedgerEntries(
+  database: D1Database,
+  trackerUser: string,
+  calendarId: string,
+): Promise<GoogleCalendarEventLedgerEntry[]> {
+  const entries = await database.prepare(
+    `SELECT google_event_id, ntt_task_id, lifecycle_state
+     FROM google_calendar_event_ledger
+     WHERE tracker_user = ? AND calendar_id = ?
+     ORDER BY google_event_id`,
+  ).bind(trackerUser, calendarId).all<GoogleCalendarEventLedgerEntry>();
+  return entries.results;
+}
+
+export async function saveActiveGoogleCalendarEventMapping(
+  database: D1Database,
+  trackerUser: string,
+  calendarId: string,
+  googleEventId: string,
+  nttTaskId: string,
+): Promise<void> {
+  await database.prepare(
+    `INSERT INTO google_calendar_event_ledger
+       (tracker_user, calendar_id, google_event_id, ntt_task_id, lifecycle_state, updated_at)
+     VALUES (?, ?, ?, ?, 'active', ?)
+     ON CONFLICT (tracker_user, calendar_id, google_event_id) DO UPDATE SET
+       ntt_task_id = excluded.ntt_task_id,
+       lifecycle_state = 'active',
+       updated_at = excluded.updated_at`,
+  ).bind(
+    trackerUser,
+    calendarId,
+    googleEventId,
+    nttTaskId,
+    new Date().toISOString(),
+  ).run();
+}
+
+export async function markGoogleCalendarEventDeletedByNtt(
+  database: D1Database,
+  trackerUser: string,
+  calendarId: string,
+  googleEventId: string,
+  nttTaskId: string,
+): Promise<boolean> {
+  const updateResult = await database.prepare(
+    `UPDATE google_calendar_event_ledger
+     SET lifecycle_state = 'deleted_by_ntt', updated_at = ?
+     WHERE tracker_user = ?
+       AND calendar_id = ?
+       AND google_event_id = ?
+       AND ntt_task_id = ?
+       AND lifecycle_state = 'active'`,
+  ).bind(
+    new Date().toISOString(),
+    trackerUser,
+    calendarId,
+    googleEventId,
+    nttTaskId,
+  ).run();
+  return updateResult.meta.changes === 1;
 }
 
 export async function saveGoogleCalendarNotificationChannel(

@@ -2,14 +2,20 @@ import { createJsonResponse } from "./create_http_response";
 import { WorkerEnvironment } from "./environment";
 import { advanceGoogleCalendarChangeCursor } from "./google_calendar/advance_google_calendar_change_cursor";
 import { dispatchDailyGoogleCalendarRecovery } from "./google_calendar/dispatch_daily_google_calendar_recovery";
+import { markGoogleCalendarEventDeletedByNttRoute } from "./google_calendar/mark_google_calendar_event_deleted_by_ntt";
+import { readGoogleCalendarSynchronisationState } from "./google_calendar/read_google_calendar_synchronisation_state";
 import { readLatestGoogleCalendarNotificationChannel } from "./google_calendar/read_latest_google_calendar_notification_channel";
 import { receiveGoogleCalendarNotification } from "./google_calendar/receive_google_calendar_notification";
+import { recordActiveGoogleCalendarEvent } from "./google_calendar/record_active_google_calendar_event";
 import { recordGoogleCalendarNotificationChannel } from "./google_calendar/record_google_calendar_notification_channel";
 import { dispatchNotionTaskTrackerChangeToGitHub } from "./notion/dispatch_notion_task_tracker_change_to_github";
 
 const GOOGLE_CALENDAR_NOTIFICATION_PATH = "/google-calendar-notifications";
 const GOOGLE_CALENDAR_NOTIFICATION_CHANNELS_PATH = "/google-calendar/notification-channels";
 const GOOGLE_CALENDAR_CHANGE_CURSORS_PATH = "/google-calendar/change-cursors";
+const GOOGLE_CALENDAR_SYNCHRONISATION_STATE_PATH = "/google-calendar/synchronisation-state";
+const GOOGLE_CALENDAR_ACTIVE_EVENTS_PATH = "/google-calendar/event-ledger/active-events";
+const GOOGLE_CALENDAR_NTT_DELETIONS_PATH = "/google-calendar/event-ledger/ntt-deletions";
 const NOTION_TASK_TRACKER_CHANGES_PATH = "/notion-task-tracker-changes";
 
 export default {
@@ -30,6 +36,15 @@ export default {
     }
     if (requestPath === GOOGLE_CALENDAR_CHANGE_CURSORS_PATH) {
       return await advanceGoogleCalendarChangeCursor(request, environment);
+    }
+    if (requestPath === GOOGLE_CALENDAR_SYNCHRONISATION_STATE_PATH) {
+      return await readGoogleCalendarSynchronisationState(request, environment);
+    }
+    if (requestPath === GOOGLE_CALENDAR_ACTIVE_EVENTS_PATH) {
+      return await recordActiveGoogleCalendarEvent(request, environment);
+    }
+    if (requestPath === GOOGLE_CALENDAR_NTT_DELETIONS_PATH) {
+      return await markGoogleCalendarEventDeletedByNttRoute(request, environment);
     }
     if (requestPath === NOTION_TASK_TRACKER_CHANGES_PATH) {
       return await dispatchNotionTaskTrackerChangeToGitHub(request, environment);
