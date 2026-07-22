@@ -324,6 +324,16 @@ def test_write_command_renders_landing_pages_from_full_fresh_database_projection
     assert "22222222222222222222222222222222" in ongoing_landing_markdown
     assert "[P1]" not in ongoing_landing_markdown
     assert "33333333333333333333333333333333" in completed_landing_markdown
+    assert notion_client.execution_order_membership_updates == [
+        (
+            "22222222222222222222222222222222",
+            {"In execution order": {"checkbox": True}},
+        ),
+        (
+            "33333333333333333333333333333333",
+            {"In execution order": {"checkbox": False}},
+        ),
+    ]
 
 
 def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(tmp_path: Path):
@@ -365,6 +375,8 @@ def test_reconcile_from_notion_creates_missing_tracker_state_from_configuration(
     assert refresh_summary.to_json_summary()["completed_operations"] == [
         "replace:ongoing_landing_page",
         "replace:completed_landing_page",
+        "create:task_database_property:in_execution_order",
+        "create:ready_priority_page:linked_database_view",
     ]
     assert json.loads(output_path.read_text(encoding="utf-8"))["task_count"] == 0
 
@@ -452,25 +464,13 @@ class _FakeNotionClient:
 
     async def fetch_block_children(self, parent_block_id: str) -> list[dict]:
         assert parent_block_id == "99999999999999999999999999999999"
-        return [{
-            "id": "existing-priority-block",
-            "type": "numbered_list_item",
-            "numbered_list_item": {
-                "rich_text": [{
-                    "type": "mention",
-                    "mention": {
-                        "type": "page",
-                        "page": {"id": "22222222222222222222222222222222"},
-                    },
-                }],
-            },
-        }]
+        return [{"id": "linked-database", "type": "child_database"}]
 
-    async def delete_block(self, block_id: str) -> None:
-        raise AssertionError(f"Reconciliation should preserve priority block {block_id}")
+    async def ensure_checkbox_property(self, data_source_id: str, property_name: str):
+        return ({property_name: {"id": "execution-order-property"}}, False)
 
-    async def append_block_children(self, parent_block_id, children, after_block_id) -> None:
-        raise AssertionError("Reconciliation should not append an existing ready task")
+    async def query_checkbox_page_ids(self, data_source_id: str, property_name: str):
+        return {"22222222222222222222222222222222"}
 
 
 class _ConfiguredTrackerReconcileClient:
@@ -503,6 +503,21 @@ class _ConfiguredTrackerReconcileClient:
         assert parent_block_id == "77777777777777777777777777777777"
         return []
 
+    async def ensure_checkbox_property(self, data_source_id: str, property_name: str):
+        properties = {
+            **_fixed_database_properties(),
+            property_name: {"id": "execution-order-property", "type": "checkbox"},
+        }
+        for property_name, property_definition in properties.items():
+            property_definition.setdefault("id", property_name)
+        return properties, True
+
+    async def create_linked_execution_order_view(self, **arguments):
+        self.created_linked_view = arguments
+
+    async def query_checkbox_page_ids(self, data_source_id: str, property_name: str):
+        return set()
+
     async def create_page(self, parent: dict, properties: dict, markdown: str) -> dict:
         self.created_pages.append(
             {"parent": parent, "properties": properties, "markdown": markdown}
@@ -512,6 +527,7 @@ class _ConfiguredTrackerReconcileClient:
 
 def _tracker_state(title: str, priority: str) -> dict:
     return {
+        "task_database": {"data_source_id": "88888888888888888888888888888888"},
         "ongoing_landing_page": {
             "local_page_key": "ongoing_landing_page",
             "title": ONGOING_LANDING_PAGE_TITLE,

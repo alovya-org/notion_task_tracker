@@ -128,6 +128,87 @@ class NotionRestClient:
     async def delete_block(self, block_id: str) -> None:
         await self.client.blocks.delete(block_id=block_id)
 
+    async def ensure_checkbox_property(
+        self,
+        data_source_id: str,
+        property_name: str,
+    ) -> tuple[dict[str, Any], bool]:
+        data_source = await self.fetch_data_source(data_source_id)
+        properties = data_source.get("properties", {})
+        existing_property = properties.get(property_name)
+        if existing_property is not None:
+            if existing_property.get("type") != "checkbox":
+                raise ValueError(f"Task database property {property_name!r} must be a checkbox")
+            return properties, False
+
+        updated_data_source = await self.client.data_sources.update(
+            data_source_id=data_source_id,
+            properties={property_name: {"checkbox": {}}},
+        )
+        return updated_data_source["properties"], True
+
+    async def create_linked_execution_order_view(
+        self,
+        page_id: str,
+        data_source_id: str,
+        property_ids_by_name: dict[str, str],
+        visible_property_names: list[str],
+        hidden_property_names: list[str],
+        membership_property_name: str,
+    ) -> None:
+        await self.client.views.create(
+            create_database={"parent": {"type": "page_id", "page_id": page_id}},
+            data_source_id=data_source_id,
+            name="Execution order",
+            type="table",
+            filter={
+                "property": membership_property_name,
+                "checkbox": {"equals": True},
+            },
+            sorts=[],
+            configuration={
+                "type": "table",
+                "properties": [
+                    {
+                        "property_id": property_ids_by_name[property_name],
+                        "visible": True,
+                    }
+                    for property_name in visible_property_names
+                ]
+                + [
+                    {
+                        "property_id": property_ids_by_name[property_name],
+                        "visible": False,
+                    }
+                    for property_name in hidden_property_names
+                ],
+            },
+        )
+
+    async def query_checkbox_page_ids(
+        self,
+        data_source_id: str,
+        property_name: str,
+    ) -> set[str]:
+        included_page_ids = set()
+        next_cursor = None
+        while True:
+            arguments = {
+                "data_source_id": data_source_id,
+                "filter": {"property": property_name, "checkbox": {"equals": True}},
+                "page_size": 100,
+            }
+            if next_cursor is not None:
+                arguments["start_cursor"] = next_cursor
+            response = await self.client.data_sources.query(**arguments)
+            included_page_ids.update(
+                canonical_notion_page_id(page["id"])
+                for page in response.get("results", [])
+            )
+            if not response.get("has_more"):
+                return included_page_ids
+            next_cursor = response["next_cursor"]
+
     async def query_data_source(self, data_source_url: str, query: str) -> list[dict[str, Any]]:
         return await self.query_data_source_id(_data_source_id_from_url(data_source_url))
 

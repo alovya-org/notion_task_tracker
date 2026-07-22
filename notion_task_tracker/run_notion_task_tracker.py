@@ -461,6 +461,9 @@ async def _run_notion_writes_for_write_command(
             tracker_state=command_ready_tracker_state,
             notion_client=notion_client,
         )
+        command_operation_keys.extend(
+            await reconcile_task_execution_order_page(command_tracker_state, notion_client)
+        )
         return command_tracker_state, command_operation_keys, []
 
     context_repair_result = plan_context_repair_result(
@@ -476,6 +479,9 @@ async def _run_notion_writes_for_write_command(
     command_tracker_state, command_operation_keys = await _execute_command_writes_with_fresh_landing_page_render(
         command_result,
         notion_client,
+    )
+    command_operation_keys.extend(
+        await reconcile_task_execution_order_page(command_result.tracker_state, notion_client)
     )
     return command_tracker_state, command_operation_keys, command_result.warnings or []
 

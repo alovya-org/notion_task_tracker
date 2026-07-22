@@ -31,6 +31,24 @@ class FakeNotionClient:
         self.queries = []
         self.view_queries = []
         self.created_page_ids = list(created_page_ids or [])
+        self.execution_order_membership_updates = []
+
+    async def ensure_checkbox_property(self, data_source_id: str, property_name: str):
+        property_names = [
+            "Task page", "Priority", "Deadline", "Status", "Parent", "Dependencies",
+            "Dependants", "External coordination", "Uncertainty", "Friction",
+            "Start date & time", "End date & time", "Task ID", property_name,
+        ]
+        return ({name: {"id": name} for name in property_names}, False)
+
+    async def fetch_block_children(self, parent_block_id: str):
+        return [{"id": "linked-database", "type": "child_database"}]
+
+    async def query_checkbox_page_ids(self, data_source_id: str, property_name: str):
+        return {"33333333333333333333333333333333"}
+
+    async def update_page_properties(self, page_id: str, properties: dict):
+        self.execution_order_membership_updates.append((page_id, properties))
 
     async def fetch_task_page_content(self, page_id: str):
         self.fetched_pages.append(page_id)
