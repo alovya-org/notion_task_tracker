@@ -111,7 +111,13 @@ def _refresh_task_ids_in_task_tree(
 
 def find_task_ids_to_refresh_before_command(command: dict[str, Any], tracker_state: dict[str, Any]) -> list[str]:
     command_name = command["command"]
-    if command_name in {"append_task_timeline_log", "complete_task", "cancel_task"}:
+    if command_name in {
+        "append_task_timeline_log",
+        "complete_task",
+        "cancel_task",
+        "set_task_dependencies",
+        "set_task_dependants",
+    }:
         return [command["task_id"]]
 
     if command_name == "delete_task":

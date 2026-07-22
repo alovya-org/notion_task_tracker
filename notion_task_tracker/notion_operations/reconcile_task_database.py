@@ -222,4 +222,6 @@ def _needs_task_context_for_command(command: dict[str, Any]) -> bool:
         "complete_task_with_all_children",
         "split_task_into_children",
         "split_task_with_sibling",
+        "set_task_dependencies",
+        "set_task_dependants",
     }

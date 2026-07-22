@@ -59,6 +59,7 @@ def build_task_tree_from_database_query_results(
     previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_task_tree)
     previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_task_tree)
     database_rows = _database_rows_from_query_results(query_results, ticket_prefix)
+    _require_stable_task_ids_for_known_notion_pages(database_rows, previous_tasks_by_page_id)
     database_rows = _database_rows_that_belong_to_task_tree(database_rows)
     task_tree = TaskTree(
         ongoing_tasks_landing_page=OngoingTasksLandingPage(page=landing_page),
@@ -152,6 +153,21 @@ def _database_rows_from_query_results(
         _record_database_row_by_task_id(database_rows_by_task_id, database_row)
 
     return list(database_rows_by_task_id.values())
+
+
+def _require_stable_task_ids_for_known_notion_pages(
+    database_rows: list[TaskDatabaseRow],
+    previous_tasks_by_page_id: dict[str, Task],
+) -> None:
+    for database_row in database_rows:
+        previous_task = previous_tasks_by_page_id.get(database_row.notion_page_id)
+        if previous_task is None or previous_task.task_id == database_row.task_id:
+            continue
+
+        raise NotionPlanningError(
+            f"Notion page {database_row.notion_page_id} changed task identity from "
+            f"{previous_task.task_id} to {database_row.task_id}; refusing to reconcile"
+        )
 
 
 def _database_rows_that_belong_to_task_tree(database_rows: list[TaskDatabaseRow]) -> list[TaskDatabaseRow]:

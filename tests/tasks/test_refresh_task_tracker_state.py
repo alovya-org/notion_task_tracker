@@ -44,6 +44,36 @@ def test_find_task_ids_to_refresh_before_delete_includes_changed_relations():
     assert task_ids == ["ALOVYA-1", "ALOVYA-2", "ALOVYA-3"]
 
 
+def test_find_task_ids_to_refresh_before_setting_dependencies_includes_changed_task():
+    tracker_state = _tracker_state_with_child_and_new_parent()
+
+    task_ids = find_task_ids_to_refresh_before_command(
+        {
+            "command": "set_task_dependencies",
+            "task_id": "ALOVYA-2",
+            "dependency_task_ids": ["ALOVYA-3"],
+        },
+        tracker_state,
+    )
+
+    assert task_ids == ["ALOVYA-2"]
+
+
+def test_find_task_ids_to_refresh_before_setting_dependants_includes_changed_task():
+    tracker_state = _tracker_state_with_child_and_new_parent()
+
+    task_ids = find_task_ids_to_refresh_before_command(
+        {
+            "command": "set_task_dependants",
+            "task_id": "ALOVYA-2",
+            "dependant_task_ids": ["ALOVYA-3"],
+        },
+        tracker_state,
+    )
+
+    assert task_ids == ["ALOVYA-2"]
+
+
 def _tracker_state_with_child_and_new_parent() -> dict:
     task_tree = TaskTree()
     task_tree.add_task(

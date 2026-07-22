@@ -28,7 +28,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         previous_task_tree = TaskTree()
         previous_task_tree.add_task(
             Task(
-                task_id="ALOVYA-1",
+                task_id="ALOVYA-68",
                 title="Old root title",
                 configured_priority=Priority.P1,
                 status=TaskStatus.ACTIVE,
@@ -67,6 +67,41 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-69"].parent_task_id == "ALOVYA-68"
         assert task_tree.tasks["ALOVYA-69"].configured_priority == Priority.P2
         assert task_tree.tasks["ALOVYA-69"].status == TaskStatus.BLOCKED
+
+    def test_rejects_a_different_ticket_id_for_a_known_notion_page(self):
+        previous_task_tree = TaskTree()
+        previous_task_tree.add_task(
+            Task(
+                task_id="ALOVYA-118",
+                title="Stage 1",
+                configured_priority=Priority.P2,
+                status=TaskStatus.ACTIVE,
+                notion_page_id="11111111111111111111111111111111",
+            )
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Notion page 11111111111111111111111111111111 changed task identity "
+                "from ALOVYA-118 to ALOVYA-127; refusing to reconcile"
+            ),
+        ):
+            _build_task_tree(
+                query_results=[
+                    _build_task_database_row(
+                        ticket_page="Stage 1",
+                        ticket_id="127",
+                        page_id="11111111111111111111111111111111",
+                    ),
+                ],
+                landing_page=TrackedPage(
+                    local_page_key="ongoing_landing_page",
+                    title=ONGOING_LANDING_PAGE_TITLE,
+                    notion_page_id="landing-page-id",
+                ),
+                previous_task_tree=previous_task_tree,
+            )
 
     def test_preserves_completed_landing_page_from_previous_tree(self):
         previous_task_tree = TaskTree()

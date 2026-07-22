@@ -153,6 +153,46 @@ def test_refresh_tracker_state_for_task_command_requires_known_tasks():
     assert notion_client.queries == []
 
 
+def test_refresh_tracker_state_for_setting_dependencies_reads_current_task_page():
+    tracker_state = build_tracker_state_with_root_and_child_task()
+    notion_client = FakeNotionClient(
+        fetched_page_content_by_id={
+            "33333333333333333333333333333333": build_fetched_task_page(
+                ticket_id="2",
+                title="Child task edited in database",
+                priority="P2",
+                status="Active",
+                parent_urls=["https://www.notion.so/22222222222222222222222222222222"],
+            ),
+            "22222222222222222222222222222222": build_fetched_task_page(
+                ticket_id="1",
+                title="Root task",
+                priority="P1",
+                status="Active",
+                parent_urls=[],
+            ),
+        }
+    )
+
+    command_result = asyncio.run(
+        refresh_tracker_state_for_task_command(
+            command={
+                "command": "set_task_dependencies",
+                "task_id": "ALOVYA-2",
+                "dependency_task_ids": ["ALOVYA-1"],
+            },
+            tracker_state=tracker_state,
+            notion_client=notion_client,
+        )
+    )
+
+    assert command_result.tracker_state["tasks"]["ALOVYA-2"]["title"] == "Child task edited in database"
+    assert notion_client.fetched_pages == [
+        "33333333333333333333333333333333",
+        "22222222222222222222222222222222",
+    ]
+
+
 def _task_database_state() -> dict:
     return build_task_database_tracker_state(
         data_source_id="configured-data-source-id",

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import notion_task_tracker.run_notion_task_tracker as run_notion_task_tracker
 from notion_task_tracker import COMPLETED_LANDING_PAGE_TITLE, ONGOING_LANDING_PAGE_TITLE
 from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.config import ManagedPageUrls, TrackerConfig
@@ -145,6 +146,25 @@ def test_main_rejects_unknown_flag():
         main(["--unknown-flag", "result.json"])
 
     assert error.value.code == 2
+
+
+def test_main_exits_non_zero_when_reconciliation_refuses_unsafe_state(monkeypatch, capsys):
+    refusal_message = "Notion page changed task identity; refusing to reconcile"
+
+    def _refuse_unsafe_reconciliation(args):
+        raise ValueError(refusal_message)
+
+    monkeypatch.setattr(
+        run_notion_task_tracker,
+        "_run_requested_cli_action",
+        _refuse_unsafe_reconciliation,
+    )
+
+    with pytest.raises(SystemExit) as error:
+        main(["--reconcile-from-notion"])
+
+    assert error.value.code == 2
+    assert capsys.readouterr().err == f"{refusal_message}\n"
 
 
 def test_default_tracker_paths_are_constant_app_paths():
