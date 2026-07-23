@@ -8,8 +8,8 @@ from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_c
     GoogleCalendarEventLedgerEntry,
     GoogleCalendarSynchronisationState,
 )
-from notion_task_tracker.google_calendar_sync.synchronise_notion_task_tracker_with_google_calendar import (
-    synchronise_notion_task_tracker_with_google_calendar,
+from notion_task_tracker.refresh_notion_task_tracker import (
+    refresh_notion_task_tracker,
 )
 from notion_task_tracker.notion_operations.resolve_tracker_resources import (
     ResolvedTrackerResources,
@@ -30,8 +30,7 @@ def test_google_changes_mutate_the_one_current_tree_before_reconciliation_and_pr
 
     async def record_managed_page_reconciliation(
         task_tree,
-        task_data_source_id,
-        ready_priority_page,
+        resources,
         notion_client,
     ):
         reconciled_starts.append(task_tree.tasks["ALOVYA-1"].start)
@@ -40,12 +39,12 @@ def test_google_changes_mutate_the_one_current_tree_before_reconciliation_and_pr
     _use_resolved_test_resources(monkeypatch)
     monkeypatch.setattr(
         "notion_task_tracker.google_calendar_sync."
-        "synchronise_notion_task_tracker_with_google_calendar."
-        "_reconcile_managed_pages_from_current_tree",
+        "continue_synchronisation_with_google_calendar."
+        "reconcile_managed_pages_from_current_tree",
         record_managed_page_reconciliation,
     )
 
-    summary = asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
+    summary = asyncio.run(refresh_notion_task_tracker(
         tracker_user="al0vya",
         output_path=tmp_path / "summary.json",
         config=_tracker_config(),
@@ -95,13 +94,13 @@ def test_failed_remote_operation_leaves_the_google_cursor_unadvanced(
     _use_resolved_test_resources(monkeypatch)
     monkeypatch.setattr(
         "notion_task_tracker.google_calendar_sync."
-        "synchronise_notion_task_tracker_with_google_calendar."
-        "_reconcile_managed_pages_from_current_tree",
+        "continue_synchronisation_with_google_calendar."
+        "reconcile_managed_pages_from_current_tree",
         _complete_no_managed_page_operations,
     )
 
     with pytest.raises(RuntimeError, match=f"{failed_boundary} operation failed"):
-        asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
+        asyncio.run(refresh_notion_task_tracker(
             tracker_user="al0vya",
             output_path=tmp_path / "summary.json",
             config=_tracker_config(),
@@ -136,12 +135,12 @@ def test_expired_cursor_rebuilds_the_ledger_and_reports_recovery(
     _use_resolved_test_resources(monkeypatch)
     monkeypatch.setattr(
         "notion_task_tracker.google_calendar_sync."
-        "synchronise_notion_task_tracker_with_google_calendar."
-        "_reconcile_managed_pages_from_current_tree",
+        "continue_synchronisation_with_google_calendar."
+        "reconcile_managed_pages_from_current_tree",
         _complete_no_managed_page_operations,
     )
 
-    summary = asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
+    summary = asyncio.run(refresh_notion_task_tracker(
         tracker_user="al0vya",
         output_path=tmp_path / "summary.json",
         config=_tracker_config(),
@@ -162,8 +161,7 @@ def test_expired_cursor_rebuilds_the_ledger_and_reports_recovery(
 
 async def _complete_no_managed_page_operations(
     task_tree,
-    task_data_source_id,
-    ready_priority_page,
+    resources,
     notion_client,
 ):
     return []
@@ -193,8 +191,7 @@ def _use_resolved_test_resources(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "notion_task_tracker.google_calendar_sync."
-        "synchronise_notion_task_tracker_with_google_calendar.resolve_tracker_resources",
+        "notion_task_tracker.refresh_notion_task_tracker.resolve_tracker_resources",
         resolve_test_resources,
     )
 

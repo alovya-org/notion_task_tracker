@@ -30,12 +30,10 @@ def test_parse_args_reads_full_page_action():
     assert arguments.ticket_number == [67]
 
 
-def test_parse_args_reads_two_way_google_calendar_synchronisation_action():
-    arguments = parse_args([
-        "--synchronise-notion-task-tracker-with-google-calendar"
-    ])
+def test_parse_args_reads_universal_refresh_action():
+    arguments = parse_args(["--refresh-notion-task-tracker"])
 
-    assert arguments.synchronise_notion_task_tracker_with_google_calendar is True
+    assert arguments.refresh_notion_task_tracker is True
 
 
 def test_parse_args_reads_notification_channel_maintenance_identity():
@@ -115,6 +113,8 @@ def test_task_mutation_summary_reports_completed_notion_operations(tmp_path):
 @pytest.mark.parametrize(
     "removed_flag",
     [
+        "--synchronise-notion-task-tracker",
+        "--synchronise-notion-task-tracker-with-google-calendar",
         "--tracker-state-path",
         "--transport",
         "--token-file",

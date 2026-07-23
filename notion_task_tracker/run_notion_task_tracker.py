@@ -37,17 +37,16 @@ from notion_task_tracker.notion_operations.resolve_tracker_resources import (
     ResolvedTrackerResources,
     resolve_tracker_resources,
 )
-from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
-    reconcile_task_execution_order_page,
-)
-from notion_task_tracker.notion_operations.reconcile_task_landing_pages import (
-    plan_task_landing_page_reconciliation,
+from notion_task_tracker.notion_operations.reconcile_current_task_tracker import (
+    execute_notion_intents as _execute_task_command_intents,
+    execute_notion_intents_and_reconcile_managed_pages as _execute_current_task_write_plan,
+    reconcile_managed_pages_from_current_tree as _reconcile_current_managed_pages,
 )
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_page_registry_for_task_tree,
 )
-from notion_task_tracker.google_calendar_sync.synchronise_notion_task_tracker_with_google_calendar import (
-    synchronise_notion_task_tracker_with_google_calendar,
+from notion_task_tracker.refresh_notion_task_tracker import (
+    refresh_notion_task_tracker,
 )
 from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notification_channel import (
     maintain_google_calendar_notification_channel,
@@ -123,10 +122,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--install-skill", action="store_true")
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--refresh-notion-task-tracker", action="store_true")
-    action_group.add_argument(
-        "--synchronise-notion-task-tracker-with-google-calendar",
-        action="store_true",
-    )
     action_group.add_argument(
         "--maintain-google-calendar-notification-channel",
         action="store_true",
@@ -249,19 +244,6 @@ def execute_tracker_command(
     ))
 
 
-def refresh_task_tracker_from_notion(
-    output_path: str | Path | None = None,
-    notion_client: NotionRestClient | None = None,
-    config: TrackerConfig | None = None,
-) -> "TrackerActionExecutionSummary":
-    return asyncio.run(_run_state_free_task_command(
-        command={"command": "refresh_notion_task_tracker"},
-        config=config,
-        output_path=resolve_output_path(output_path),
-        notion_client=notion_client,
-    ))
-
-
 def read_task_pages(
     task_ids: list[str],
     output_path: str | Path | None = None,
@@ -303,22 +285,14 @@ async def _run_tracker_command(
             google_calendar_state_client=google_calendar_state_client,
         )
 
-    if command["command"] == "synchronise_notion_task_tracker_with_google_calendar":
-        return await synchronise_notion_task_tracker_with_google_calendar(
+    if command["command"] == "refresh_notion_task_tracker":
+        return await refresh_notion_task_tracker(
             tracker_user=command["tracker_user"],
             config=config,
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
             google_calendar_state_client=google_calendar_state_client,
-        )
-
-    if command["command"] == "refresh_notion_task_tracker":
-        return await _run_state_free_task_command(
-            command=command,
-            config=config,
-            output_path=output_path,
-            notion_client=notion_client,
         )
 
     if command["command"] in {"read_tasks", "read_all_tasks", "work_task"}:
@@ -365,16 +339,6 @@ async def _run_state_free_task_command(
             current_tasks.task_tree,
             current_tasks.repair_intents,
             current_tasks.warnings,
-            output_path,
-            client,
-        )
-
-    if command["command"] == "refresh_notion_task_tracker":
-        return await _reconcile_current_task_tracker(
-            current_tasks.task_tree,
-            current_tasks.repair_intents,
-            current_tasks.warnings,
-            resources,
             output_path,
             client,
         )
@@ -536,32 +500,6 @@ async def _read_current_task_pages(
     return summary
 
 
-async def _reconcile_current_task_tracker(
-    task_tree: TaskTree,
-    repair_intents,
-    warnings: list[dict[str, str]],
-    resources: ResolvedTrackerResources,
-    output_path: str | Path,
-    notion_client: NotionRestClient,
-) -> "TrackerActionExecutionSummary":
-    completed_operation_keys = await _execute_current_task_write_plan(
-        task_tree,
-        list(repair_intents),
-        resources,
-        notion_client,
-    )
-    summary = TrackerActionExecutionSummary(
-        action_name="refresh_notion_task_tracker",
-        output_path=Path(output_path),
-        notion_operation_keys=completed_operation_keys,
-        task_count=len(task_tree.tasks),
-        repair_operation_count=len(repair_intents),
-        warnings=warnings,
-    )
-    write_json_file(summary.to_json_summary(), output_path)
-    return summary
-
-
 async def _move_current_task_timeline_log(
     command: dict[str, Any],
     task_tree: TaskTree,
@@ -646,70 +584,15 @@ def _required_current_task_page_id(task) -> str:
     return task.notion_page_id
 
 
-async def _execute_current_task_write_plan(
-    task_tree: TaskTree,
-    primary_write_intents,
-    resources: ResolvedTrackerResources,
-    notion_client: NotionRestClient,
-) -> list[str]:
-    primary_plan = TaskCommandPlan(
-        task_tree=task_tree,
-        write_intents=list(primary_write_intents),
-        page_registry=build_page_registry_for_task_tree(task_tree),
-    )
-    completed_operation_keys = await _execute_task_command_plan(
-        primary_plan,
-        notion_client,
-    )
-    completed_operation_keys.extend(
-        await _reconcile_current_managed_pages(
-            task_tree,
-            resources,
-            notion_client,
-        )
-    )
-    return completed_operation_keys
-
-
-async def _reconcile_current_managed_pages(
-    task_tree: TaskTree,
-    resources: ResolvedTrackerResources,
-    notion_client: NotionRestClient,
-) -> list[str]:
-    landing_page_intents = await plan_task_landing_page_reconciliation(
-        task_tree,
-        notion_client,
-    )
-    landing_plan = TaskCommandPlan(
-        task_tree=task_tree,
-        write_intents=landing_page_intents,
-        page_registry=build_page_registry_for_task_tree(task_tree),
-    )
-    completed_operation_keys = await _execute_task_command_plan(
-        landing_plan,
-        notion_client,
-    )
-    completed_operation_keys.extend(
-        await reconcile_task_execution_order_page(
-            task_tree=task_tree,
-            task_data_source_id=resources.task_data_source_id,
-            ready_priority_page=resources.ready_priority_page,
-            notion_client=notion_client,
-        )
-    )
-    return completed_operation_keys
-
-
 async def _execute_task_command_plan(
     command_plan: TaskCommandPlan,
     notion_client: NotionRestClient,
 ) -> list[str]:
-    if not command_plan.write_intents:
-        return []
-    write_result = await notion_client.execute_command_result(command_plan)
-    if write_result.blocked_operation_count:
-        raise ValueError("Ordinary task writes cannot depend on newly captured page identifiers")
-    return list(write_result.completed_operation_keys)
+    return await _execute_task_command_intents(
+        command_plan.task_tree,
+        command_plan.write_intents,
+        notion_client,
+    )
 
 
 def _write_task_action_summary(
@@ -792,9 +675,6 @@ def _summarise_fetched_page_content(fetched_page_content: str) -> list[str]:
 
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
-        "synchronise_notion_task_tracker_with_google_calendar": (
-            "synchronise_notion_task_tracker_with_google_calendar"
-        ),
         "maintain_google_calendar_notification_channel": (
             "maintain_google_calendar_notification_channel"
         ),

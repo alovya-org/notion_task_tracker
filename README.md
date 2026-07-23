@@ -1,6 +1,6 @@
 # Notion task tracker
 
-Notion task tracker turns explicit command-line actions into Notion task changes and keeps eligible scheduled tasks visible in Google Calendar.
+Notion task tracker turns explicit command-line actions into Notion task changes. Google Calendar synchronisation is an optional addition for trackers that configure it.
 
 ## Authority boundaries
 
@@ -9,11 +9,11 @@ Each system owns a deliberately narrow part of the tracker:
 | System | Values it owns |
 |---|---|
 | Notion | Task identity, title, hierarchy, dependencies, status, priority, schedule, timeline content and the rendered managed pages |
-| Google Calendar | The current presentation of eligible scheduled tasks; a person may move, resize or delete an event that is uniquely owned by the tracker |
-| Cloudflare D1 | The Calendar synchronisation cursor, Google-event-to-task identity and tracker-originated deletion provenance |
-| GitHub Actions | Wake-ups and serialised execution of the same complete synchronisation lifecycle |
+| Google Calendar, when configured | The current presentation of eligible scheduled tasks; a person may move, resize or delete an event that is uniquely owned by the tracker |
+| Cloudflare D1, when Calendar is configured | The Calendar synchronisation cursor, Google-event-to-task identity and tracker-originated deletion provenance |
+| GitHub Actions | Wake-ups and serialised execution of the configured synchronisation lifecycle |
 
-Notion is the task authority. Google edits become Notion schedule changes before the resulting current Notion task data is projected back into Calendar. D1 is not a task cache or an alternative source of tracker data. A GitHub event says only why work should begin; it does not choose a different kind of synchronisation.
+Notion is always the task authority. A Notion-only tracker never contacts Google or D1. When Calendar is configured, Google edits become Notion schedule changes before the resulting current Notion task data is projected back into Calendar. D1 is not a task cache or an alternative source of tracker data. A GitHub event says only why work should begin; it does not choose a different kind of synchronisation.
 
 ## Configuration
 
@@ -95,14 +95,20 @@ task_database_url = "https://www.notion.so/..."
 ongoing_tasks_url = "https://www.notion.so/..."
 completed_tasks_url = "https://www.notion.so/..."
 ready_priority_page_url = "https://www.notion.so/..."
+```
 
+This minimal tracker needs only `NOTION_API_KEY`. It supports the complete Notion lifecycle locally and through GitHub without Google credentials, D1 state or notification channels.
+
+To opt in to two-way Google Calendar synchronisation, add:
+
+```toml
 [calendar]
 calendar_id = "primary"
 timezone_name = "Europe/London"
 colour_id = "8"
 ```
 
-Calendar synchronisation also requires:
+The Calendar-enabled tracker additionally requires:
 
 ```text
 GOOGLE_CALENDAR_CLIENT_ID
@@ -110,6 +116,7 @@ GOOGLE_CALENDAR_CLIENT_SECRET
 GOOGLE_CALENDAR_REFRESH_TOKEN
 NTT_GOOGLE_CALENDAR_STATE_API_TOKEN
 NTT_GOOGLE_CALENDAR_STATE_API_URL
+NTT_GOOGLE_CALENDAR_NOTIFICATION_URL
 ```
 
 Obtain the Google refresh token through offline OAuth consent with `https://www.googleapis.com/auth/calendar.events`. NTT renews short-lived access tokens automatically.
@@ -261,7 +268,21 @@ For each managed page, NTT renders the desired current output, reads the existin
 
 Task timeline bodies remain user-owned. Timeline commands make targeted changes around the `Timeline log` heading and dated toggles; managed-page reconciliation does not replace task bodies.
 
-## Two-way Calendar lifecycle
+## Universal synchronisation lifecycle
+
+Run the lifecycle selected by the configuration with:
+
+```bash
+ntt \
+  --refresh-notion-task-tracker \
+  --tracker-user example
+```
+
+Every tracker resolves its Notion resources, queries and validates Notion once, executes canonical repairs, reconciles only stale managed pages and emits one summary. Without `[calendar]`, the command finishes there and reports zero Calendar operations.
+
+When `[calendar]` exists, the same command continues from that already loaded `TaskTree` through the two-way Calendar lifecycle. Empty optional Google or D1 environment values are never validated on the Notion-only branch.
+
+## Calendar opt-in lifecycle
 
 A task is eligible for Calendar when it is active, has no children and has a complete start and duration. For example:
 
@@ -275,15 +296,7 @@ Start:        2026-08-03 10:00
 End:          2026-08-03 11:00
 ```
 
-Run the complete lifecycle with:
-
-```bash
-ntt \
-  --synchronise-notion-task-tracker-with-google-calendar \
-  --tracker-user example
-```
-
-The command performs one ordered story:
+When Calendar is configured, the refresh performs one ordered story:
 
 ```text
 resolve resources
@@ -329,12 +342,15 @@ D1 contains no task snapshot, hierarchy, status, priority, schedule or managed-p
 2. A Google notification dispatch named `apply-google-calendar-changes-to-notion-task-tracker`.
 3. A manual workflow dispatch.
 
-All three invoke the same `--synchronise-notion-task-tracker-with-google-calendar` command in the same per-user concurrency group. The event name remains visible as the wake-up reason, but it does not select narrower work. Dispatch payloads contain only `tracker_user`; they do not carry Calendar progress.
+All three invoke the same `--refresh-notion-task-tracker` command in the same per-user concurrency group. The event name remains visible as the wake-up reason, but it does not select narrower work. Dispatch payloads contain only `tracker_user`; they do not carry Calendar progress. A Notion-only tracker uses the Notion and manual routes. It has no Google notification channel, so it cannot receive Google wake-ups.
 
-Each tracker user is one GitHub environment. It supplies:
+Each tracker user is one GitHub environment. Every environment supplies:
 
 - Secret `NTT_CONFIG_TOML`
 - Secret `NOTION_API_KEY`
+
+A Calendar-enabled environment additionally supplies:
+
 - Secrets `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` and `GOOGLE_CALENDAR_REFRESH_TOKEN`
 - Secret `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN`
 - Variable `NTT_GOOGLE_CALENDAR_NOTIFICATION_URL`
@@ -351,7 +367,7 @@ Manual synchronisation asks for the environment name as `tracker_user`. A Notion
 }
 ```
 
-Google uses `apply-google-calendar-changes-to-notion-task-tracker` with the same identity-only payload.
+Google uses `apply-google-calendar-changes-to-notion-task-tracker` with the same identity-only payload for opted-in trackers.
 
 The separate notification-channel maintenance workflow runs:
 
@@ -362,11 +378,11 @@ ntt \
   --calendar-notification-url https://<worker>/google-calendar-notifications
 ```
 
-Google notification channels expire and cannot be extended. Maintenance creates a replacement before expiry. If the old channel already expired, maintenance renews it and wakes the ordinary complete lifecycle. The current scheduled workflow is deliberately configured for the `al0vya` environment.
+Google notification channels expire and cannot be extended. Maintenance creates a replacement before expiry. If the old channel already expired, maintenance renews it and wakes the ordinary complete lifecycle. Provision this Calendar-only workflow only for opted-in tracker environments. The current scheduled workflow is deliberately configured for the Calendar-enabled `al0vya` environment.
 
 ## Worker deployment
 
-`cloudflare_worker/` authenticates Notion and Google webhook requests, dispatches GitHub wake-ups and exposes the authenticated D1 Calendar protocol API.
+`cloudflare_worker/` authenticates Notion and Google webhook requests, dispatches GitHub wake-ups and exposes the authenticated D1 Calendar protocol API. Notion webhook dispatch uses only the tracker identity and remains valid for both modes; Notion-only trackers never use the Google or D1 endpoints.
 
 Inspect and run the package’s pinned scripts:
 
@@ -410,6 +426,7 @@ Configure Notion’s `Send webhook` action to send `POST /notion-task-tracker-ch
 - Tracker-originated deletion provenance prevents Google’s cancellation record from reverse-unscheduling a task.
 - The cursor advances only after all required Notion, Google and D1 operations succeed. A failed operation leaves it unchanged so the outstanding changes can be retried.
 - A run with no changes performs no task or managed-page writes.
+- A Notion-only run never constructs Google or D1 clients and reports zero Calendar operations.
 - GitHub serialises each user’s lifecycle so overlapping wake-ups read the latest cursor when they begin.
 - The Worker also wakes synchronisation daily at `00:00 UTC`, preventing a missed notification from hiding changes permanently.
 
@@ -418,10 +435,11 @@ Configure Notion’s `Send webhook` action to send `POST /notion-task-tracker-ch
 The behaviour is divided at these boundaries:
 
 - `notion_task_tracker/run_notion_task_tracker.py` parses actions and runs one task-bearing command from current Notion data.
+- `notion_task_tracker/refresh_notion_task_tracker.py` owns the universal one-load lifecycle and selects the configured mode.
 - `notion_task_tracker/notion_operations/load_current_task_tree_from_notion.py` performs the single database query and validates the in-memory task tree.
 - `notion_task_tracker/notion_operations/` resolves configured resources, plans narrow Notion writes and reconciles managed pages.
 - `notion_task_tracker/tasks/` owns task, schedule, hierarchy and rendering rules.
-- `notion_task_tracker/google_calendar_sync/synchronise_notion_task_tracker_with_google_calendar.py` owns the complete two-way lifecycle.
+- `notion_task_tracker/google_calendar_sync/continue_synchronisation_with_google_calendar.py` continues an already loaded lifecycle through the optional Calendar protocol.
 - `cloudflare_worker/` owns authenticated wake-ups and the narrow D1 Calendar protocol boundary.
 
 ## Tests

@@ -50,7 +50,6 @@ READ_ACTIONS = {
 
 MAINTENANCE_ACTIONS = {
     "maintain_google_calendar_notification_channel",
-    "synchronise_notion_task_tracker_with_google_calendar",
     "refresh_notion_task_tracker",
 }
 
@@ -67,13 +66,13 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
     action_name = selected_cli_action_from_arguments(arguments)
     if action_name is None:
         raise ValueError("Choose one tracker action")
-    if action_name == "synchronise_notion_task_tracker_with_google_calendar":
+    if action_name == "refresh_notion_task_tracker":
         if not arguments.tracker_user:
             raise ValueError(
-                "--synchronise-notion-task-tracker-with-google-calendar requires --tracker-user"
+                "--refresh-notion-task-tracker requires --tracker-user"
             )
         return {
-            "command": "synchronise_notion_task_tracker_with_google_calendar",
+            "command": "refresh_notion_task_tracker",
             "tracker_user": arguments.tracker_user,
         }
     if action_name == "maintain_google_calendar_notification_channel":
@@ -91,8 +90,6 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
             "tracker_user": arguments.tracker_user,
             "notification_url": arguments.calendar_notification_url,
         }
-    if action_name == "refresh_notion_task_tracker":
-        return {"command": "refresh_notion_task_tracker"}
     if action_name == "read":
         return _build_read_command(arguments, ticket_prefix)
     if action_name == "read_all":

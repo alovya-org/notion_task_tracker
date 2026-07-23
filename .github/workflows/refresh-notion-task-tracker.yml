@@ -1,4 +1,4 @@
-name: Wake two-way Notion and Google Calendar synchronisation
+name: Wake Notion task tracker synchronisation
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
       - apply-google-calendar-changes-to-notion-task-tracker
 
 concurrency:
-  group: synchronise-notion-and-google-calendar-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
+  group: refresh-notion-task-tracker-${{ github.event.inputs.tracker_user || github.event.client_payload.tracker_user }}
   cancel-in-progress: false
 
 permissions:
@@ -50,9 +50,9 @@ jobs:
         env:
           NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}
 
-      - name: Synchronise Notion tasks with Google Calendar
+      - name: Synchronise Notion task tracker
         run: >-
-          ntt --synchronise-notion-task-tracker-with-google-calendar
+          ntt --refresh-notion-task-tracker
           --tracker-user "$TRACKER_USER"
         env:
           GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}

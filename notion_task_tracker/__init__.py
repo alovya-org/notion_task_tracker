@@ -15,9 +15,6 @@ from notion_task_tracker.notion_operations.write_intent import (
     NotionWriteIntent,
 )
 from notion_task_tracker.tracked_pages import TrackedPage
-from notion_task_tracker.run_notion_task_tracker import (
-    refresh_task_tracker_from_notion,
-)
 from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 from notion_task_tracker.tasks import (
     ExternalCoordination,
@@ -50,5 +47,4 @@ __all__ = [
     "TimelineEntry",
     "TaskTree",
     "Uncertainty",
-    "refresh_task_tracker_from_notion",
 ]

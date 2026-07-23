@@ -5,30 +5,40 @@ REPOSITORY_ROOT_PATH = Path(__file__).parent.parent
 SYNCHRONISATION_WORKFLOW_PATH = (
     REPOSITORY_ROOT_PATH / ".github/workflows/refresh-notion-task-tracker.yml"
 )
-def test_every_wake_up_invokes_one_complete_two_way_calendar_lifecycle():
+def test_every_wake_up_invokes_one_universal_tracker_lifecycle():
     workflow = SYNCHRONISATION_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert workflow.count("ntt --synchronise-notion-task-tracker-with-google-calendar") == 1
-    assert "ntt --refresh-notion-task-tracker" not in workflow
+    assert workflow.count("ntt --refresh-notion-task-tracker") == 1
+    assert "--synchronise-notion-task-tracker" not in workflow
+    assert "--synchronise-notion-task-tracker-with-google-calendar" not in workflow
     assert "ntt --apply-google-calendar-changes-to-tasks" not in workflow
     assert "ntt --sync-tasks-to-google-calendar" not in workflow
     assert "--tracker-state-path" not in workflow
 
 
-def test_every_ordinary_wake_up_runs_one_serialised_two_way_synchronisation():
+def test_every_ordinary_wake_up_runs_one_serialised_universal_synchronisation():
     workflow = SYNCHRONISATION_WORKFLOW_PATH.read_text(encoding="utf-8")
     workflow_paths = list((REPOSITORY_ROOT_PATH / ".github/workflows").glob("*.yml"))
 
     assert "- refresh-notion-task-tracker" in workflow
     assert "- apply-google-calendar-changes-to-notion-task-tracker" in workflow
-    assert "group: synchronise-notion-and-google-calendar-" in workflow
-    assert workflow.count("ntt --synchronise-notion-task-tracker-with-google-calendar") == 1
+    assert "group: refresh-notion-task-tracker-" in workflow
+    assert workflow.count("ntt --refresh-notion-task-tracker") == 1
     assert [
         workflow_path
         for workflow_path in workflow_paths
-        if "ntt --synchronise-notion-task-tracker-with-google-calendar"
+        if "ntt --refresh-notion-task-tracker"
         in workflow_path.read_text(encoding="utf-8")
     ] == [SYNCHRONISATION_WORKFLOW_PATH]
+
+
+def test_universal_workflow_exposes_calendar_credentials_as_optional_inputs():
+    workflow = SYNCHRONISATION_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert "NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}" in workflow
+    assert "NTT_CONFIG_TOML: ${{ secrets.NTT_CONFIG_TOML }}" in workflow
+    assert "GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" in workflow
+    assert "NTT_GOOGLE_CALENDAR_STATE_API_TOKEN: ${{ secrets.NTT_GOOGLE_CALENDAR_STATE_API_TOKEN }}" in workflow
 
 
 def test_google_change_cursor_never_crosses_the_github_dispatch_boundary():
