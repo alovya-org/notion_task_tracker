@@ -238,6 +238,19 @@ def build_task_duration_update_intent(task: Task) -> NotionWriteIntent:
     )
 
 
+def build_task_schedule_update_intent(task: Task) -> NotionWriteIntent:
+    return _build_task_property_update_intent(
+        task=task,
+        operation_key=f"update_schedule:{task.local_page_key}",
+        properties={
+            TASK_DATABASE_START_PROPERTY: task.start,
+            TASK_DATABASE_END_PROPERTY: task.end,
+            TASK_DATABASE_DURATION_PROPERTY: task.duration,
+            TASK_DATABASE_DURATION_UNIT_PROPERTY: task.duration_unit.value if task.duration_unit else None,
+        },
+    )
+
+
 def build_task_external_coordination_update_intent(task: Task) -> NotionWriteIntent:
     return _build_task_property_update_intent(
         task=task,

@@ -2,22 +2,16 @@
 
 from __future__ import annotations
 
-import json
-from typing import Protocol
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from notion_task_tracker.config import TrackerConfig, load_config
 from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
     CloudflareGoogleCalendarStateClient,
 )
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import GoogleCalendarClient
-from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.tasks import DurationUnit, Task, TaskStatus, TaskTree
-from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
 NTT_EVENT_DESCRIPTION = "This is a personal task. Feel free to schedule a meeting over this slot."
@@ -62,85 +56,39 @@ class GoogleCalendarUpdatePlan:
     warnings: list[dict[str, str]]
 
 
-class _RefreshTasksFromNotion(Protocol):
-    async def __call__(
-        self,
-        config: TrackerConfig | None,
-        tracker_state_path: str | Path,
-        output_path: str | Path,
-        backup_path: str | Path | None,
-        notion_client: NotionRestClient | None,
-    ) -> TrackerActionExecutionSummary: ...
-
-
-async def sync_tasks_to_google_calendar(
+async def project_current_tasks_into_google_calendar(
+    task_tree: TaskTree,
     tracker_user: str,
-    config: TrackerConfig | None,
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
-    google_calendar_client: GoogleCalendarClient | None,
-    google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
-    refresh_tasks_from_notion: _RefreshTasksFromNotion,
-) -> TrackerActionExecutionSummary:
-    configured_tracker = config or load_config()
-    if configured_tracker.calendar is None:
-        raise ValueError("Configure [calendar] before syncing tasks to Google Calendar")
-
-    refresh_summary = await refresh_tasks_from_notion(
-        config=configured_tracker,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=backup_path,
-        notion_client=notion_client,
-    )
-    refreshed_tracker_state = _read_json(Path(tracker_state_path))
+    tracker_id: str,
+    calendar_id: str,
+    timezone_name: str,
+    colour_id: str | None,
+    google_calendar_client: GoogleCalendarClient,
+    google_calendar_state_client: CloudflareGoogleCalendarStateClient,
+) -> tuple[list[str], list[dict[str, str]], int]:
     desired_events = derive_desired_calendar_events(
-        TaskTree.from_tracker_state(refreshed_tracker_state),
-        configured_tracker.calendar.timezone_name,
+        task_tree,
+        timezone_name,
     )
-    calendar_client = google_calendar_client or GoogleCalendarClient.from_environment(
-        configured_tracker.calendar.calendar_id,
-    )
-    existing_events = await calendar_client.list_all_calendar_events({
-        "privateExtendedProperty": f"ntt_tracker={configured_tracker.ticket_prefix}",
+    existing_events = await google_calendar_client.list_all_calendar_events({
+        "privateExtendedProperty": f"ntt_tracker={tracker_id}",
         "showDeleted": "false",
     })
     update_plan = plan_google_calendar_updates(
         desired_events=desired_events,
         existing_events=existing_events,
-        tracker_id=configured_tracker.ticket_prefix,
-        timezone_name=configured_tracker.calendar.timezone_name,
-        colour_id=configured_tracker.calendar.colour_id,
-    )
-    state_client = (
-        google_calendar_state_client
-        or CloudflareGoogleCalendarStateClient.from_environment()
+        tracker_id=tracker_id,
+        timezone_name=timezone_name,
+        colour_id=colour_id,
     )
     calendar_operation_keys = await _execute_google_calendar_updates(
         update_plan,
-        calendar_client,
-        state_client,
+        google_calendar_client,
+        google_calendar_state_client,
         tracker_user,
-        configured_tracker.calendar.calendar_id,
+        calendar_id,
     )
-
-    execution_summary = TrackerActionExecutionSummary(
-        action_name="sync_tasks_to_google_calendar",
-        output_path=Path(output_path),
-        tracker_state_path=Path(tracker_state_path),
-        warnings=[*refresh_summary.warnings, *update_plan.warnings],
-        backup_path=refresh_summary.backup_path,
-        completed_operation_keys=refresh_summary.completed_operation_keys,
-        task_tree_changes=refresh_summary.task_tree_changes,
-        task_count=refresh_summary.task_count,
-        repair_operation_count=refresh_summary.repair_operation_count,
-        calendar_operation_keys=calendar_operation_keys,
-        desired_calendar_event_count=len(desired_events),
-    )
-    _write_json(Path(output_path), execution_summary.to_json_summary())
-    return execution_summary
+    return calendar_operation_keys, update_plan.warnings, len(desired_events)
 
 
 def derive_desired_calendar_events(

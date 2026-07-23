@@ -66,10 +66,10 @@ def test_parse_args_reads_install_skill_action():
     assert args.install_skill is True
 
 
-def test_parse_args_reads_sync_tasks_to_google_calendar_action():
-    args = parse_args(["--sync-tasks-to-google-calendar"])
+def test_parse_args_reads_two_way_google_calendar_synchronisation_action():
+    args = parse_args(["--synchronise-notion-task-tracker-with-google-calendar"])
 
-    assert args.sync_tasks_to_google_calendar is True
+    assert args.synchronise_notion_task_tracker_with_google_calendar is True
 
 
 def test_parse_args_reads_notification_channel_maintenance_identity():
@@ -84,17 +84,6 @@ def test_parse_args_reads_notification_channel_maintenance_identity():
     assert args.maintain_google_calendar_notification_channel is True
     assert args.tracker_user == "al0vya"
     assert args.calendar_notification_url.endswith("/google-calendar-notifications")
-
-
-def test_parse_args_reads_google_calendar_change_tracker_identity():
-    args = parse_args([
-        "--apply-google-calendar-changes-to-tasks",
-        "--tracker-user",
-        "al0vya",
-    ])
-
-    assert args.apply_google_calendar_changes_to_tasks is True
-    assert args.tracker_user == "al0vya"
 
 
 def test_parse_args_reads_initialise_action_and_configuration():

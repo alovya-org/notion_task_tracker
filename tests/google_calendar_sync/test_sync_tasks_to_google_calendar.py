@@ -1,17 +1,12 @@
 import asyncio
 from datetime import date, datetime
-import json
-from pathlib import Path
-
-from notion_task_tracker.config import CalendarConfig, ManagedPageUrls, TrackerConfig
 from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
     DesiredCalendarEvent,
     derive_desired_calendar_events,
     plan_google_calendar_updates,
-    sync_tasks_to_google_calendar,
+    project_current_tasks_into_google_calendar,
 )
 from notion_task_tracker.tasks import DurationUnit, Priority, Task, TaskStatus, TaskTree
-from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
 
 
 def test_derives_timed_and_all_day_events_for_active_scheduled_leaves():
@@ -62,7 +57,7 @@ def test_hour_duration_keeps_elapsed_time_across_daylight_saving_change():
     assert event.end_date_time == datetime.fromisoformat("2026-03-29T03:30:00+01:00")
 
 
-def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
+def test_projects_the_supplied_current_task_tree_to_google_calendar():
     task_tree = TaskTree()
     task_tree.add_task(_scheduled_task(
         "ALOVYA-1",
@@ -71,48 +66,21 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
         1.5,
         DurationUnit.HOURS,
     ))
-    tracker_state = {
-        "identity": {"display_name": "Alovya", "ticket_prefix": "ALOVYA"},
-        **task_tree.to_tracker_state(),
-    }
-    tracker_state_path = tmp_path / "tracker_state.json"
-    output_path = tmp_path / "output.json"
-    backup_path = tmp_path / "backup.json"
-    tracker_state_path.write_text(json.dumps(tracker_state), encoding="utf-8")
     google_calendar_client = _RecordingGoogleCalendarClient()
     google_calendar_state_client = _RecordingGoogleCalendarStateClient()
-    config = TrackerConfig(
-        display_name="Alovya",
-        ticket_prefix="ALOVYA",
-        parent_page_url="https://notion.so/parent",
-        task_database_url="https://notion.so/tasks",
-        pages=ManagedPageUrls(),
-        calendar=CalendarConfig(
-            calendar_id="test-calendar",
-            timezone_name="Europe/London",
-            colour_id="8",
-        ),
-    )
 
-    async def preserve_refreshed_tracker_state(**arguments):
-        return TrackerActionExecutionSummary(
-            action_name="refresh_notion_task_tracker",
-            output_path=Path(arguments["output_path"]),
-            tracker_state_path=Path(arguments["tracker_state_path"]),
-            warnings=[],
-        )
-
-    summary = asyncio.run(sync_tasks_to_google_calendar(
+    calendar_operations, warnings, desired_event_count = asyncio.run(
+        project_current_tasks_into_google_calendar(
+        task_tree=task_tree,
         tracker_user="al0vya",
-        config=config,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=backup_path,
-        notion_client=None,
+        tracker_id="ALOVYA",
+        calendar_id="test-calendar",
+        timezone_name="Europe/London",
+        colour_id="8",
         google_calendar_client=google_calendar_client,
         google_calendar_state_client=google_calendar_state_client,
-        refresh_tasks_from_notion=preserve_refreshed_tracker_state,
-    ))
+        )
+    )
 
     assert google_calendar_client.list_queries == [{
         "privateExtendedProperty": "ntt_tracker=ALOVYA",
@@ -126,27 +94,15 @@ def test_syncs_refreshed_tasks_to_google_calendar(tmp_path: Path):
         "ntt_tracker": "ALOVYA",
         "ntt_task_id": "ALOVYA-1",
     }
-    assert summary.to_json_summary()["calendar_operations"] == [
-        "create:calendar_event:ALOVYA-1"
-    ]
-    assert summary.to_json_summary()["desired_calendar_event_count"] == 1
+    assert calendar_operations == ["create:calendar_event:ALOVYA-1"]
+    assert warnings == []
+    assert desired_event_count == 1
     assert google_calendar_state_client.active_events == [
         ("al0vya", "test-calendar", "created-event", "ALOVYA-1")
     ]
-    assert json.loads(output_path.read_text(encoding="utf-8"))["action_name"] == (
-        "sync_tasks_to_google_calendar"
-    )
 
 
-def test_marks_an_orphaned_event_as_ntt_deleted_before_removing_it_from_google(
-    tmp_path: Path,
-):
-    tracker_state_path = tmp_path / "tracker_state.json"
-    output_path = tmp_path / "output.json"
-    tracker_state_path.write_text(json.dumps({
-        "identity": {"display_name": "Alovya", "ticket_prefix": "ALOVYA"},
-        **TaskTree().to_tracker_state(),
-    }), encoding="utf-8")
+def test_marks_an_orphaned_event_as_ntt_deleted_before_removing_it_from_google():
     operations = []
     google_calendar_state_client = _RecordingGoogleCalendarStateClient(operations)
 
@@ -163,33 +119,15 @@ def test_marks_an_orphaned_event_as_ntt_deleted_before_removing_it_from_google(
         async def delete_calendar_event(self, event_id):
             operations.append(("delete_from_google", event_id))
 
-    async def preserve_refreshed_tracker_state(**arguments):
-        return TrackerActionExecutionSummary(
-            action_name="refresh_notion_task_tracker",
-            output_path=Path(arguments["output_path"]),
-            tracker_state_path=Path(arguments["tracker_state_path"]),
-            warnings=[],
-        )
-
-    asyncio.run(sync_tasks_to_google_calendar(
+    asyncio.run(project_current_tasks_into_google_calendar(
+        task_tree=TaskTree(),
         tracker_user="al0vya",
-        config=TrackerConfig(
-            display_name="Alovya",
-            ticket_prefix="ALOVYA",
-            parent_page_url="https://notion.so/parent",
-            task_database_url="https://notion.so/tasks",
-            calendar=CalendarConfig(
-                calendar_id="test-calendar",
-                timezone_name="Europe/London",
-            ),
-        ),
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=None,
-        notion_client=None,
+        tracker_id="ALOVYA",
+        calendar_id="test-calendar",
+        timezone_name="Europe/London",
+        colour_id=None,
         google_calendar_client=CalendarWithOrphanedEvent(),
         google_calendar_state_client=google_calendar_state_client,
-        refresh_tasks_from_notion=preserve_refreshed_tracker_state,
     ))
 
     assert operations == [

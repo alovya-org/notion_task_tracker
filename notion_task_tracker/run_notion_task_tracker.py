@@ -22,9 +22,6 @@ from notion_task_tracker.fixed_pages import READY_PRIORITY_PAGE_LOCAL_KEY
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     GoogleCalendarClient,
 )
-from notion_task_tracker.google_calendar_sync.apply_google_calendar_changes_to_tasks import (
-    apply_google_calendar_changes_to_tasks,
-)
 from notion_task_tracker.initialise_tracker import (
     add_configured_ready_priority_page_to_tracker_state,
     create_tracker_state_from_configured_pages,
@@ -66,8 +63,8 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_page_registry_for_task_tree,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
-from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
-    sync_tasks_to_google_calendar,
+from notion_task_tracker.google_calendar_sync.synchronise_notion_task_tracker_with_google_calendar import (
+    synchronise_notion_task_tracker_with_google_calendar,
 )
 from notion_task_tracker.google_calendar_sync.maintain_google_calendar_notification_channel import (
     maintain_google_calendar_notification_channel,
@@ -151,12 +148,14 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--install-skill", action="store_true")
     parser.add_argument("--force", action="store_true", help="Overwrite existing skill files")
     action_group.add_argument("--refresh-notion-task-tracker", action="store_true")
-    action_group.add_argument("--sync-tasks-to-google-calendar", action="store_true")
+    action_group.add_argument(
+        "--synchronise-notion-task-tracker-with-google-calendar",
+        action="store_true",
+    )
     action_group.add_argument(
         "--maintain-google-calendar-notification-channel",
         action="store_true",
     )
-    action_group.add_argument("--apply-google-calendar-changes-to-tasks", action="store_true")
     action_group.add_argument("--read", action="store_true")
     action_group.add_argument("--read-all", action="store_true")
     action_group.add_argument("--work", action="store_true")
@@ -350,24 +349,11 @@ async def _run_tracker_command(
             google_calendar_state_client=google_calendar_state_client,
         )
 
-    if command["command"] == "sync_tasks_to_google_calendar":
-        return await sync_tasks_to_google_calendar(
+    if command["command"] == "synchronise_notion_task_tracker_with_google_calendar":
+        return await synchronise_notion_task_tracker_with_google_calendar(
             tracker_user=command["tracker_user"],
             config=config,
-            tracker_state_path=tracker_state_path,
-            output_path=output_path,
-            backup_path=backup_path,
-            notion_client=notion_client,
-            google_calendar_client=google_calendar_client,
-            google_calendar_state_client=google_calendar_state_client,
-            refresh_tasks_from_notion=_run_refresh_notion_task_tracker_command,
-        )
-
-    if command["command"] == "apply_google_calendar_changes_to_tasks":
-        return await apply_google_calendar_changes_to_tasks(
-            tracker_user=command["tracker_user"],
-            config=config,
-            tracker_state_path=tracker_state_path,
+            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
@@ -1315,11 +1301,12 @@ async def repair_and_write_refreshed_tracker_state(
 
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
     return {
-        "sync_tasks_to_google_calendar": "sync_tasks_to_google_calendar",
+        "synchronise_notion_task_tracker_with_google_calendar": (
+            "synchronise_notion_task_tracker_with_google_calendar"
+        ),
         "maintain_google_calendar_notification_channel": (
             "maintain_google_calendar_notification_channel"
         ),
-        "apply_google_calendar_changes_to_tasks": "apply_google_calendar_changes_to_tasks",
         "refresh_notion_task_tracker": "refresh_notion_task_tracker",
         "read_tasks": "read",
         "read_all_tasks": "read_all",

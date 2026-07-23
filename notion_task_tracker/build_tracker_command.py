@@ -50,8 +50,7 @@ READ_ACTIONS = {
 
 MAINTENANCE_ACTIONS = {
     "maintain_google_calendar_notification_channel",
-    "sync_tasks_to_google_calendar",
-    "apply_google_calendar_changes_to_tasks",
+    "synchronise_notion_task_tracker_with_google_calendar",
     "refresh_notion_task_tracker",
 }
 
@@ -68,11 +67,13 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
     action_name = selected_cli_action_from_arguments(arguments)
     if action_name is None:
         raise ValueError("Choose one tracker action")
-    if action_name == "sync_tasks_to_google_calendar":
+    if action_name == "synchronise_notion_task_tracker_with_google_calendar":
         if not arguments.tracker_user:
-            raise ValueError("--sync-tasks-to-google-calendar requires --tracker-user")
+            raise ValueError(
+                "--synchronise-notion-task-tracker-with-google-calendar requires --tracker-user"
+            )
         return {
-            "command": "sync_tasks_to_google_calendar",
+            "command": "synchronise_notion_task_tracker_with_google_calendar",
             "tracker_user": arguments.tracker_user,
         }
     if action_name == "maintain_google_calendar_notification_channel":
@@ -89,13 +90,6 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
             "command": "maintain_google_calendar_notification_channel",
             "tracker_user": arguments.tracker_user,
             "notification_url": arguments.calendar_notification_url,
-        }
-    if action_name == "apply_google_calendar_changes_to_tasks":
-        if not arguments.tracker_user:
-            raise ValueError("--apply-google-calendar-changes-to-tasks requires --tracker-user")
-        return {
-            "command": "apply_google_calendar_changes_to_tasks",
-            "tracker_user": arguments.tracker_user,
         }
     if action_name == "refresh_notion_task_tracker":
         return {"command": "refresh_notion_task_tracker"}

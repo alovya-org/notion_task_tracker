@@ -18,24 +18,26 @@ def test_refresh_notion_task_tracker_action_builds_refresh_command():
     assert command == {"command": "refresh_notion_task_tracker"}
 
 
-def test_sync_tasks_to_google_calendar_action_builds_sync_command():
+def test_synchronise_notion_task_tracker_with_google_calendar_action_builds_command():
     command = _build_tracker_command(_arguments(
-        sync_tasks_to_google_calendar=True,
+        synchronise_notion_task_tracker_with_google_calendar=True,
         tracker_user="al0vya",
     ))
 
     assert command == {
-        "command": "sync_tasks_to_google_calendar",
+        "command": "synchronise_notion_task_tracker_with_google_calendar",
         "tracker_user": "al0vya",
     }
 
 
-def test_sync_tasks_to_google_calendar_requires_tracker_identity():
+def test_synchronise_notion_task_tracker_with_google_calendar_requires_tracker_identity():
     with pytest.raises(
         ValueError,
-        match="--sync-tasks-to-google-calendar requires --tracker-user",
+        match="--synchronise-notion-task-tracker-with-google-calendar requires --tracker-user",
     ):
-        _build_tracker_command(_arguments(sync_tasks_to_google_calendar=True))
+        _build_tracker_command(_arguments(
+            synchronise_notion_task_tracker_with_google_calendar=True
+        ))
 
 
 def test_maintain_google_calendar_notification_channel_action_preserves_identity():
@@ -49,18 +51,6 @@ def test_maintain_google_calendar_notification_channel_action_preserves_identity
         "command": "maintain_google_calendar_notification_channel",
         "tracker_user": "al0vya",
         "notification_url": "https://worker.example/google-calendar-notifications",
-    }
-
-
-def test_apply_google_calendar_changes_to_tasks_action_preserves_dispatch_identity():
-    command = _build_tracker_command(_arguments(
-        apply_google_calendar_changes_to_tasks=True,
-        tracker_user="al0vya",
-    ))
-
-    assert command == {
-        "command": "apply_google_calendar_changes_to_tasks",
-        "tracker_user": "al0vya",
     }
 
 
@@ -542,9 +532,8 @@ def _assert_uuid4_log_id(log_id: str, ticket_prefix: str = "ALOVYA") -> None:
 def _arguments(**overrides):
     values = {
         "refresh_notion_task_tracker": False,
-        "sync_tasks_to_google_calendar": False,
+        "synchronise_notion_task_tracker_with_google_calendar": False,
         "maintain_google_calendar_notification_channel": False,
-        "apply_google_calendar_changes_to_tasks": False,
         "read": False,
         "read_all": False,
         "work": False,
