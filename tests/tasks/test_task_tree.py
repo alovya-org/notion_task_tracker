@@ -393,8 +393,6 @@ class TestTaskTreeRepairOperationKeysForChanges:
         )
 
         assert operation_keys == [
-            "replace:ongoing_landing_page",
-            "replace:completed_landing_page",
             "update_properties:task:ALOVYA-1",
             "update_properties:task:ALOVYA-2",
             "update_properties:task:ALOVYA-3",

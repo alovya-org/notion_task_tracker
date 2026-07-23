@@ -23,10 +23,12 @@ class FakeNotionClient:
         created_page_ids: list[str] | None = None,
         database_rows: list[dict] | None = None,
         fetched_page_content_by_id: dict[str, str] | None = None,
+        fetched_page_markdown_by_id: dict[str, str] | None = None,
     ):
         self.calls = []
         self.database_rows = list(database_rows or [])
         self.fetched_page_content_by_id = fetched_page_content_by_id or {}
+        self.fetched_page_markdown_by_id = fetched_page_markdown_by_id or {}
         self.fetched_pages = []
         self.queries = []
         self.view_queries = []
@@ -53,6 +55,9 @@ class FakeNotionClient:
     async def fetch_task_page_content(self, page_id: str):
         self.fetched_pages.append(page_id)
         return self.fetched_page_content_by_id.get(page_id, "")
+
+    async def fetch_page_markdown(self, page_id: str):
+        return self.fetched_page_markdown_by_id.get(page_id, "")
 
     async def query_data_source(self, data_source_url: str, query: str):
         self.queries.append({"data_source_url": data_source_url, "query": query})

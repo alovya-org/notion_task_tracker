@@ -20,7 +20,6 @@ def test_plan_context_repair_result_plans_repairs_without_writing_them():
     assert repair_result.tracker_state["tasks"]["ALOVYA-1"]["title"] == "Root task edited in Notion"
     assert [write_intent.operation_key for write_intent in repair_result.write_intents] == [
         "update_properties:task:ALOVYA-1",
-        "replace:ongoing_landing_page",
     ]
 
 
@@ -59,7 +58,6 @@ def test_plan_context_repair_result_does_not_write_indirectly_changed_unfetched_
 
     assert [write_intent.operation_key for write_intent in repair_result.write_intents] == [
         "update_properties:task:ALOVYA-1",
-        "replace:ongoing_landing_page",
     ]
 
 

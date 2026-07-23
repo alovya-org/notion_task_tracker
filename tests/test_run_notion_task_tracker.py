@@ -230,7 +230,15 @@ def test_explicit_tracker_paths_override_defaults(tmp_path: Path):
 def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_task(
     tmp_path: Path,
 ):
-    notion_client = _FakeNotionClient()
+    notion_client = _FakeNotionClient(
+        ongoing_landing_markdown="\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://www.notion.so/'
+                '22222222222222222222222222222222"/>: Active {color="orange"}'
+            ),
+        ])
+    )
     tracker_state_path = tmp_path / "tracker_state.json"
     output_path = tmp_path / "output.json"
     backup_path = tmp_path / "backup.json"
@@ -290,10 +298,18 @@ def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_tas
     }
 
 
-def test_repair_and_write_refreshed_tracker_state_refreshes_landing_pages_when_nothing_changed(
+def test_repair_and_write_refreshed_tracker_state_skips_landing_pages_when_nothing_changed(
     tmp_path: Path,
 ):
-    notion_client = _FakeNotionClient()
+    notion_client = _FakeNotionClient(
+        ongoing_landing_markdown="\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://www.notion.so/'
+                '22222222222222222222222222222222"/>: Active {color="orange"}'
+            ),
+        ])
+    )
     tracker_state_path = tmp_path / "tracker_state.json"
     output_path = tmp_path / "output.json"
     backup_path = tmp_path / "backup.json"
@@ -315,14 +331,10 @@ def test_repair_and_write_refreshed_tracker_state_refreshes_landing_pages_when_n
         ),
     )
 
-    assert json.loads(output_path.read_text(encoding="utf-8"))["completed_operations"] == [
-        "replace:ongoing_landing_page",
-    ]
-    assert [write_intent.operation_key for write_intent in notion_client.write_intents] == [
-        "replace:ongoing_landing_page",
-    ]
+    assert json.loads(output_path.read_text(encoding="utf-8"))["completed_operations"] == []
+    assert notion_client.write_intents == []
     assert refresh_summary.to_json_summary()["task_tree_changes"] == []
-    assert refresh_summary.to_json_summary()["repair_operation_count"] == 1
+    assert refresh_summary.to_json_summary()["repair_operation_count"] == 0
 
 
 def test_write_command_renders_landing_pages_from_fully_refreshed_database_state(tmp_path: Path):
@@ -446,13 +458,8 @@ def test_refresh_notion_task_tracker_creates_missing_tracker_state_from_configur
     assert tracker_state["tasks"] == {}
     assert backed_up_tracker_state == tracker_state
     assert notion_client.created_pages == []
-    assert [write_intent.operation_key for write_intent in notion_client.write_intents] == [
-        "replace:ongoing_landing_page",
-        "replace:completed_landing_page",
-    ]
+    assert notion_client.write_intents == []
     assert refresh_summary.to_json_summary()["completed_operations"] == [
-        "replace:ongoing_landing_page",
-        "replace:completed_landing_page",
         "create:task_database_property:in_execution_order",
         "create:ready_priority_page:linked_database_view",
     ]
@@ -591,8 +598,16 @@ def test_read_all_task_pages_includes_complete_fetched_page_content(tmp_path: Pa
 
 
 class _FakeNotionClient:
-    def __init__(self):
+    def __init__(
+        self,
+        ongoing_landing_markdown: str,
+        completed_landing_markdown: str = "No completed tasks yet.",
+    ):
         self.write_intents = []
+        self.landing_markdown_by_page_id = {
+            "11111111111111111111111111111111": ongoing_landing_markdown,
+            "44444444444444444444444444444444": completed_landing_markdown,
+        }
 
     async def execute_command_result(self, command_result: TrackerCommandResult):
         self.write_intents.extend(command_result.write_intents)
@@ -613,6 +628,9 @@ class _FakeNotionClient:
     async def query_checkbox_page_ids(self, data_source_id: str, property_name: str):
         return {"22222222222222222222222222222222"}
 
+    async def fetch_page_markdown(self, page_id: str) -> str:
+        return self.landing_markdown_by_page_id[page_id]
+
 
 class _ConfiguredTrackerRefreshClient:
     def __init__(self) -> None:
@@ -630,6 +648,13 @@ class _ConfiguredTrackerRefreshClient:
     async def query_task_database_rows(self, tracker_state: dict) -> list[dict]:
         assert tracker_state["task_database"]["data_source_id"] == "cccccccccccccccccccccccccccccccc"
         return []
+
+    async def fetch_page_markdown(self, page_id: str) -> str:
+        if page_id == "dddddddddddddddddddddddddddddddd":
+            return ""
+        if page_id == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee":
+            return "No completed tasks yet."
+        raise AssertionError(f"Unexpected managed page {page_id}")
 
     async def execute_command_result(self, command_result: TrackerCommandResult):
         self.write_intents.extend(command_result.write_intents)
@@ -678,7 +703,7 @@ def _tracker_state(title: str, priority: str) -> dict:
         "completed_landing_page": {
             "local_page_key": "completed_landing_page",
             "title": COMPLETED_LANDING_PAGE_TITLE,
-            "notion_page_id": None,
+            "notion_page_id": "44444444444444444444444444444444",
             "parent_page_key": None,
         },
         "ready_priority_page": {

@@ -1,4 +1,4 @@
-"""Render ready leaf tasks through a linked database view."""
+"""Reconcile ready leaf tasks through a linked database view."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
-    task_database_data_source_id_from_tracker_state,
 )
+from notion_task_tracker.tracked_pages import TrackedPage
 
 
 TASK_DATABASE_EXECUTION_ORDER_PROPERTY = "In execution order"
@@ -50,19 +50,19 @@ _HIDDEN_EXECUTION_ORDER_PROPERTIES = [
 ]
 
 
-async def refresh_task_execution_order_page(
-    tracker_state: dict[str, Any],
+async def reconcile_task_execution_order_page(
+    task_tree: TaskTree,
+    task_data_source_id: str,
+    ready_priority_page: TrackedPage,
     notion_client: NotionRestClient,
 ) -> list[str]:
-    """Make the linked view show exactly the locally derived ready leaf tasks."""
-    page_id = _ready_priority_page_id(tracker_state)
-    data_source_id = task_database_data_source_id_from_tracker_state(tracker_state)
-    task_tree = TaskTree.from_tracker_state(tracker_state)
+    """Make the linked view show exactly the currently derived ready leaf tasks."""
+    page_id = _required_ready_priority_page_id(ready_priority_page)
     page_blocks = await notion_client.fetch_block_children(page_id)
     page_contains_linked_database = _page_contains_linked_database(page_blocks)
 
     properties, property_was_created = await notion_client.ensure_checkbox_property(
-        data_source_id,
+        task_data_source_id,
         TASK_DATABASE_EXECUTION_ORDER_PROPERTY,
     )
     completed_operation_keys = (
@@ -76,7 +76,7 @@ async def refresh_task_execution_order_page(
             await notion_client.delete_block(blank_paragraph_id)
         await notion_client.create_linked_execution_order_view(
             page_id=page_id,
-            data_source_id=data_source_id,
+            data_source_id=task_data_source_id,
             property_ids_by_name={
                 property_name: property_definition["id"]
                 for property_name, property_definition in properties.items()
@@ -89,7 +89,7 @@ async def refresh_task_execution_order_page(
 
     ready_task_ids = set(_ready_leaf_task_ids(task_tree))
     currently_included_page_ids = await notion_client.query_checkbox_page_ids(
-        data_source_id,
+        task_data_source_id,
         TASK_DATABASE_EXECUTION_ORDER_PROPERTY,
     )
     for task in task_tree.tasks.values():
@@ -121,11 +121,10 @@ def _ready_leaf_task_ids(task_tree: TaskTree) -> list[str]:
     ]
 
 
-def _ready_priority_page_id(tracker_state: dict[str, Any]) -> str:
-    priority_page = tracker_state.get("ready_priority_page")
-    if not isinstance(priority_page, dict) or not priority_page.get("notion_page_id"):
-        raise ValueError("Tracker state has no configured ready priority page; run `ntt --init`")
-    return canonical_notion_page_id(priority_page["notion_page_id"])
+def _required_ready_priority_page_id(ready_priority_page: TrackedPage) -> str:
+    if ready_priority_page.notion_page_id is None:
+        raise ValueError("Configured ready priority page has no Notion page id")
+    return canonical_notion_page_id(ready_priority_page.notion_page_id)
 
 
 def _page_contains_linked_database(page_blocks: list[dict[str, Any]]) -> bool:

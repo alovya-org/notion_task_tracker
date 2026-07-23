@@ -17,6 +17,7 @@ from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_c
 )
 from notion_task_tracker.install_skill import install_skill
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
+from notion_task_tracker.fixed_pages import READY_PRIORITY_PAGE_LOCAL_KEY
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     GoogleCalendarClient,
 )
@@ -45,8 +46,14 @@ from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion impo
     refresh_tracker_state_for_task_command,
     refresh_tracker_state_from_notion_task_database,
 )
-from notion_task_tracker.notion_operations.refresh_task_execution_order_page import (
-    refresh_task_execution_order_page,
+from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
+    reconcile_task_execution_order_page,
+)
+from notion_task_tracker.notion_operations.reconcile_task_landing_pages import (
+    plan_task_landing_page_reconciliation,
+)
+from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
+    build_page_registry_for_task_tree,
 )
 from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.google_calendar_sync.sync_tasks_to_google_calendar import (
@@ -65,6 +72,7 @@ from notion_task_tracker.tasks import (
 )
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
+from notion_task_tracker.tracked_pages import fixed_tracked_page_from_tracker_state
 
 
 APP_HOME_PATH = Path.home() / ".notion-task-tracker"
@@ -537,7 +545,10 @@ async def _run_notion_writes_for_write_command(
             notion_client=notion_client,
         )
         command_operation_keys.extend(
-            await refresh_task_execution_order_page(command_tracker_state, notion_client)
+            await _reconcile_current_task_execution_order(
+                command_tracker_state,
+                notion_client,
+            )
         )
         return command_tracker_state, command_operation_keys, []
 
@@ -556,9 +567,27 @@ async def _run_notion_writes_for_write_command(
         notion_client,
     )
     command_operation_keys.extend(
-        await refresh_task_execution_order_page(command_result.tracker_state, notion_client)
+        await _reconcile_current_task_execution_order(
+            command_result.tracker_state,
+            notion_client,
+        )
     )
     return command_tracker_state, command_operation_keys, command_result.warnings or []
+
+
+async def _reconcile_current_task_execution_order(
+    tracker_state: dict[str, Any],
+    notion_client: NotionRestClient,
+) -> list[str]:
+    return await reconcile_task_execution_order_page(
+        task_tree=TaskTree.from_tracker_state(tracker_state),
+        task_data_source_id=str(tracker_state["task_database"]["data_source_id"]),
+        ready_priority_page=fixed_tracked_page_from_tracker_state(
+            tracker_state.get("ready_priority_page"),
+            READY_PRIORITY_PAGE_LOCAL_KEY,
+        ),
+        notion_client=notion_client,
+    )
 
 
 async def _execute_command_writes_with_fresh_landing_page_render(
@@ -581,12 +610,15 @@ async def _execute_command_writes_with_fresh_landing_page_render(
             notion_client,
         )
         landing_source_tracker_state = refreshed_result.tracker_state
-    landing_refresh_result = apply_command_to_tracker_state(
-        command={
-            "command": "refresh_task_pages",
-            "operation_keys": landing_operation_keys,
-        },
+    landing_task_tree = TaskTree.from_tracker_state(landing_source_tracker_state)
+    landing_page_repair_intents = await plan_task_landing_page_reconciliation(
+        landing_task_tree,
+        notion_client,
+    )
+    landing_refresh_result = TrackerCommandResult(
         tracker_state=landing_source_tracker_state,
+        write_intents=landing_page_repair_intents,
+        page_registry=build_page_registry_for_task_tree(landing_task_tree),
     )
     tracker_state_after_landing_pages, landing_operation_keys = await execute_command_result_writes(
         landing_refresh_result,
@@ -770,9 +802,26 @@ async def repair_and_write_refreshed_tracker_state(
         refreshed_result=refreshed_result,
         task_tree_changes=task_changes,
     )
+    landing_page_repair_intents = await plan_task_landing_page_reconciliation(
+        TaskTree.from_tracker_state(repair_result.tracker_state),
+        notion_client,
+    )
+    repair_result = TrackerCommandResult(
+        tracker_state=repair_result.tracker_state,
+        write_intents=[
+            *repair_result.write_intents,
+            *landing_page_repair_intents,
+        ],
+        page_registry=repair_result.page_registry,
+        warnings=repair_result.warnings,
+        refreshed_task_ids=repair_result.refreshed_task_ids,
+    )
     repaired_tracker_state, completed_operation_keys = await execute_command_result_writes(repair_result, notion_client)
     completed_operation_keys.extend(
-        await refresh_task_execution_order_page(repaired_tracker_state, notion_client)
+        await _reconcile_current_task_execution_order(
+            repaired_tracker_state,
+            notion_client,
+        )
     )
     _write_json(source_tracker_state_path, repaired_tracker_state)
 

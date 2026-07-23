@@ -1,8 +1,10 @@
 import asyncio
 
-from notion_task_tracker.notion_operations.refresh_task_execution_order_page import (
+import pytest
+
+from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
     TASK_DATABASE_EXECUTION_ORDER_PROPERTY,
-    refresh_task_execution_order_page,
+    reconcile_task_execution_order_page,
 )
 from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskTree
 from notion_task_tracker.tasks.database import (
@@ -22,9 +24,10 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TITLE_PROPERTY,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
 )
+from notion_task_tracker.tracked_pages import TrackedPage
 
 
-def test_refresh_task_execution_order_page_creates_filtered_table_on_notions_empty_page():
+def test_reconcile_task_execution_order_page_creates_filtered_table_on_notions_empty_page():
     task_tree = _task_tree_with_ready_blocked_and_container_tasks()
     notion_client = _ExecutionOrderClient(
         page_blocks=[
@@ -35,7 +38,12 @@ def test_refresh_task_execution_order_page_creates_filtered_table_on_notions_emp
     )
 
     operation_keys = asyncio.run(
-        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
+        reconcile_task_execution_order_page(
+            task_tree,
+            "88888888888888888888888888888888",
+            _ready_priority_page(),
+            notion_client,
+        )
     )
 
     assert notion_client.deleted_block_ids == ["empty-paragraph"]
@@ -66,7 +74,7 @@ def test_refresh_task_execution_order_page_creates_filtered_table_on_notions_emp
     ]
 
 
-def test_refresh_task_execution_order_page_changes_membership_without_recreating_view():
+def test_reconcile_task_execution_order_page_changes_membership_without_recreating_view():
     task_tree = _task_tree_with_ready_blocked_and_container_tasks()
     notion_client = _ExecutionOrderClient(
         page_blocks=[{"id": "linked-database", "type": "child_database"}],
@@ -80,7 +88,12 @@ def test_refresh_task_execution_order_page_changes_membership_without_recreating
     )
 
     operation_keys = asyncio.run(
-        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
+        reconcile_task_execution_order_page(
+            task_tree,
+            "88888888888888888888888888888888",
+            _ready_priority_page(),
+            notion_client,
+        )
     )
 
     assert notion_client.created_view is None
@@ -90,7 +103,7 @@ def test_refresh_task_execution_order_page_changes_membership_without_recreating
     assert operation_keys == ["update:execution_order_membership:task:ALOVYA-3"]
 
 
-def test_refresh_task_execution_order_page_leaves_matching_membership_unchanged():
+def test_reconcile_task_execution_order_page_leaves_matching_membership_unchanged():
     task_tree = _task_tree_with_ready_blocked_and_container_tasks()
     notion_client = _ExecutionOrderClient(
         page_blocks=[{"id": "linked-database", "type": "child_database"}],
@@ -103,12 +116,46 @@ def test_refresh_task_execution_order_page_leaves_matching_membership_unchanged(
     )
 
     operation_keys = asyncio.run(
-        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
+        reconcile_task_execution_order_page(
+            task_tree,
+            "88888888888888888888888888888888",
+            _ready_priority_page(),
+            notion_client,
+        )
     )
 
     assert notion_client.created_view is None
     assert notion_client.membership_updates == []
     assert operation_keys == []
+
+
+def test_reconcile_task_execution_order_page_rejects_additional_page_content():
+    notion_client = _ExecutionOrderClient(
+        page_blocks=[
+            {"id": "linked-database", "type": "child_database"},
+            {
+                "id": "handwritten-note",
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"plain_text": "Keep this note"}]},
+            },
+        ],
+        included_page_ids=set(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be empty or contain only its linked database",
+    ):
+        asyncio.run(
+            reconcile_task_execution_order_page(
+                _task_tree_with_ready_blocked_and_container_tasks(),
+                "88888888888888888888888888888888",
+                _ready_priority_page(),
+                notion_client,
+            )
+        )
+
+    assert notion_client.membership_updates == []
 
 
 def _task_tree_with_ready_blocked_and_container_tasks() -> TaskTree:
@@ -135,14 +182,12 @@ def _task_tree_with_ready_blocked_and_container_tasks() -> TaskTree:
     return task_tree
 
 
-def _tracker_state(task_tree: TaskTree) -> dict:
-    return {
-        **task_tree.to_tracker_state(),
-        "task_database": {"data_source_id": "88888888888888888888888888888888"},
-        "ready_priority_page": {
-            "notion_page_id": "99999999999999999999999999999999",
-        },
-    }
+def _ready_priority_page() -> TrackedPage:
+    return TrackedPage(
+        local_page_key="ready_priority_page",
+        title="Alovya's tasks in execution order",
+        notion_page_id="99999999999999999999999999999999",
+    )
 
 
 class _ExecutionOrderClient:

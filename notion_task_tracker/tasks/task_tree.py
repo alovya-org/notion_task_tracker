@@ -346,8 +346,6 @@ class TaskTree:
                 task_ids_to_repair.update(_parent_task_ids_from_change(task_tree_change))
 
         return [
-            "replace:ongoing_landing_page",
-            "replace:completed_landing_page",
             *[
                 operation_key
                 for task_id in sorted(task_ids_to_repair, key=task_id_sort_key)
