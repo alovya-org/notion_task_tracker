@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime
 
 from notion_task_tracker.notion_operations.database_properties import (
     strikethrough_rich_text_items,
@@ -82,7 +83,7 @@ def _plan_derived_end_repair(
     database_row: TaskDatabaseRow,
     canonical_end: str | None,
 ) -> list[NotionWriteIntent]:
-    if database_row.end == canonical_end:
+    if _notion_date_matches_canonical_value(database_row.end, canonical_end):
         return []
 
     return [
@@ -93,6 +94,26 @@ def _plan_derived_end_repair(
             repaired_property_value=canonical_end,
         )
     ]
+
+
+def _notion_date_matches_canonical_value(
+    notion_value: str | None,
+    canonical_value: str | None,
+) -> bool:
+    if notion_value is None or canonical_value is None:
+        return notion_value == canonical_value
+
+    notion_has_time = "T" in notion_value
+    canonical_has_time = "T" in canonical_value
+    if notion_has_time != canonical_has_time:
+        return False
+    if notion_has_time:
+        return datetime.fromisoformat(
+            notion_value.replace("Z", "+00:00")
+        ) == datetime.fromisoformat(
+            canonical_value.replace("Z", "+00:00")
+        )
+    return date.fromisoformat(notion_value) == date.fromisoformat(canonical_value)
 
 
 def _plan_title_presentation_repair(

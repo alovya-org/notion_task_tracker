@@ -70,6 +70,23 @@ def test_load_current_task_tree_from_notion_repairs_only_a_genuine_derived_end_m
     ]
 
 
+def test_load_current_task_tree_from_notion_accepts_equivalent_end_with_zero_milliseconds():
+    notion_client = _CurrentTaskDatabaseClient([
+        _task_database_row(
+            start="2026-07-23T11:00:00.000+01:00",
+            end="2026-07-23T12:00:00.000+01:00",
+            duration=1,
+            duration_unit="Hours",
+        )
+    ])
+
+    result = asyncio.run(
+        load_current_task_tree_from_notion(_resolved_resources(), notion_client)
+    )
+
+    assert result.repair_intents == []
+
+
 def test_load_current_task_tree_from_notion_repairs_only_a_missing_title_prefix():
     notion_client = _CurrentTaskDatabaseClient([
         _task_database_row(title="Canonical task")
