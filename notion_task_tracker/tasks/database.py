@@ -46,6 +46,7 @@ TASK_DATABASE_DURATION_UNIT_PROPERTY = "Duration unit"
 TASK_DATABASE_EXTERNAL_COORDINATION_PROPERTY = "External coordination"
 TASK_DATABASE_UNCERTAINTY_PROPERTY = "Uncertainty"
 TASK_DATABASE_FRICTION_PROPERTY = "Friction"
+TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE = "_ntt_title_strikethrough"
 _TASK_TITLE_PREFIX_PATTERN = re.compile(r"^(?:[A-Z][A-Z0-9_]*-\d+:|\[\d+\])\s+")
 
 
@@ -56,11 +57,24 @@ def build_task_tree_from_database_query_results(
     completed_landing_page: TrackedPage | None = None,
     previous_task_tree: TaskTree | None = None,
 ) -> TaskTree:
+    database_rows = task_database_rows_from_query_results(query_results, ticket_prefix)
+    return build_task_tree_from_database_rows(
+        database_rows=database_rows,
+        landing_page=landing_page,
+        completed_landing_page=completed_landing_page,
+        previous_task_tree=previous_task_tree,
+    )
+
+
+def build_task_tree_from_database_rows(
+    database_rows: list[TaskDatabaseRow],
+    landing_page: TrackedPage,
+    completed_landing_page: TrackedPage | None = None,
+    previous_task_tree: TaskTree | None = None,
+) -> TaskTree:
     previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_task_tree)
     previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_task_tree)
-    database_rows = _database_rows_from_query_results(query_results, ticket_prefix)
-    _require_stable_task_ids_for_known_notion_pages(database_rows, previous_tasks_by_page_id)
-    database_rows = _database_rows_that_belong_to_task_tree(database_rows)
+    _require_known_parent_relations(database_rows)
     task_tree = TaskTree(
         ongoing_tasks_landing_page=OngoingTasksLandingPage(page=landing_page),
         completed_tasks_landing_page=CompletedTasksLandingPage(
@@ -87,6 +101,8 @@ class TaskDatabaseRow:
 
     task_id: str
     title: str
+    fetched_title: str
+    fetched_title_is_struck_through: bool | None
     configured_priority: Priority
     status: TaskStatus
     notion_page_id: str
@@ -140,7 +156,7 @@ def build_task_database_tracker_state(data_source_id: str) -> dict[str, str]:
     }
 
 
-def _database_rows_from_query_results(
+def task_database_rows_from_query_results(
     query_results: list[dict[str, Any]],
     ticket_prefix: str,
 ) -> list[TaskDatabaseRow]:
@@ -155,47 +171,23 @@ def _database_rows_from_query_results(
     return list(database_rows_by_task_id.values())
 
 
-def _require_stable_task_ids_for_known_notion_pages(
-    database_rows: list[TaskDatabaseRow],
-    previous_tasks_by_page_id: dict[str, Task],
-) -> None:
+def _require_known_parent_relations(database_rows: list[TaskDatabaseRow]) -> None:
+    task_page_ids = {
+        database_row.notion_page_id
+        for database_row in database_rows
+    }
     for database_row in database_rows:
-        previous_task = previous_tasks_by_page_id.get(database_row.notion_page_id)
-        if previous_task is None or previous_task.task_id == database_row.task_id:
+        if len(database_row.parent_notion_page_ids) > 1:
+            raise NotionPlanningError(f"Task {database_row.task_id} has more than one parent")
+        if not database_row.parent_notion_page_ids:
             continue
 
-        raise NotionPlanningError(
-            f"Notion page {database_row.notion_page_id} changed task identity from "
-            f"{previous_task.task_id} to {database_row.task_id}; refusing to refresh"
-        )
-
-
-def _database_rows_that_belong_to_task_tree(database_rows: list[TaskDatabaseRow]) -> list[TaskDatabaseRow]:
-    retained_database_rows = list(database_rows)
-
-    while True:
-        task_page_ids = {
-            database_row.notion_page_id
-            for database_row in retained_database_rows
-        }
-        filtered_database_rows = [
-            database_row
-            for database_row in retained_database_rows
-            if _database_row_has_no_parent_or_known_parent(database_row, task_page_ids)
-        ]
-        if len(filtered_database_rows) == len(retained_database_rows):
-            return filtered_database_rows
-        retained_database_rows = filtered_database_rows
-
-
-def _database_row_has_no_parent_or_known_parent(
-    database_row: TaskDatabaseRow,
-    task_page_ids: set[str],
-) -> bool:
-    if len(database_row.parent_notion_page_ids) > 1:
-        raise NotionPlanningError(f"Task {database_row.task_id} has more than one parent")
-
-    return not database_row.parent_notion_page_ids or database_row.parent_notion_page_ids[0] in task_page_ids
+        parent_page_id = database_row.parent_notion_page_ids[0]
+        if parent_page_id not in task_page_ids:
+            raise NotionPlanningError(
+                f"Parent page {parent_page_id} for task {database_row.task_id} "
+                "is not in the current task database"
+            )
 
 
 def _ticket_number_from_fetched_task_database_page(fetched_page_content: str) -> int:
@@ -215,12 +207,15 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
     notion_page_url = _required_text_property(query_result, "url")
     notion_page_id = notion_page_id_from_url(notion_page_url)
     task_id = f"{ticket_prefix}-{ticket_number}"
-    title = _task_title_from_database_title(
-        database_title=_required_text_property(query_result, TASK_DATABASE_TITLE_PROPERTY),
-    )
+    fetched_title = _required_text_property(query_result, TASK_DATABASE_TITLE_PROPERTY)
+    title = _task_title_from_database_title(database_title=fetched_title)
     return TaskDatabaseRow(
         task_id=task_id,
         title=title,
+        fetched_title=_plain_database_title(fetched_title),
+        fetched_title_is_struck_through=_title_strikethrough_from_query_result(
+            query_result,
+        ),
         configured_priority=_priority_from_database_property(query_result),
         status=_status_from_database_property(query_result),
         notion_page_id=notion_page_id,
@@ -266,6 +261,15 @@ def _database_row_from_query_result(query_result: dict[str, Any], ticket_prefix:
         ),
         ticket_number=ticket_number,
     )
+
+
+def _title_strikethrough_from_query_result(
+    query_result: dict[str, Any],
+) -> bool | None:
+    title_strikethrough = query_result.get(TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE)
+    if isinstance(title_strikethrough, bool):
+        return title_strikethrough
+    return None
 
 
 def _task_from_database_row(

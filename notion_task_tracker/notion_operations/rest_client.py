@@ -37,6 +37,7 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
+    TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
     task_database_data_source_id_from_tracker_state,
 )
@@ -594,8 +595,12 @@ def _task_database_rows_from_rest_pages(pages: list[dict[str, Any]]) -> list[dic
 
 def _task_database_row_from_rest_page(page: dict[str, Any]) -> dict[str, Any]:
     properties = page.get("properties", {})
+    title_property = properties.get(TASK_DATABASE_TITLE_PROPERTY)
     return {
-        TASK_DATABASE_TITLE_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_TITLE_PROPERTY)),
+        TASK_DATABASE_TITLE_PROPERTY: _plain_property_value(title_property),
+        TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE: _title_is_struck_through(
+            title_property
+        ),
         TASK_DATABASE_TICKET_ID_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_TICKET_ID_PROPERTY)),
         TASK_DATABASE_PRIORITY_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_PRIORITY_PROPERTY)),
         TASK_DATABASE_STATUS_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_STATUS_PROPERTY)),
@@ -626,6 +631,19 @@ def _task_database_row_from_rest_page(page: dict[str, Any]) -> dict[str, Any]:
         TASK_DATABASE_FRICTION_PROPERTY: _plain_property_value(properties.get(TASK_DATABASE_FRICTION_PROPERTY)),
         "url": page.get("url") or f"https://www.notion.so/{canonical_notion_page_id(page['id'])}",
     }
+
+
+def _title_is_struck_through(
+    title_property: dict[str, Any] | None,
+) -> bool:
+    if not title_property or title_property.get("type") != "title":
+        return False
+
+    rich_text_items = title_property.get("title", [])
+    return bool(rich_text_items) and all(
+        rich_text_item.get("annotations", {}).get("strikethrough") is True
+        for rich_text_item in rich_text_items
+    )
 
 
 def _rest_database_properties(
@@ -741,11 +759,13 @@ def _resolve_relation_page_id(
 
 
 def _fetched_database_page_content(page: dict[str, Any], markdown: str) -> str:
+    database_row = _task_database_row_from_rest_page(page)
+    database_row.pop(TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE)
     return "\n".join(
         [
             "<page>",
             "<properties>",
-            json.dumps(_task_database_row_from_rest_page(page)),
+            json.dumps(database_row),
             "</properties>",
             "<content>",
             markdown,

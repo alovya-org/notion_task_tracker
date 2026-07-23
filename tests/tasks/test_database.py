@@ -68,7 +68,7 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task_tree.tasks["ALOVYA-69"].configured_priority == Priority.P2
         assert task_tree.tasks["ALOVYA-69"].status == TaskStatus.BLOCKED
 
-    def test_rejects_a_different_ticket_id_for_a_known_notion_page(self):
+    def test_uses_current_unique_task_id_when_a_known_page_reports_a_different_id(self):
         previous_task_tree = TaskTree()
         previous_task_tree.add_task(
             Task(
@@ -80,28 +80,23 @@ class TestTaskTreeFromDatabaseQueryResults:
             )
         )
 
-        with pytest.raises(
-            ValueError,
-            match=(
-                "Notion page 11111111111111111111111111111111 changed task identity "
-                "from ALOVYA-118 to ALOVYA-127; refusing to refresh"
-            ),
-        ):
-            _build_task_tree(
-                query_results=[
-                    _build_task_database_row(
-                        ticket_page="Stage 1",
-                        ticket_id="127",
-                        page_id="11111111111111111111111111111111",
-                    ),
-                ],
-                landing_page=TrackedPage(
-                    local_page_key="ongoing_landing_page",
-                    title=ONGOING_LANDING_PAGE_TITLE,
-                    notion_page_id="landing-page-id",
+        task_tree = _build_task_tree(
+            query_results=[
+                _build_task_database_row(
+                    ticket_page="Stage 1",
+                    ticket_id="127",
+                    page_id="11111111111111111111111111111111",
                 ),
-                previous_task_tree=previous_task_tree,
-            )
+            ],
+            landing_page=TrackedPage(
+                local_page_key="ongoing_landing_page",
+                title=ONGOING_LANDING_PAGE_TITLE,
+                notion_page_id="landing-page-id",
+            ),
+            previous_task_tree=previous_task_tree,
+        )
+
+        assert list(task_tree.tasks) == ["ALOVYA-127"]
 
     def test_preserves_completed_landing_page_from_previous_tree(self):
         previous_task_tree = TaskTree()
@@ -325,51 +320,31 @@ class TestTaskTreeFromDatabaseQueryResults:
         assert task.uncertainty == Uncertainty.LOW
         assert task.friction == Friction.NONE
 
-    def test_skips_rows_that_point_to_unknown_parent_rows(self):
-        task_tree = _build_task_tree(
-            query_results=[
-                _build_task_database_row(
-                    ticket_page="ALOVYA-2: Child task",
-                    ticket_id="69",
-                    priority="P2",
-                    status="Blocked",
-                    parent_page_ids=["11111111111111111111111111111111"],
-                    page_id="22222222222222222222222222222222",
+    def test_rejects_rows_that_point_to_unknown_parent_rows(self):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Parent page 11111111111111111111111111111111 "
+                "for task ALOVYA-69 is not in the current task database"
+            ),
+        ):
+            _build_task_tree(
+                query_results=[
+                    _build_task_database_row(
+                        ticket_page="ALOVYA-2: Child task",
+                        ticket_id="69",
+                        priority="P2",
+                        status="Blocked",
+                        parent_page_ids=["11111111111111111111111111111111"],
+                        page_id="22222222222222222222222222222222",
+                    ),
+                ],
+                landing_page=TrackedPage(
+                    local_page_key="ongoing_landing_page",
+                    title=ONGOING_LANDING_PAGE_TITLE,
+                    notion_page_id="landing-page-id",
                 ),
-            ],
-            landing_page=TrackedPage(
-                local_page_key="ongoing_landing_page",
-                title=ONGOING_LANDING_PAGE_TITLE,
-                notion_page_id="landing-page-id",
             )
-        )
-
-        assert task_tree.tasks == {}
-
-    def test_skips_orphan_subtrees(self):
-        task_tree = _build_task_tree(
-            query_results=[
-                _build_task_database_row(
-                    ticket_page="Parent prototype",
-                    ticket_id="15",
-                    parent_page_ids=["11111111111111111111111111111111"],
-                    page_id="22222222222222222222222222222222",
-                ),
-                _build_task_database_row(
-                    ticket_page="Child prototype",
-                    ticket_id="16",
-                    parent_page_ids=["22222222222222222222222222222222"],
-                    page_id="33333333333333333333333333333333",
-                ),
-            ],
-            landing_page=TrackedPage(
-                local_page_key="ongoing_landing_page",
-                title=ONGOING_LANDING_PAGE_TITLE,
-                notion_page_id="landing-page-id",
-            )
-        )
-
-        assert task_tree.tasks == {}
 
     def test_rejects_duplicate_task_ids(self):
         with pytest.raises(ValueError, match="Duplicate task id ALOVYA-68"):

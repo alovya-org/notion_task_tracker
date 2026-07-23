@@ -27,6 +27,7 @@ def test_fetch_task_page_content_uses_page_properties_and_markdown():
     )
 
     assert '"Task ID": "1"' in fetched_page_content
+    assert "_ntt_title_strikethrough" not in fetched_page_content
     assert "## Timeline log" in fetched_page_content
     assert notion_client.requests == [
         ("GET", "/v1/pages/22222222222222222222222222222222", None),
@@ -164,7 +165,8 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
             "Dependants": '["https://www.notion.so/44444444444444444444444444444444"]',
             "External coordination": "Yes",
             "Friction": "Charged",
-            "Task page": "Root task",
+                "Task page": "Root task",
+                "_ntt_title_strikethrough": False,
             "Task ID": "7",
             "Priority": "P1",
             "Status": "Active",
@@ -176,6 +178,21 @@ def test_query_data_source_maps_rest_pages_to_database_rows():
     assert notion_client.requests == [
         ("POST", "/v1/data_sources/data-source-a/query", {"page_size": 100})
     ]
+
+
+def test_query_row_preserves_completed_title_strikethrough_for_canonical_comparison():
+    properties = _task_properties(ticket_number=7)
+    properties["Task page"]["title"][0]["annotations"] = {
+        "strikethrough": True,
+    }
+
+    row = _task_database_row_from_rest_page({
+        "id": "22222222-2222-2222-2222-222222222222",
+        "properties": properties,
+    })
+
+    assert row["Task page"] == "Root task"
+    assert row["_ntt_title_strikethrough"] is True
 
 
 def test_update_properties_call_uses_rest_page_property_shape():
