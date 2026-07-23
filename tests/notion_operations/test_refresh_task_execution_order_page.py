@@ -43,11 +43,12 @@ def test_refresh_task_execution_order_page_creates_filtered_table_on_notions_emp
         "page_id": "99999999999999999999999999999999",
         "data_source_id": "88888888888888888888888888888888",
         "visible_property_names": [
-            "Task page", "Priority", "Deadline", "Status", "Parent", "Dependencies",
-            "Dependants", "External coordination", "Uncertainty", "Friction",
+            "Task page", "Priority", "Deadline", "Start", "End", "Duration",
+            "Duration unit", "Status", "Parent", "Dependencies", "Dependants",
+            "External coordination", "Uncertainty", "Friction",
         ],
         "hidden_property_names": [
-            "Start", "End", "Duration", "Duration unit", "Task ID", "In execution order",
+            "Task ID", "In execution order",
         ],
         "membership_property_name": "In execution order",
     }
