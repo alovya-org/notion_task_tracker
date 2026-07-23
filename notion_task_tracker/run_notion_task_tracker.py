@@ -213,7 +213,6 @@ def _run_initialise_tracker_action(arguments: argparse.Namespace) -> None:
             parent_page_url=arguments.parent_page_url,
             task_database_url=arguments.task_database_url,
             config_path=resolve_config_path(arguments.config_path),
-            tracker_state_path=resolve_tracker_state_path(arguments.tracker_state_path),
             notion_client=NotionRestClient.from_environment(),
         )
     )

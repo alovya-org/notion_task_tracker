@@ -11,3 +11,13 @@ COMPLETED_LANDING_PAGE_TITLE = "Completed tasks"
 READY_PRIORITY_PAGE_TITLE = "Tasks in execution order"
 MISCELLANEOUS_NOTES_PAGE_TITLE = "Miscellaneous notes"
 SYNTHESIS_NOTES_PAGE_TITLE = "Synthesis notes"
+
+
+def derive_managed_page_titles(display_name: str) -> dict[str, str]:
+    return {
+        ONGOING_LANDING_PAGE_LOCAL_KEY: f"{display_name}'s ongoing tasks",
+        COMPLETED_LANDING_PAGE_LOCAL_KEY: f"{display_name}'s completed tasks",
+        READY_PRIORITY_PAGE_LOCAL_KEY: f"{display_name}'s tasks in execution order",
+        MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY: f"{display_name}'s miscellaneous notes",
+        SYNTHESIS_NOTES_PAGE_LOCAL_KEY: f"{display_name}'s synthesis notes",
+    }

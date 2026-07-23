@@ -1,5 +1,4 @@
 import asyncio
-import json
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,11 @@ from notion_task_tracker.tasks.database import (
 def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration(tmp_path: Path) -> None:
     notion_client = _NotionInitialisationClient()
     config_path = tmp_path / "config.toml"
-    tracker_state_path = tmp_path / "notion_tasks_tree.json"
+    obsolete_tracker_state_path = tmp_path / "notion_tasks_tree.json"
+    obsolete_tracker_state_path.write_text(
+        "obsolete state remains user-owned",
+        encoding="utf-8",
+    )
 
     result = asyncio.run(
         initialise_tracker(
@@ -41,13 +44,11 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
             parent_page_url="https://www.notion.so/tracker-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             config_path=config_path,
-            tracker_state_path=tracker_state_path,
             notion_client=notion_client,
         )
     )
 
     config = load_config(config_path)
-    tracker_state = json.loads(tracker_state_path.read_text(encoding="utf-8"))
     assert [created_page["properties"]["title"] for created_page in notion_client.created_pages] == [
         "Alovya's ongoing tasks",
         "Alovya's completed tasks",
@@ -68,17 +69,23 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
     assert config.pages.ready_priority_page_url == (
         "https://www.notion.so/created-00000000000000000000000000000003"
     )
-    assert tracker_state["identity"] == {"display_name": "Alovya", "ticket_prefix": "ALOVYA"}
-    assert tracker_state["task_database"]["data_source_id"] == "cccccccccccccccccccccccccccccccc"
-    assert tracker_state["ongoing_landing_page"]["notion_page_id"] == (
-        "00000000000000000000000000000001"
-    )
-    assert tracker_state["ready_priority_page"]["notion_page_id"] == (
-        "00000000000000000000000000000003"
-    )
-    assert tracker_state["tasks"] == {}
     assert result.config_path == config_path
-    assert result.tracker_state_path == tracker_state_path
+    assert result.data_source_id == "cccccccccccccccccccccccccccccccc"
+    assert result.to_json_summary() == {
+        "action_name": "init",
+        "config_path": str(config_path),
+        "data_source_id": "cccccccccccccccccccccccccccccccc",
+        "created_page_urls": {
+            "ongoing_tasks_url": "https://www.notion.so/created-00000000000000000000000000000001",
+            "completed_tasks_url": "https://www.notion.so/created-00000000000000000000000000000002",
+            "ready_priority_page_url": "https://www.notion.so/created-00000000000000000000000000000003",
+            "miscellaneous_notes_url": "https://www.notion.so/created-00000000000000000000000000000004",
+            "synthesis_notes_url": "https://www.notion.so/created-00000000000000000000000000000005",
+        },
+    }
+    assert obsolete_tracker_state_path.read_text(encoding="utf-8") == (
+        "obsolete state remains user-owned"
+    )
 
 
 def test_initialise_tracker_rejects_database_without_the_fixed_schema(tmp_path: Path) -> None:
@@ -94,11 +101,36 @@ def test_initialise_tracker_rejects_database_without_the_fixed_schema(tmp_path: 
                 parent_page_url="https://www.notion.so/tracker-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 config_path=tmp_path / "config.toml",
-                tracker_state_path=tmp_path / "notion_tasks_tree.json",
                 notion_client=notion_client,
             )
         )
 
+    assert notion_client.created_pages == []
+
+
+def test_initialise_tracker_refuses_to_replace_existing_config_before_notion_writes(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("existing configuration", encoding="utf-8")
+    notion_client = _NotionInitialisationClient()
+
+    with pytest.raises(
+        FileExistsError,
+        match=f"Tracker is already initialised at {config_path}",
+    ):
+        asyncio.run(
+            initialise_tracker(
+                display_name="Alovya",
+                ticket_prefix="ALOVYA",
+                parent_page_url="https://www.notion.so/tracker-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                config_path=config_path,
+                notion_client=notion_client,
+            )
+        )
+
+    assert notion_client.fetched_database_ids == []
     assert notion_client.created_pages == []
 
 
@@ -141,7 +173,6 @@ def test_initialise_tracker_rejects_incompatible_fixed_property_type(tmp_path: P
                 parent_page_url="https://www.notion.so/tracker-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 config_path=tmp_path / "config.toml",
-                tracker_state_path=tmp_path / "notion_tasks_tree.json",
                 notion_client=notion_client,
             )
         )
@@ -153,9 +184,11 @@ class _NotionInitialisationClient:
     def __init__(self, properties: dict[str, Any] | None = None) -> None:
         self.properties = properties or _fixed_database_properties()
         self.created_pages: list[dict[str, Any]] = []
+        self.fetched_database_ids: list[str] = []
 
     async def fetch_database(self, database_id: str) -> dict[str, Any]:
         assert database_id == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        self.fetched_database_ids.append(database_id)
         return {"data_sources": [{"id": "cccccccccccccccccccccccccccccccc"}]}
 
     async def fetch_data_source(self, data_source_id: str) -> dict[str, Any]:
