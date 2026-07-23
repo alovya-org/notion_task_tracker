@@ -267,6 +267,30 @@ class TestTaskTreeFromDatabaseQueryResults:
                 ),
             )
 
+    def test_rejects_dependency_relation_to_unknown_task(self):
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Dependency page 99999999999999999999999999999999 "
+                "for task ALOVYA-1 is not in the local task tree"
+            ),
+        ):
+            _build_task_tree(
+                query_results=[
+                    _build_task_database_row(
+                        ticket_page="Task with missing dependency",
+                        ticket_id="1",
+                        dependency_page_ids=["99999999999999999999999999999999"],
+                        page_id="11111111111111111111111111111111",
+                    ),
+                ],
+                landing_page=TrackedPage(
+                    local_page_key="ongoing_landing_page",
+                    title=ONGOING_LANDING_PAGE_TITLE,
+                    notion_page_id="landing-page-id",
+                ),
+            )
+
     def test_defaults_blank_task_metadata_to_the_least_alarming_values(self):
         row = _build_task_database_row(
             ticket_page="Incomplete task metadata",

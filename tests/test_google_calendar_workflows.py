@@ -1,10 +1,26 @@
 from pathlib import Path
 
+import pytest
+
 
 REPOSITORY_ROOT_PATH = Path(__file__).parent.parent
 SYNCHRONISATION_WORKFLOW_PATH = (
     REPOSITORY_ROOT_PATH / ".github/workflows/refresh-notion-task-tracker.yml"
 )
+_UNIFIED_CALENDAR_LIFECYCLE_REASON = (
+    "ALOVYA-147 item 7 will replace three state-file commands with one two-way lifecycle"
+)
+
+
+@pytest.mark.xfail(strict=True, reason=_UNIFIED_CALENDAR_LIFECYCLE_REASON)
+def test_every_wake_up_invokes_one_complete_two_way_calendar_lifecycle():
+    workflow = SYNCHRONISATION_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert workflow.count("ntt --synchronise-notion-tasks-with-google-calendar") == 1
+    assert "ntt --refresh-notion-task-tracker" not in workflow
+    assert "ntt --apply-google-calendar-changes-to-tasks" not in workflow
+    assert "ntt --sync-tasks-to-google-calendar" not in workflow
+    assert "--tracker-state-path" not in workflow
 
 
 def test_every_ordinary_wake_up_runs_one_serialised_two_way_synchronisation():

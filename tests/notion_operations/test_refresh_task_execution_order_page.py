@@ -90,6 +90,27 @@ def test_refresh_task_execution_order_page_changes_membership_without_recreating
     assert operation_keys == ["update:execution_order_membership:task:ALOVYA-3"]
 
 
+def test_refresh_task_execution_order_page_leaves_matching_membership_unchanged():
+    task_tree = _task_tree_with_ready_blocked_and_container_tasks()
+    notion_client = _ExecutionOrderClient(
+        page_blocks=[{"id": "linked-database", "type": "child_database"}],
+        included_page_ids={
+            "11111111111111111111111111111111",
+            "22222222222222222222222222222222",
+            "66666666666666666666666666666666",
+            "77777777777777777777777777777777",
+        },
+    )
+
+    operation_keys = asyncio.run(
+        refresh_task_execution_order_page(_tracker_state(task_tree), notion_client)
+    )
+
+    assert notion_client.created_view is None
+    assert notion_client.membership_updates == []
+    assert operation_keys == []
+
+
 def _task_tree_with_ready_blocked_and_container_tasks() -> TaskTree:
     task_tree = TaskTree()
     for task_id, status, notion_page_id in [
