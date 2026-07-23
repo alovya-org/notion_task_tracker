@@ -63,6 +63,13 @@ async def resolve_configured_tracker_resources(
     config_path: str | Path | None = None,
 ) -> ResolvedTrackerResources:
     config = load_config(config_path)
+    return await resolve_tracker_resources(config, notion_client)
+
+
+async def resolve_tracker_resources(
+    config: TrackerConfig,
+    notion_client: NotionRestClient,
+) -> ResolvedTrackerResources:
     page_titles = derive_managed_page_titles(config.display_name)
     ongoing_tasks_page = _resolve_managed_page(
         ONGOING_LANDING_PAGE_LOCAL_KEY,

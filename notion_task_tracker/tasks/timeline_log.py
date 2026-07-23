@@ -32,6 +32,24 @@ def parse_timeline_entries_from_fetched_task_page_content(fetched_page_content: 
     return timeline_entries
 
 
+def parse_timeline_log_ids_from_fetched_task_page_content(
+    fetched_page_content: str,
+) -> set[str]:
+    timeline_content = _extract_timeline_log_content_from_fetched_task_page_content(
+        fetched_page_content
+    )
+    if timeline_content is None:
+        return set()
+    return set(
+        re.findall(
+            r"\b[A-Za-z0-9_-]+-LOG-[0-9a-f]{8}-[0-9a-f]{4}-"
+            r"4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
+            timeline_content,
+            re.IGNORECASE,
+        )
+    )
+
+
 def check_fetched_task_page_has_usable_timeline_log(
     fetched_page_content: str,
     timeline_entries: list[dict[str, str]],

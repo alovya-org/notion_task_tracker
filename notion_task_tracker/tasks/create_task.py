@@ -73,6 +73,21 @@ def add_created_task_to_tracker_state(
     created_page_id: str,
 ) -> dict[str, Any]:
     task_tree = TaskTree.from_tracker_state(tracker_state)
+    add_created_task_to_tree(
+        task_tree,
+        task_creation,
+        created_task_id,
+        created_page_id,
+    )
+    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
+
+
+def add_created_task_to_tree(
+    task_tree: TaskTree,
+    task_creation: TaskCreation,
+    created_task_id: str,
+    created_page_id: str,
+) -> None:
     task_tree.add_task(
         Task(
             task_id=created_task_id,
@@ -107,7 +122,6 @@ def add_created_task_to_tracker_state(
     task_tree.derive_dependant_task_ids_from_dependencies()
     task_tree.validate()
     task_tree.recalculate_display_priorities()
-    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
 
 
 def clear_split_source_task_relations(tracker_state: dict[str, Any], source_task_id: str) -> dict[str, Any]:

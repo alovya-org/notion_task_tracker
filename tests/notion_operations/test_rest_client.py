@@ -1,13 +1,44 @@
 import asyncio
 import json
 
+import pytest
+
 from notion_task_tracker import NotionPageReference, NotionPageRegistry, NotionWriteIntent
+from notion_task_tracker.apply_tracker_command import TrackerCommandResult
 from notion_task_tracker.notion_operations.rest_client import (
     NotionRestClient,
     _notion_rest_access_token_from_environment,
     _notion_rest_error_message,
     _task_database_row_from_rest_page,
 )
+
+
+def test_execute_command_result_reports_operations_completed_before_failure():
+    notion_client = _PartiallyFailingWriteClient()
+    command_result = TrackerCommandResult(
+        tracker_state={},
+        write_intents=[
+            NotionWriteIntent(
+                operation_key="first",
+                operation_name="update_page_properties",
+                target_page_key="task:ALOVYA-1",
+                arguments={},
+            ),
+            NotionWriteIntent(
+                operation_key="second",
+                operation_name="update_page_properties",
+                target_page_key="task:ALOVYA-1",
+                arguments={},
+            ),
+        ],
+        page_registry=NotionPageRegistry(pages={}),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Notion write 'second' failed after completed operations: first",
+    ):
+        asyncio.run(notion_client.execute_command_result(command_result))
 
 
 def test_fetch_task_page_content_uses_page_properties_and_markdown():
@@ -600,3 +631,18 @@ def _task_properties(ticket_number: int) -> dict:
             "select": {"name": "Charged"},
         },
     }
+
+
+class _PartiallyFailingWriteClient(NotionRestClient):
+    def __init__(self) -> None:
+        pass
+
+    async def execute_write_intent(
+        self,
+        write_intent: NotionWriteIntent,
+        page_registry: NotionPageRegistry,
+    ) -> dict:
+        del page_registry
+        if write_intent.operation_key == "second":
+            raise RuntimeError("Transport stopped")
+        return {"operation_key": write_intent.operation_key}

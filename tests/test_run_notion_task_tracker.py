@@ -28,6 +28,7 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_STATUS_PROPERTY,
     TASK_DATABASE_TICKET_ID_PROPERTY,
     TASK_DATABASE_TITLE_PROPERTY,
+    TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
 )
 from notion_task_tracker.run_notion_task_tracker import (
@@ -41,6 +42,7 @@ from notion_task_tracker.run_notion_task_tracker import (
     parse_args,
     resolve_tracker_state_path,
     repair_and_write_refreshed_tracker_state,
+    execute_tracker_command,
 )
 
 
@@ -225,6 +227,209 @@ def test_explicit_tracker_paths_override_defaults(tmp_path: Path):
     tracker_state_path = tmp_path / "explicit_state.json"
 
     assert resolve_tracker_state_path(tracker_state_path) == tracker_state_path
+
+
+def test_read_uses_one_current_database_query_and_current_page_id_without_state(
+    tmp_path: Path,
+):
+    current_page_id = "11111111111111111111111111111111"
+    notion_client = _StateFreeCommandClient(
+        database_rows=[_current_task_database_row(current_page_id)],
+        fetched_page_content_by_id={
+            current_page_id: "<page><content>Current task context.</content></page>",
+        },
+    )
+    missing_tracker_state_path = tmp_path / "missing-state.json"
+
+    summary = execute_tracker_command(
+        command={"command": "read_tasks", "task_ids": ["ALOVYA-1", "ALOVYA-1"]},
+        config=_configured_tracker(),
+        tracker_state_path=missing_tracker_state_path,
+        output_path=tmp_path / "summary.json",
+        notion_client=notion_client,
+    )
+
+    assert notion_client.queried_data_source_ids == [
+        "cccccccccccccccccccccccccccccccc"
+    ]
+    assert notion_client.fetched_pages == [current_page_id]
+    assert not missing_tracker_state_path.exists()
+    assert summary.to_json_summary()["tasks"][0]["task_id"] == "ALOVYA-1"
+    assert len(summary.to_json_summary()["tasks"]) == 1
+
+
+def test_deadline_change_plans_narrow_write_from_one_current_task_tree(
+    tmp_path: Path,
+):
+    current_page_id = "11111111111111111111111111111111"
+    notion_client = _StateFreeCommandClient(
+        database_rows=[_current_task_database_row(current_page_id)],
+    )
+
+    summary = execute_tracker_command(
+        command={
+            "command": "set_task_deadline",
+            "task_id": "ALOVYA-1",
+            "deadline": "2026-08-01",
+        },
+        config=_configured_tracker(),
+        tracker_state_path=tmp_path / "missing-state.json",
+        output_path=tmp_path / "summary.json",
+        notion_client=notion_client,
+    )
+
+    assert notion_client.queried_data_source_ids == [
+        "cccccccccccccccccccccccccccccccc"
+    ]
+    deadline_call = next(
+        call
+        for call in notion_client.calls
+        if call.operation_key == "update_deadline:task:ALOVYA-1"
+    )
+    assert deadline_call.arguments == {
+        "page_id": current_page_id,
+        "properties": {"Deadline": "2026-08-01"},
+    }
+    assert "update_deadline:task:ALOVYA-1" in summary.completed_operation_keys
+
+
+def test_timeline_retry_reads_current_log_ids_and_does_not_append_twice(
+    tmp_path: Path,
+):
+    current_page_id = "11111111111111111111111111111111"
+    log_id = "ALOVYA-LOG-09c41014-3381-4ae6-b620-cb53ce8ab12e"
+    notion_client = _StateFreeCommandClient(
+        database_rows=[_current_task_database_row(current_page_id)],
+        fetched_page_content_by_id={
+            current_page_id: "\n".join([
+                "<page>",
+                "<content>",
+                "## Timeline log",
+                '### <mention-date start="2026-07-23"/>',
+                f"<details><summary>Existing log · {log_id}</summary></details>",
+                "</content>",
+                "</page>",
+            ]),
+        },
+    )
+
+    execute_tracker_command(
+        command={
+            "command": "append_task_timeline_log",
+            "task_id": "ALOVYA-1",
+            "timeline_entry": {
+                "log_id": log_id,
+                "title": "Existing log",
+                "entry_date": "2026-07-23",
+                "heading": '<mention-date start="2026-07-23"/>',
+                "lines": ["This retry must not be appended again."],
+            },
+        },
+        config=_configured_tracker(),
+        tracker_state_path=tmp_path / "missing-state.json",
+        output_path=tmp_path / "summary.json",
+        notion_client=notion_client,
+    )
+
+    assert notion_client.fetched_pages == [current_page_id]
+    assert not any(
+        call.operation_key.startswith("update_timeline_log:")
+        for call in notion_client.calls
+    )
+
+
+def test_invalid_initial_task_content_is_rejected_before_database_creation(
+    tmp_path: Path,
+):
+    notion_client = _StateFreeCommandClient(database_rows=[])
+
+    with pytest.raises(ValueError, match="Unsupported timeline_entry block type"):
+        execute_tracker_command(
+            command={
+                "command": "create_top_level_task",
+                "task": {
+                    "title": "Invalid task",
+                    "configured_priority": "P1",
+                    "status": "Active",
+                    "deadline": None,
+                    "start": None,
+                    "duration": None,
+                    "duration_unit": None,
+                    "external_coordination": "No",
+                    "uncertainty": "Low",
+                    "friction": "None",
+                },
+                "timeline_entry": {
+                    "log_id": "ALOVYA-LOG-09c41014-3381-4ae6-b620-cb53ce8ab12e",
+                    "title": "Invalid content",
+                    "entry_date": "2026-07-23",
+                    "heading": '<mention-date start="2026-07-23"/>',
+                    "blocks": [{"type": "unsupported", "text": "Must fail"}],
+                },
+            },
+            config=_configured_tracker(),
+            tracker_state_path=tmp_path / "missing-state.json",
+            output_path=tmp_path / "summary.json",
+            notion_client=notion_client,
+        )
+
+    assert notion_client.calls == []
+
+
+def test_creation_uses_returned_page_id_and_reconciles_from_updated_tree(
+    tmp_path: Path,
+):
+    created_page_id = "22222222222222222222222222222222"
+    notion_client = _StateFreeCommandClient(
+        database_rows=[],
+        created_page_ids=[created_page_id],
+        fetched_page_content_by_id={
+            created_page_id: "\n".join([
+                "<page>",
+                "<properties>",
+                '{"Task ID":"2","Task page":"Created task"}',
+                "</properties>",
+                "<content>## Timeline log</content>",
+                "</page>",
+            ]),
+        },
+    )
+
+    summary = execute_tracker_command(
+        command={
+            "command": "create_top_level_task",
+            "task": {
+                "title": "Created task",
+                "configured_priority": "P1",
+                "status": "Active",
+                "deadline": None,
+                "start": None,
+                "duration": None,
+                "duration_unit": None,
+                "external_coordination": "No",
+                "uncertainty": "Low",
+                "friction": "None",
+            },
+        },
+        config=_configured_tracker(),
+        tracker_state_path=tmp_path / "missing-state.json",
+        output_path=tmp_path / "summary.json",
+        notion_client=notion_client,
+    )
+
+    assert notion_client.queried_data_source_ids == [
+        "cccccccccccccccccccccccccccccccc"
+    ]
+    assert summary.completed_operation_keys[:2] == [
+        "create_database_task:create_top_level_task",
+        "update_properties:task:ALOVYA-2",
+    ]
+    ongoing_landing_call = next(
+        call
+        for call in notion_client.calls
+        if call.operation_key == "replace:ongoing_landing_page"
+    )
+    assert created_page_id in ongoing_landing_call.arguments["markdown"]
 
 
 def test_repair_and_write_refreshed_tracker_state_pushes_repairs_for_changed_task(
@@ -689,6 +894,65 @@ class _ConfiguredTrackerRefreshClient:
             {"parent": parent, "properties": properties, "markdown": markdown}
         )
         raise AssertionError("Refreshing tracker state must not create managed pages")
+
+
+class _StateFreeCommandClient(FakeNotionClient):
+    def __init__(
+        self,
+        database_rows: list[dict],
+        created_page_ids: list[str] | None = None,
+        fetched_page_content_by_id: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(
+            created_page_ids=created_page_ids,
+            database_rows=database_rows,
+            fetched_page_content_by_id=fetched_page_content_by_id,
+        )
+        self.queried_data_source_ids: list[str] = []
+
+    async def fetch_database(self, database_id: str) -> dict:
+        assert database_id == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        return {"data_sources": [{"id": "cccccccccccccccccccccccccccccccc"}]}
+
+    async def fetch_data_source(self, data_source_id: str) -> dict:
+        assert data_source_id == "cccccccccccccccccccccccccccccccc"
+        return {"properties": _fixed_database_properties()}
+
+    async def query_data_source_id(self, data_source_id: str) -> list[dict]:
+        self.queried_data_source_ids.append(data_source_id)
+        return list(self.database_rows)
+
+    async def query_checkbox_page_ids(
+        self,
+        data_source_id: str,
+        property_name: str,
+    ) -> set[str]:
+        return {
+            row["url"].rsplit("/", 1)[-1]
+            for row in self.database_rows
+        }
+
+
+def _current_task_database_row(page_id: str) -> dict:
+    return {
+        "Task page": "[1] Current task",
+        TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE: False,
+        "Task ID": "1",
+        "Priority": "P1",
+        "Status": "Active",
+        "Parent": "[]",
+        "Dependencies": "[]",
+        "Dependants": "[]",
+        "Deadline": "",
+        "Start": "",
+        "End": "",
+        "Duration": "",
+        "Duration unit": "",
+        "External coordination": "No",
+        "Uncertainty": "Low",
+        "Friction": "None",
+        "url": f"https://www.notion.so/{page_id}",
+    }
 
 
 def _tracker_state(title: str, priority: str) -> dict:

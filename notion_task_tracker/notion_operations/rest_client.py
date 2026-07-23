@@ -304,7 +304,17 @@ class NotionRestClient:
         executed_operation_keys = []
         captured_page_ids = {}
         for write_intent in command_result.write_intents:
-            write_result = await self.execute_write_intent(write_intent, command_result.page_registry)
+            try:
+                write_result = await self.execute_write_intent(
+                    write_intent,
+                    command_result.page_registry,
+                )
+            except Exception as error:
+                completed_operations = ", ".join(executed_operation_keys) or "none"
+                raise ValueError(
+                    f"Notion write {write_intent.operation_key!r} failed after "
+                    f"completed operations: {completed_operations}. {error}"
+                ) from error
             executed_operation_keys.append(write_result["operation_key"])
             if write_result.get("captured_page_key") is not None:
                 captured_page_ids[write_result["captured_page_key"]] = write_result["captured_page_id"]
