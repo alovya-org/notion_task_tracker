@@ -1,7 +1,10 @@
+import json
+
 import pytest
 
 from notion_task_tracker.run_notion_task_tracker import (
     _action_name_from_tracker_command,
+    _write_task_action_summary,
     parse_args,
 )
 from notion_task_tracker.tasks import DEFAULT_TASK_PRIORITY
@@ -87,6 +90,26 @@ def test_parse_args_reads_complete_with_all_children_action():
 
 def test_delete_command_reports_delete_action_name():
     assert _action_name_from_tracker_command({"command": "delete_task"}) == "delete"
+
+
+def test_task_mutation_summary_reports_completed_notion_operations(tmp_path):
+    output_path = tmp_path / "result.json"
+
+    summary = _write_task_action_summary(
+        action_name="set_start",
+        output_path=output_path,
+        notion_operation_keys=["set_start:task:ALOVYA-102"],
+        warnings=[],
+    )
+
+    expected_summary = {
+        "action_name": "set_start",
+        "notion_operations": ["set_start:task:ALOVYA-102"],
+        "output_path": str(output_path),
+        "warnings": [],
+    }
+    assert summary.to_json_summary() == expected_summary
+    assert json.loads(output_path.read_text(encoding="utf-8")) == expected_summary
 
 
 @pytest.mark.parametrize(

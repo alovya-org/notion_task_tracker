@@ -715,13 +715,13 @@ async def _execute_task_command_plan(
 def _write_task_action_summary(
     action_name: str,
     output_path: str | Path,
-    completed_operation_keys: list[str],
+    notion_operation_keys: list[str],
     warnings: list[dict[str, str]],
 ) -> "TrackerActionExecutionSummary":
     summary = TrackerActionExecutionSummary(
         action_name=action_name,
         output_path=Path(output_path),
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=notion_operation_keys,
         warnings=warnings,
     )
     write_json_file(summary.to_json_summary(), output_path)
