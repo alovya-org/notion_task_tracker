@@ -10,7 +10,6 @@ from enum import Enum
 from typing import Any
 
 from notion_task_tracker.errors import NotionPlanningError
-from notion_task_tracker.external_links import ExternalLink
 
 
 COMPLETED_TASK_PRIORITY_LABEL = "N/A"
@@ -123,23 +122,6 @@ class TimelineEntry:
     lines: list[str] = field(default_factory=list)
     blocks: list[dict[str, str]] = field(default_factory=list)
 
-    def to_tracker_state(self) -> dict[str, Any]:
-        return {
-            "entry_date": self.entry_date,
-            "heading": self.heading,
-            "lines": [],
-        }
-
-    @classmethod
-    def from_tracker_state(cls, tracker_state: dict[str, Any]) -> "TimelineEntry":
-        return cls(
-            entry_date=tracker_state["entry_date"],
-            heading=tracker_state["heading"],
-            lines=[],
-            blocks=[],
-        )
-
-
 @dataclass(frozen=True)
 class TimelineLog:
     """One independently movable log written beneath a timeline date."""
@@ -190,7 +172,6 @@ class Task:
     title: str
     configured_priority: Priority
     status: TaskStatus
-    status_update: str = ""
     parent_task_id: str | None = None
     child_task_ids: list[str] = field(default_factory=list)
     dependency_task_ids: list[str] = field(default_factory=list)
@@ -203,8 +184,6 @@ class Task:
     external_coordination: ExternalCoordination = DEFAULT_TASK_EXTERNAL_COORDINATION
     uncertainty: Uncertainty = DEFAULT_TASK_UNCERTAINTY
     friction: Friction = DEFAULT_TASK_FRICTION
-    timeline_entries: list[TimelineEntry] = field(default_factory=list)
-    links: list[ExternalLink] = field(default_factory=list)
     notion_page_id: str | None = None
     displayed_priority: Priority | None = None
 
@@ -218,16 +197,18 @@ class Task:
     def render_page_title(self) -> str:
         return render_task_database_page_title(self.task_id, self.title)
 
-    def append_timeline_log(self, timeline_log: TimelineLog) -> TimelineLogChange:
-        self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
-        existing_entry = _build_timeline_entry_for_date(self.timeline_entries, timeline_log.entry_date)
+    def append_timeline_log(
+        self,
+        timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
+    ) -> TimelineLogChange:
+        timeline_entries = _merged_timeline_entries_by_date(current_timeline_entries)
+        existing_entry = _build_timeline_entry_for_date(timeline_entries, timeline_log.entry_date)
         existing_entry_before_append = _copy_timeline_entry(existing_entry) if existing_entry is not None else None
         timeline_entry = existing_entry or TimelineEntry(
             entry_date=timeline_log.entry_date,
             heading=timeline_log.heading,
         )
-        if existing_entry is None:
-            self.timeline_entries.append(timeline_entry)
         return TimelineLogChange(
             task_id=self.task_id,
             existing_timeline_entry=existing_entry_before_append,
@@ -235,22 +216,33 @@ class Task:
             timeline_entry=timeline_entry,
         )
 
-    def complete_with_timeline_log(self, timeline_log: TimelineLog) -> TaskCompletionChange:
+    def complete_with_timeline_log(
+        self,
+        timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
+    ) -> TaskCompletionChange:
         self.status = TaskStatus.COMPLETE
         return TaskCompletionChange(
             task_id=self.task_id,
-            timeline_log_change=self.append_timeline_log(timeline_log),
+            timeline_log_change=self.append_timeline_log(
+                timeline_log,
+                current_timeline_entries,
+            ),
         )
 
-    def cancel_with_timeline_log(self, timeline_log: TimelineLog) -> TaskCompletionChange:
+    def cancel_with_timeline_log(
+        self,
+        timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
+    ) -> TaskCompletionChange:
         self.status = TaskStatus.CANCELLED
         return TaskCompletionChange(
             task_id=self.task_id,
-            timeline_log_change=self.append_timeline_log(timeline_log),
+            timeline_log_change=self.append_timeline_log(
+                timeline_log,
+                current_timeline_entries,
+            ),
         )
-
-    def normalise_timeline_entries(self) -> None:
-        self.timeline_entries = _merged_timeline_entries_by_date(self.timeline_entries)
 
 
 def validate_task_schedule(

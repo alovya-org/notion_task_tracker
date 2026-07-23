@@ -164,7 +164,6 @@ def test_expired_channel_renews_then_dispatches_synchronisation_and_prunes(tmp_p
         current_time_milliseconds=1_000_000,
         replace_within_milliseconds=500_000,
         config=_configured_tracker(),
-        tracker_state_path=tmp_path / "tracker-state.json",
         output_path=tmp_path / "output.json",
         google_calendar_client=_RecordingGoogleCalendarClient(returned_channel_id=None),
         google_calendar_state_client=google_calendar_state_client,

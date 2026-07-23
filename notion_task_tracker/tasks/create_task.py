@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from notion_task_tracker.tasks import TaskTree, Task, TimelineEntry
+from notion_task_tracker.tasks import TaskTree, Task
 from notion_task_tracker.tasks.task import (
     DurationUnit,
     ExternalCoordination,
@@ -17,7 +17,6 @@ from notion_task_tracker.tasks.task import (
     generate_timeline_log_id,
     validate_task_schedule,
 )
-from notion_task_tracker.tasks.timeline_log import build_timeline_entry_for_date
 
 
 @dataclass(frozen=True)
@@ -66,22 +65,6 @@ def derive_split_task_page_creations(
     raise ValueError(f"Unsupported database task creation command {command_name!r}")
 
 
-def add_created_task_to_tracker_state(
-    tracker_state: dict[str, Any],
-    task_creation: TaskCreation,
-    created_task_id: str,
-    created_page_id: str,
-) -> dict[str, Any]:
-    task_tree = TaskTree.from_tracker_state(tracker_state)
-    add_created_task_to_tree(
-        task_tree,
-        task_creation,
-        created_task_id,
-        created_page_id,
-    )
-    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
-
-
 def add_created_task_to_tree(
     task_tree: TaskTree,
     task_creation: TaskCreation,
@@ -109,7 +92,6 @@ def add_created_task_to_tree(
             external_coordination=task_creation.external_coordination,
             uncertainty=task_creation.uncertainty,
             friction=task_creation.friction,
-            timeline_entries=_derive_timeline_entries_for_created_task(task_creation.initial_child_timeline_entry),
             notion_page_id=created_page_id,
         )
     )
@@ -122,13 +104,6 @@ def add_created_task_to_tree(
     task_tree.derive_dependant_task_ids_from_dependencies()
     task_tree.validate()
     task_tree.recalculate_display_priorities()
-
-
-def clear_split_source_task_relations(tracker_state: dict[str, Any], source_task_id: str) -> dict[str, Any]:
-    task_tree = TaskTree.from_tracker_state(tracker_state)
-    task_tree.set_task_dependencies(source_task_id, [])
-    task_tree.set_task_dependants(source_task_id, [])
-    return task_tree.replace_task_tree_in_tracker_state(tracker_state)
 
 
 def _derive_parent_task_creation_from_command(command: dict[str, Any]) -> TaskCreation:
@@ -263,7 +238,6 @@ def copy_source_task_relations_to_split_tasks(task_tree: TaskTree, source_task_i
         "dependant_task_ids": list(source_task.dependant_task_ids),
     }
 
-
 def _timeline_entry_date_shell(timeline_entry: dict[str, Any] | None) -> dict[str, Any] | None:
     if timeline_entry is None:
         return None
@@ -272,18 +246,3 @@ def _timeline_entry_date_shell(timeline_entry: dict[str, Any] | None) -> dict[st
         "entry_date": timeline_entry["entry_date"],
         "heading": timeline_entry["heading"],
     }
-
-
-def _derive_timeline_entries_for_created_task(
-    initial_timeline_entry: dict[str, Any] | None,
-) -> list[TimelineEntry]:
-    if initial_timeline_entry is None:
-        return []
-
-    timeline_entry = build_timeline_entry_for_date(initial_timeline_entry["entry_date"])
-    return [
-        TimelineEntry(
-            entry_date=timeline_entry["entry_date"],
-            heading=timeline_entry["heading"],
-        )
-    ]

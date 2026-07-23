@@ -4,19 +4,20 @@ import json
 import pytest
 
 from notion_task_tracker import NotionPageReference, NotionPageRegistry, NotionWriteIntent
-from notion_task_tracker.apply_tracker_command import TrackerCommandResult
+from notion_task_tracker.apply_task_command import TaskCommandPlan
 from notion_task_tracker.notion_operations.rest_client import (
     NotionRestClient,
     _notion_rest_access_token_from_environment,
     _notion_rest_error_message,
     _task_database_row_from_rest_page,
 )
+from notion_task_tracker.tasks import TaskTree
 
 
 def test_execute_command_result_reports_operations_completed_before_failure():
     notion_client = _PartiallyFailingWriteClient()
-    command_result = TrackerCommandResult(
-        tracker_state={},
+    command_result = TaskCommandPlan(
+        task_tree=TaskTree(),
         write_intents=[
             NotionWriteIntent(
                 operation_key="first",

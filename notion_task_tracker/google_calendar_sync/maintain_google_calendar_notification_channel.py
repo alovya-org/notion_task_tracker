@@ -42,7 +42,6 @@ async def maintain_google_calendar_notification_channel(
     current_time_milliseconds: int,
     replace_within_milliseconds: int,
     config: TrackerConfig | None,
-    tracker_state_path: str | Path,
     output_path: str | Path,
     google_calendar_client: GoogleCalendarClient | None,
     google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
@@ -78,7 +77,6 @@ async def maintain_google_calendar_notification_channel(
     execution_summary = TrackerActionExecutionSummary(
         action_name="maintain_google_calendar_notification_channel",
         output_path=Path(output_path),
-        tracker_state_path=Path(tracker_state_path),
         warnings=[],
         google_calendar_notification_channel={
             "channel_id": maintenance.channel_id,

@@ -336,15 +336,3 @@ def _calendar_fields_from_existing_event(event: dict[str, Any]) -> dict[str, Any
     if private_properties is not None:
         comparable_fields["extendedProperties"] = {"private": private_properties}
     return comparable_fields
-
-
-def _read_json(source_path: Path) -> dict[str, Any]:
-    return json.loads(source_path.read_text(encoding="utf-8"))
-
-
-def _write_json(destination_path: Path, tracker_state: dict[str, Any]) -> None:
-    destination_path.parent.mkdir(parents=True, exist_ok=True)
-    destination_path.write_text(
-        json.dumps(tracker_state, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )

@@ -48,7 +48,6 @@ def test_google_changes_mutate_the_one_current_tree_before_reconciliation_and_pr
     summary = asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
         tracker_user="al0vya",
         output_path=tmp_path / "summary.json",
-        legacy_tracker_state_path=tmp_path / "unused-state.json",
         config=_tracker_config(),
         notion_client=notion_client,
         google_calendar_client=calendar_client,
@@ -68,7 +67,7 @@ def test_google_changes_mutate_the_one_current_tree_before_reconciliation_and_pr
         "current-cursor",
         "next-cursor",
     )
-    assert summary.completed_operation_keys == [
+    assert summary.notion_operation_keys == [
         "update_schedule:task:ALOVYA-1",
         "reconcile:managed_pages",
     ]
@@ -105,7 +104,6 @@ def test_failed_remote_operation_leaves_the_google_cursor_unadvanced(
         asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
             tracker_user="al0vya",
             output_path=tmp_path / "summary.json",
-            legacy_tracker_state_path=tmp_path / "unused-state.json",
             config=_tracker_config(),
             notion_client=notion_client,
             google_calendar_client=calendar_client,
@@ -146,7 +144,6 @@ def test_expired_cursor_rebuilds_the_ledger_and_reports_recovery(
     summary = asyncio.run(synchronise_notion_task_tracker_with_google_calendar(
         tracker_user="al0vya",
         output_path=tmp_path / "summary.json",
-        legacy_tracker_state_path=tmp_path / "unused-state.json",
         config=_tracker_config(),
         notion_client=notion_client,
         google_calendar_client=calendar_client,

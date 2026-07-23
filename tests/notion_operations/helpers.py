@@ -1,12 +1,11 @@
 import json
 
-from notion_task_tracker.apply_tracker_command import TrackerCommandResult
+from notion_task_tracker.apply_task_command import TaskCommandPlan
 from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.rest_client import CreatedTaskDatabasePage, NotionWriteExecutionResult
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TITLE_PROPERTY,
-    task_database_data_source_id_from_tracker_state,
 )
 
 
@@ -67,19 +66,6 @@ class FakeNotionClient:
         self.view_queries.append(view_url)
         return list(self.database_rows)
 
-    async def query_task_database_rows(self, tracker_state: dict):
-        self.queries.append({
-            "data_source_id": task_database_data_source_id_from_tracker_state(tracker_state),
-        })
-        if self.database_rows:
-            return list(self.database_rows)
-
-        tasks = tracker_state.get("tasks", {})
-        return [
-            _database_row_from_tracker_task(task, tasks)
-            for task in tasks.values()
-        ]
-
     async def create_task_database_page(
         self,
         data_source_id: str,
@@ -122,7 +108,7 @@ class FakeNotionClient:
         )
         return operation_key
 
-    async def execute_command_result(self, command_result: TrackerCommandResult):
+    async def execute_command_result(self, command_result: TaskCommandPlan):
         if command_result.page_registry is None:
             raise ValueError("Fake write execution requires a page registry")
 

@@ -55,14 +55,12 @@ def build_task_tree_from_database_query_results(
     ticket_prefix: str,
     landing_page: TrackedPage,
     completed_landing_page: TrackedPage | None = None,
-    previous_task_tree: TaskTree | None = None,
 ) -> TaskTree:
     database_rows = task_database_rows_from_query_results(query_results, ticket_prefix)
     return build_task_tree_from_database_rows(
         database_rows=database_rows,
         landing_page=landing_page,
         completed_landing_page=completed_landing_page,
-        previous_task_tree=previous_task_tree,
     )
 
 
@@ -70,23 +68,17 @@ def build_task_tree_from_database_rows(
     database_rows: list[TaskDatabaseRow],
     landing_page: TrackedPage,
     completed_landing_page: TrackedPage | None = None,
-    previous_task_tree: TaskTree | None = None,
 ) -> TaskTree:
-    previous_tasks_by_task_id = _previous_tasks_by_task_id(previous_task_tree)
-    previous_tasks_by_page_id = _previous_tasks_by_page_id(previous_task_tree)
     _require_known_parent_relations(database_rows)
     task_tree = TaskTree(
         ongoing_tasks_landing_page=OngoingTasksLandingPage(page=landing_page),
         completed_tasks_landing_page=CompletedTasksLandingPage(
-            page=completed_landing_page or _previous_completed_landing_page(previous_task_tree)
+            page=completed_landing_page or TaskTree().completed_tasks_landing_page.page
         ),
     )
 
     for database_row in database_rows:
-        previous_task = previous_tasks_by_task_id.get(database_row.task_id)
-        if previous_task is None:
-            previous_task = previous_tasks_by_page_id.get(database_row.notion_page_id)
-        task_tree.add_task(_task_from_database_row(database_row, previous_task))
+        task_tree.add_task(_task_from_database_row(database_row))
 
     _link_database_parent_rows(task_tree, database_rows)
     _sort_child_task_ids(task_tree)
@@ -121,20 +113,6 @@ class TaskDatabaseRow:
     ticket_number: int
 
 
-def task_database_query_for_tracker_state(tracker_state: dict[str, Any]) -> str:
-    return (
-        f'SELECT * FROM "{task_database_data_source_url_from_tracker_state(tracker_state)}"'
-    )
-
-
-def task_database_data_source_url_from_tracker_state(tracker_state: dict[str, Any]) -> str:
-    return str(tracker_state["task_database"]["data_source_url"])
-
-
-def task_database_data_source_id_from_tracker_state(tracker_state: dict[str, Any]) -> str:
-    return str(tracker_state["task_database"]["data_source_id"])
-
-
 def task_id_from_fetched_task_database_page(fetched_page_content: str, ticket_prefix: str) -> str:
     return f"{ticket_prefix}-{_ticket_number_from_fetched_task_database_page(fetched_page_content)}"
 
@@ -147,13 +125,6 @@ def task_database_row_from_fetched_task_database_page(
     properties = _properties_from_fetched_task_database_page(fetched_page_content)
     properties.setdefault("url", f"https://www.notion.so/{canonical_notion_page_id(notion_page_id)}")
     return _database_row_from_query_result(properties, ticket_prefix)
-
-
-def build_task_database_tracker_state(data_source_id: str) -> dict[str, str]:
-    return {
-        "data_source_id": data_source_id,
-        "data_source_url": f"collection://{data_source_id}",
-    }
 
 
 def task_database_rows_from_query_results(
@@ -274,16 +245,12 @@ def _title_strikethrough_from_query_result(
 
 def _task_from_database_row(
     database_row: TaskDatabaseRow,
-    previous_task: Task | None,
 ) -> Task:
     return Task(
         task_id=database_row.task_id,
         title=database_row.title,
         configured_priority=database_row.configured_priority,
         status=database_row.status,
-        status_update=previous_task.status_update if previous_task else "",
-        timeline_entries=list(previous_task.timeline_entries) if previous_task else [],
-        links=list(previous_task.links) if previous_task else [],
         notion_page_id=database_row.notion_page_id,
         deadline=database_row.deadline,
         start=database_row.start,
@@ -512,28 +479,3 @@ def _enum_property_or_default(
     default_value: ExternalCoordination | Uncertainty | Friction,
 ) -> ExternalCoordination | Uncertainty | Friction:
     return enum_type(_optional_text_property(query_result, property_name) or default_value.value)
-
-
-def _previous_tasks_by_task_id(previous_task_tree: TaskTree | None) -> dict[str, Task]:
-    if previous_task_tree is None:
-        return {}
-
-    return dict(previous_task_tree.tasks)
-
-
-def _previous_completed_landing_page(previous_task_tree: TaskTree | None) -> TrackedPage:
-    if previous_task_tree is None:
-        return TaskTree().completed_tasks_landing_page.page
-
-    return previous_task_tree.completed_tasks_landing_page.page
-
-
-def _previous_tasks_by_page_id(previous_task_tree: TaskTree | None) -> dict[str, Task]:
-    if previous_task_tree is None:
-        return {}
-
-    return {
-        canonical_notion_page_id(task.notion_page_id): task
-        for task in previous_task_tree.tasks.values()
-        if task.notion_page_id is not None
-    }

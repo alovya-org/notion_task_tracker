@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from notion_client import AsyncClient
 from notion_client.errors import APIResponseError
 
-from notion_task_tracker.apply_tracker_command import TrackerCommandResult
+from notion_task_tracker.apply_task_command import TaskCommandPlan
 from notion_task_tracker.notion_operations.page_registry import (
     NotionPageRegistry,
     canonical_notion_page_id,
@@ -39,7 +39,6 @@ from notion_task_tracker.tasks.database import (
     TASK_DATABASE_TITLE_PROPERTY,
     TASK_DATABASE_TITLE_STRIKETHROUGH_VALUE,
     TASK_DATABASE_UNCERTAINTY_PROPERTY,
-    task_database_data_source_id_from_tracker_state,
 )
 
 
@@ -215,11 +214,6 @@ class NotionRestClient:
     async def query_data_source(self, data_source_url: str, query: str) -> list[dict[str, Any]]:
         return await self.query_data_source_id(_data_source_id_from_url(data_source_url))
 
-    async def query_task_database_rows(self, tracker_state: dict[str, Any]) -> list[dict[str, Any]]:
-        return await self.query_data_source_id(
-            task_database_data_source_id_from_tracker_state(tracker_state)
-        )
-
     async def query_data_source_id(self, data_source_id: str) -> list[dict[str, Any]]:
         rows = []
         next_cursor = None
@@ -293,7 +287,7 @@ class NotionRestClient:
         )
         return operation_key
 
-    async def execute_command_result(self, command_result: TrackerCommandResult) -> NotionWriteExecutionResult:
+    async def execute_command_result(self, command_result: TaskCommandPlan) -> NotionWriteExecutionResult:
         if command_result.page_registry is None:
             raise ValueError("REST write execution requires a page registry")
 

@@ -183,23 +183,6 @@ class TestTaskTreeValidate:
         assert task_tree.tasks["ALOVYA-2"].dependant_task_ids == ["ALOVYA-3"]
 
 
-class TestTaskTreeFromSnapshot:
-    def test_rejects_state_without_configured_completed_landing_page(self):
-        with pytest.raises(ValueError, match="completed_landing_page.*configured title"):
-            TaskTree.from_tracker_state(
-                {
-                    "ongoing_landing_page": {
-                        "local_page_key": "ongoing_landing_page",
-                        "title": ONGOING_LANDING_PAGE_TITLE,
-                        "notion_page_id": "11111111111111111111111111111111",
-                        "parent_page_key": None,
-                    },
-                    "completed_landing_page": None,
-                    "tasks": {},
-                }
-            )
-
-
 class TestTaskTreeTaskIdsGroupedForLandingPage:
     def test_groups_live_top_level_tasks_by_displayed_priority(self):
         task_tree = _build_recursive_task_tree()
@@ -348,57 +331,6 @@ class TestTaskTreeBuildNotionWritePlan:
         }
 
 
-class TestTaskTreeRepairOperationKeysForChanges:
-    def test_includes_changed_tasks_ancestors_and_landing_pages(self):
-        task_tree = TaskTree()
-        task_tree.add_task(
-            Task(
-                task_id="ALOVYA-1",
-                title="Root",
-                configured_priority=Priority.P1,
-                status=TaskStatus.ACTIVE,
-            )
-        )
-        task_tree.add_task(
-            Task(
-                task_id="ALOVYA-2",
-                title="Child",
-                configured_priority=Priority.P1,
-                status=TaskStatus.ACTIVE,
-            )
-        )
-        task_tree.add_task(
-            Task(
-                task_id="ALOVYA-3",
-                title="Grandchild",
-                configured_priority=Priority.P2,
-                status=TaskStatus.ACTIVE,
-            )
-        )
-        task_tree.link_parent_to_child("ALOVYA-1", "ALOVYA-2")
-        task_tree.link_parent_to_child("ALOVYA-2", "ALOVYA-3")
-
-        operation_keys = task_tree.repair_operation_keys_for_changes(
-            [
-                {
-                    "task_id": "ALOVYA-3",
-                    "fields": {
-                        "configured_priority": {
-                            "before": "P2",
-                            "after": "P1",
-                        }
-                    },
-                }
-            ]
-        )
-
-        assert operation_keys == [
-            "update_properties:task:ALOVYA-1",
-            "update_properties:task:ALOVYA-2",
-            "update_properties:task:ALOVYA-3",
-        ]
-
-
 class TestTaskTreeAppendTaskTimelineLog:
     def test_returns_single_timeline_update_intent(self):
         task_tree = _build_recursive_task_tree()
@@ -413,13 +345,10 @@ class TestTaskTreeAppendTaskTimelineLog:
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_log=timeline_log,
+            current_timeline_entries=[],
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == TimelineEntry(
-            entry_date="2026-05-25",
-            heading='<mention-date start="2026-05-25"/>',
-        )
         assert write_intent.operation_name == "update_timeline_log"
         assert write_intent.target_page_key == "task:ALOVYA-5"
         assert write_intent.arguments["task_id"] == "ALOVYA-5"
@@ -430,13 +359,13 @@ class TestTaskTreeAppendTaskTimelineLog:
 
     def test_appends_identified_toggle_after_legacy_content_for_same_date(self):
         task_tree = _build_recursive_task_tree()
-        task_tree.tasks["ALOVYA-5"].timeline_entries.append(
+        current_timeline_entries = [
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Started debugging the repair path."],
             )
-        )
+        ]
 
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
@@ -447,16 +376,10 @@ class TestTaskTreeAppendTaskTimelineLog:
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Found the stale REST request."],
             ),
+            current_timeline_entries=current_timeline_entries,
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries == [
-            TimelineEntry(
-                entry_date="2026-05-25",
-                heading='<mention-date start="2026-05-25"/>',
-                lines=["Started debugging the repair path."],
-            )
-        ]
         assert write_intent.arguments["timeline_entry"]["lines"] == []
         assert write_intent.arguments["appended_markdown"] == "\n".join([
             "<details>",
@@ -475,12 +398,12 @@ class TestTaskTreeAppendTaskTimelineLog:
 
     def test_appends_log_title_and_identifier_as_toggle_title(self):
         task_tree = _build_recursive_task_tree()
-        task_tree.tasks["ALOVYA-5"].timeline_entries.append(
+        current_timeline_entries = [
             TimelineEntry(
                 entry_date="2026-05-25",
                 heading='<mention-date start="2026-05-25"/>',
             )
-        )
+        ]
 
         timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
@@ -491,6 +414,7 @@ class TestTaskTreeAppendTaskTimelineLog:
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Moved task metadata into the database."],
             ),
+            current_timeline_entries=current_timeline_entries,
         )
         write_intent = build_timeline_log_write_intent(timeline_log_change)
 
@@ -503,8 +427,7 @@ class TestTaskTreeAppendTaskTimelineLog:
 
     def test_collapses_existing_duplicate_date_headings_before_appending_lines(self):
         task_tree = _build_recursive_task_tree()
-        task_tree.tasks["ALOVYA-5"].timeline_entries.extend(
-            [
+        current_timeline_entries = [
                 TimelineEntry(
                     entry_date="2026-05-25",
                     heading='<mention-date start="2026-05-25"/>',
@@ -515,10 +438,9 @@ class TestTaskTreeAppendTaskTimelineLog:
                     heading='<mention-date start="2026-05-25"/>',
                     lines=["Found the stale REST request."],
                 ),
-            ]
-        )
+        ]
 
-        task_tree.append_task_timeline_log(
+        timeline_log_change = task_tree.append_task_timeline_log(
             task_id="ALOVYA-5",
             timeline_log=TimelineLog(
                 log_id="ALOVYA-LOG-00000000-0000-4000-8000-000000000004",
@@ -527,17 +449,12 @@ class TestTaskTreeAppendTaskTimelineLog:
                 heading='<mention-date start="2026-05-25"/>',
                 lines=["Patched the call generator."],
             ),
+            current_timeline_entries=current_timeline_entries,
         )
 
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries == [
-            TimelineEntry(
-                entry_date="2026-05-25",
-                heading='<mention-date start="2026-05-25"/>',
-                lines=[
-                    "Started debugging the repair path.",
-                    "Found the stale REST request.",
-                ],
-            )
+        assert timeline_log_change.existing_timeline_entry.lines == [
+            "Started debugging the repair path.",
+            "Found the stale REST request.",
         ]
 
 
@@ -555,58 +472,16 @@ class TestTaskTreeCompleteTask:
         completion_change = task_tree.complete_task(
             task_id="ALOVYA-5",
             timeline_log=timeline_log,
+            current_timeline_entries=[],
         )
         write_intents = plan_completion_write_intents(task_tree, completion_change)
 
         assert task_tree.tasks["ALOVYA-5"].status == TaskStatus.COMPLETE
-        assert task_tree.tasks["ALOVYA-5"].timeline_entries[-1] == TimelineEntry(
-            entry_date="2026-05-25",
-            heading='<mention-date start="2026-05-25"/>',
-        )
         assert [write_intent.operation_key for write_intent in write_intents] == [
             "update_properties:task:ALOVYA-5",
             "replace:ongoing_landing_page",
             "update_timeline_log:task:ALOVYA-5:2026-05-25:ALOVYA-LOG-00000000-0000-4000-8000-000000000005",
         ]
-
-
-class TestTaskTreeFromTrackerState:
-    def test_preserves_configured_fixed_page_titles(self):
-        tracker_state = TaskTree().to_tracker_state()
-        tracker_state["ongoing_landing_page"]["title"] = "User-edited landing title"
-        tracker_state["ongoing_landing_page"]["notion_page_id"] = "landing-page-id"
-
-        loaded_task_tree = TaskTree.from_tracker_state(tracker_state)
-
-        assert loaded_task_tree.ongoing_tasks_landing_page.page.title == "User-edited landing title"
-        assert loaded_task_tree.ongoing_tasks_landing_page.page.notion_page_id == "landing-page-id"
-
-    def test_round_trips_dependency_source_and_dependant_inverse(self):
-        task_tree = _build_dependency_task_tree()
-
-        loaded_task_tree = TaskTree.from_tracker_state(task_tree.to_tracker_state())
-
-        assert loaded_task_tree.tasks["ALOVYA-2"].dependency_task_ids == ["ALOVYA-1"]
-        assert loaded_task_tree.tasks["ALOVYA-1"].dependant_task_ids == ["ALOVYA-2"]
-
-    def test_requires_new_task_database_fields_in_tracker_state(self):
-        tracker_state = TaskTree().to_tracker_state()
-        tracker_state["tasks"]["ALOVYA-1"] = {
-            "task_id": "ALOVYA-1",
-            "title": "Incomplete persisted task",
-            "configured_priority": "P1",
-            "displayed_priority": "P1",
-            "status": "Active",
-            "status_update": "",
-            "parent_task_id": None,
-            "child_task_ids": [],
-            "timeline_entries": [],
-            "links": [],
-            "notion_page_id": "11111111111111111111111111111111",
-        }
-
-        with pytest.raises(KeyError, match="dependency_task_ids"):
-            TaskTree.from_tracker_state(tracker_state)
 
 
 class TestTaskTreeValidateSchedulingFields:

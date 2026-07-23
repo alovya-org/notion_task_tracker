@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from notion_task_tracker.external_links import (
-    external_link_from_tracker_state,
-    external_link_to_tracker_state,
-)
 from notion_task_tracker.errors import NotionPlanningError
 from notion_task_tracker.fixed_pages import (
     COMPLETED_LANDING_PAGE_LOCAL_KEY,
@@ -35,12 +30,7 @@ from notion_task_tracker.tasks.task import (
     derive_task_end,
     validate_task_schedule,
 )
-from notion_task_tracker.tracked_pages import (
-    TrackedPage,
-    fixed_tracked_page_from_tracker_state,
-    tracked_page_to_tracker_state,
-    validate_fixed_tracked_page,
-)
+from notion_task_tracker.tracked_pages import TrackedPage, validate_fixed_tracked_page
 
 
 @dataclass
@@ -64,76 +54,6 @@ class TaskTree:
         )
     )
     tasks: dict[str, Task] = field(default_factory=dict)
-
-    @classmethod
-    def from_tracker_state(cls, tracker_state: dict[str, Any]) -> TaskTree:
-        task_tree = cls(
-            ongoing_tasks_landing_page=OngoingTasksLandingPage(
-                page=fixed_tracked_page_from_tracker_state(
-                    tracker_state=tracker_state["ongoing_landing_page"],
-                    local_page_key=ONGOING_LANDING_PAGE_LOCAL_KEY,
-                )
-            ),
-            completed_tasks_landing_page=CompletedTasksLandingPage(
-                page=fixed_tracked_page_from_tracker_state(
-                    tracker_state=tracker_state["completed_landing_page"],
-                    local_page_key=COMPLETED_LANDING_PAGE_LOCAL_KEY,
-                )
-            ),
-        )
-        for task_state in tracker_state.get("tasks", {}).values():
-            task_tree.tasks[task_state["task_id"]] = _task_from_tracker_state(task_state)
-        task_tree._normalise_task_timelines()
-        task_tree.derive_dependant_task_ids_from_dependencies()
-        task_tree.validate()
-        task_tree.recalculate_display_priorities()
-        return task_tree
-
-    def to_tracker_state(self) -> dict[str, Any]:
-        return {
-            "ongoing_landing_page": tracked_page_to_tracker_state(self.ongoing_tasks_landing_page.page),
-            "completed_landing_page": tracked_page_to_tracker_state(self.completed_tasks_landing_page.page),
-            "tasks": {
-                task_id: _task_to_tracker_state(task)
-                for task_id, task in sorted(self.tasks.items(), key=lambda item: task_id_sort_key(item[0]))
-            },
-        }
-
-    @classmethod
-    def changes_between_tracker_states(
-        cls,
-        before_tracker_state: dict[str, Any],
-        after_tracker_state: dict[str, Any],
-    ) -> list[dict[str, Any]]:
-        changes = []
-        before_tasks = before_tracker_state["tasks"]
-        after_tasks = after_tracker_state["tasks"]
-
-        for task_id in sorted(set(before_tasks) | set(after_tasks), key=task_id_sort_key):
-            before_task = before_tasks.get(task_id)
-            after_task = after_tasks.get(task_id)
-
-            if before_task is None:
-                changes.append({"task_id": task_id, "change": "added"})
-                continue
-
-            if after_task is None:
-                changes.append({"task_id": task_id, "change": "removed"})
-                continue
-
-            changed_fields = _changed_task_tree_fields(before_task, after_task)
-            if changed_fields:
-                changes.append({"task_id": task_id, "fields": changed_fields})
-
-        return changes
-
-    def replace_task_tree_in_tracker_state(self, tracker_state: dict[str, Any]) -> dict[str, Any]:
-        updated_tracker_state = json.loads(json.dumps(tracker_state))
-        task_tree_state = self.to_tracker_state()
-        updated_tracker_state["ongoing_landing_page"] = task_tree_state["ongoing_landing_page"]
-        updated_tracker_state["completed_landing_page"] = task_tree_state["completed_landing_page"]
-        updated_tracker_state["tasks"] = task_tree_state["tasks"]
-        return updated_tracker_state
 
     def add_task(self, task: Task) -> None:
         if task.task_id in self.tasks:
@@ -205,9 +125,13 @@ class TaskTree:
         self,
         task_id: str,
         timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
     ) -> TimelineLogChange:
         task = self.tasks[task_id]
-        timeline_log_change = task.append_timeline_log(timeline_log)
+        timeline_log_change = task.append_timeline_log(
+            timeline_log,
+            current_timeline_entries,
+        )
         self.validate()
         self.recalculate_display_priorities()
         return timeline_log_change
@@ -216,9 +140,13 @@ class TaskTree:
         self,
         task_id: str,
         timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
     ) -> TaskCompletionChange:
         task = self.tasks[task_id]
-        completion_change = task.complete_with_timeline_log(timeline_log)
+        completion_change = task.complete_with_timeline_log(
+            timeline_log,
+            current_timeline_entries,
+        )
         self.validate()
         self.recalculate_display_priorities()
         return completion_change
@@ -227,9 +155,13 @@ class TaskTree:
         self,
         task_id: str,
         timeline_log: TimelineLog,
+        current_timeline_entries: list[TimelineEntry],
     ) -> TaskCompletionChange:
         task = self.tasks[task_id]
-        cancellation_change = task.cancel_with_timeline_log(timeline_log)
+        cancellation_change = task.cancel_with_timeline_log(
+            timeline_log,
+            current_timeline_entries,
+        )
         self.validate()
         self.recalculate_display_priorities()
         return cancellation_change
@@ -332,27 +264,6 @@ class TaskTree:
 
     def cancelled_task_ids_for_landing_page(self) -> list[str]:
         return self.completed_tasks_landing_page.cancelled_landing_root_task_ids(self.tasks)
-
-    def repair_operation_keys_for_changes(self, task_tree_changes: list[dict[str, Any]]) -> list[str]:
-        task_ids_to_repair = set()
-
-        for task_tree_change in task_tree_changes:
-            task_id = task_tree_change["task_id"]
-            task_ids_to_repair.add(task_id)
-            task_ids_to_repair.update(self._ancestor_task_ids(task_id))
-
-            changed_fields = set(task_tree_change.get("fields", {}))
-            if "parent_task_id" in changed_fields:
-                task_ids_to_repair.update(_parent_task_ids_from_change(task_tree_change))
-
-        return [
-            *[
-                operation_key
-                for task_id in sorted(task_ids_to_repair, key=task_id_sort_key)
-                for operation_key in [f"update_properties:task:{task_id}"]
-                if task_id in self.tasks
-            ],
-        ]
 
     def task_id_for_notion_page_id(self, notion_page_id: str) -> str | None:
         target_page_id = _compact_notion_page_id(notion_page_id)
@@ -493,21 +404,6 @@ class TaskTree:
 
         return _highest_priority(priorities_visible_in_subtree)
 
-    def _normalise_task_timelines(self) -> None:
-        for task in self.tasks.values():
-            task.normalise_timeline_entries()
-
-    def _ancestor_task_ids(self, task_id: str) -> list[str]:
-        ancestor_task_ids = []
-        current_task = self.tasks.get(task_id)
-
-        while current_task and current_task.parent_task_id is not None:
-            parent_task_id = current_task.parent_task_id
-            ancestor_task_ids.append(parent_task_id)
-            current_task = self.tasks.get(parent_task_id)
-
-        return ancestor_task_ids
-
     def _validate_after_task_field_change(self) -> None:
         self.derive_dependant_task_ids_from_dependencies()
         self.validate()
@@ -534,111 +430,3 @@ def _normalised_task_ids(task_ids: list[str]) -> list[str]:
 
 def _compact_notion_page_id(notion_page_id: str) -> str:
     return notion_page_id.replace("-", "").lower()
-
-
-def _parent_task_ids_from_change(task_tree_change: dict[str, Any]) -> list[str]:
-    parent_change = task_tree_change.get("fields", {}).get("parent_task_id", {})
-    return [
-        task_id
-        for task_id in [parent_change.get("before"), parent_change.get("after")]
-        if task_id is not None
-    ]
-
-
-def _changed_task_tree_fields(
-    before_task: dict[str, Any],
-    after_task: dict[str, Any],
-) -> dict[str, dict[str, Any]]:
-    changed_fields = {}
-    for field_name in [
-        "parent_task_id",
-        "child_task_ids",
-        "dependency_task_ids",
-        "dependant_task_ids",
-        "deadline",
-        "start",
-        "end",
-        "duration",
-        "duration_unit",
-        "external_coordination",
-        "uncertainty",
-        "friction",
-        "configured_priority",
-        "status",
-        "title",
-    ]:
-        if before_task.get(field_name) != after_task.get(field_name):
-            changed_fields[field_name] = {
-                "before": before_task.get(field_name),
-                "after": after_task.get(field_name),
-            }
-    return changed_fields
-
-
-def _task_to_tracker_state(task: Task) -> dict[str, Any]:
-    return {
-        "task_id": task.task_id,
-        "title": task.title,
-        "configured_priority": task.configured_priority.value,
-        "displayed_priority": task.displayed_priority.value if task.displayed_priority else None,
-        "status": task.status.value,
-        "status_update": task.status_update,
-        "parent_task_id": task.parent_task_id,
-        "child_task_ids": list(task.child_task_ids),
-        "dependency_task_ids": list(task.dependency_task_ids),
-        "dependant_task_ids": list(task.dependant_task_ids),
-        "deadline": task.deadline,
-        "start": task.start,
-        "end": task.end,
-        "duration": task.duration,
-        "duration_unit": task.duration_unit.value if task.duration_unit else None,
-        "external_coordination": task.external_coordination.value,
-        "uncertainty": task.uncertainty.value,
-        "friction": task.friction.value,
-        "timeline_entries": [
-            timeline_entry.to_tracker_state()
-            for timeline_entry in task.timeline_entries
-        ],
-        "links": [
-            external_link_to_tracker_state(link)
-            for link in task.links
-        ],
-        "notion_page_id": task.notion_page_id,
-    }
-
-
-def _task_from_tracker_state(tracker_state: dict[str, Any]) -> Task:
-    displayed_priority = tracker_state["displayed_priority"]
-    return Task(
-        task_id=tracker_state["task_id"],
-        title=tracker_state["title"],
-        configured_priority=Priority(tracker_state["configured_priority"]),
-        displayed_priority=Priority(displayed_priority) if displayed_priority else None,
-        status=TaskStatus(tracker_state["status"]),
-        status_update=tracker_state["status_update"],
-        parent_task_id=tracker_state["parent_task_id"],
-        child_task_ids=list(tracker_state["child_task_ids"]),
-        dependency_task_ids=list(tracker_state["dependency_task_ids"]),
-        dependant_task_ids=list(tracker_state["dependant_task_ids"]),
-        deadline=tracker_state["deadline"],
-        start=tracker_state["start"],
-        end=tracker_state["end"],
-        duration=tracker_state["duration"],
-        duration_unit=(
-            DurationUnit(tracker_state["duration_unit"])
-            if tracker_state["duration_unit"] is not None
-            else None
-        ),
-        external_coordination=ExternalCoordination(tracker_state["external_coordination"]),
-        uncertainty=Uncertainty(tracker_state["uncertainty"]),
-        friction=Friction(tracker_state["friction"]),
-        timeline_entries=[
-            TimelineEntry.from_tracker_state(derived_timeline_log)
-            for derived_timeline_log in tracker_state["timeline_entries"]
-        ],
-        links=[
-            external_link_from_tracker_state(link_state)
-            for link_state in tracker_state["links"]
-        ],
-        notion_page_id=tracker_state["notion_page_id"],
-    )

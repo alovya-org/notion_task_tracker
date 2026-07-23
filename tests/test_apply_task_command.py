@@ -1,14 +1,22 @@
 from notion_task_tracker.apply_task_command import apply_command_to_task_tree
-from notion_task_tracker.tasks import TaskTree
-from tests.tasks.build_task_command_fixtures import (
-    build_tracker_state_with_root_and_child_task,
-)
+from notion_task_tracker.tasks import Priority, Task, TaskStatus, TaskTree
 
 
 def test_set_dependants_writes_authored_dependencies_on_affected_tasks():
-    task_tree = TaskTree.from_tracker_state(
-        build_tracker_state_with_root_and_child_task()
+    task_tree = TaskTree()
+    task_tree.add_task(
+        Task("ALOVYA-1", "Root", Priority.P1, TaskStatus.ACTIVE)
     )
+    task_tree.add_task(
+        Task(
+            "ALOVYA-2",
+            "Child",
+            Priority.P1,
+            TaskStatus.ACTIVE,
+            parent_task_id="ALOVYA-1",
+        )
+    )
+    task_tree.tasks["ALOVYA-1"].child_task_ids = ["ALOVYA-2"]
 
     command_plan = apply_command_to_task_tree(
         command={

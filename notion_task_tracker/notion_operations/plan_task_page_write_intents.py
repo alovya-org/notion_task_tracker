@@ -86,7 +86,11 @@ def build_timeline_log_write_intent(timeline_log_change: TimelineLogChange) -> N
     arguments = {
         "task_id": timeline_log_change.task_id,
         "timeline_log_heading": TASK_PAGE_TIMELINE_LOG_HEADING,
-        "timeline_entry": timeline_entry.to_tracker_state(),
+        "timeline_entry": {
+            "entry_date": timeline_entry.entry_date,
+            "heading": timeline_entry.heading,
+            "lines": [],
+        },
         "timeline_section_markdown": join_markdown_blocks([
             render_timeline_entry_section_markdown(timeline_entry),
             appended_timeline_log_markdown,

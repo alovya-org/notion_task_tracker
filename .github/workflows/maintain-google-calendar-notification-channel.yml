@@ -43,7 +43,6 @@ jobs:
           ntt --maintain-google-calendar-notification-channel
           --tracker-user al0vya
           --calendar-notification-url "$NTT_GOOGLE_CALENDAR_NOTIFICATION_URL"
-          --tracker-state-path "$RUNNER_TEMP/ntt/notion_tasks_tree.json"
         env:
           GOOGLE_CALENDAR_CLIENT_ID: ${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}
           GOOGLE_CALENDAR_CLIENT_SECRET: ${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}

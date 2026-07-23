@@ -12,32 +12,22 @@ from typing import Any
 
 from notion_task_tracker.build_tracker_command import build_tracker_command_from_cli_action
 from notion_task_tracker.apply_task_command import TaskCommandPlan
-from notion_task_tracker.apply_tracker_command import TrackerCommandResult, apply_command_to_tracker_state
 from notion_task_tracker.google_calendar_sync.cloudflare_google_calendar_state_client import (
     CloudflareGoogleCalendarStateClient,
 )
 from notion_task_tracker.install_skill import install_skill
+from notion_task_tracker.json_file import write_json_file
 from notion_task_tracker.config import TrackerConfig, load_config, resolve_config_path
-from notion_task_tracker.fixed_pages import READY_PRIORITY_PAGE_LOCAL_KEY
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
     GoogleCalendarClient,
 )
-from notion_task_tracker.initialise_tracker import (
-    add_configured_ready_priority_page_to_tracker_state,
-    create_tracker_state_from_configured_pages,
-    initialise_tracker,
-)
+from notion_task_tracker.initialise_tracker import initialise_tracker
 from notion_task_tracker.notion_operations.rest_client import NotionRestClient
 from notion_task_tracker.notion_operations.move_task_timeline_log import move_task_timeline_log
 from notion_task_tracker.notion_operations.create_task_database_page import (
     create_tasks_in_current_tree,
-    should_create_task_database_page_for_command,
-    execute_create_task_database_page_command,
 )
 from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import (
-    prepare_command_result_from_current_task_page,
-    merge_context_repairs_into_command_result,
-    plan_context_repair_result,
     prepare_task_command_from_fetched_page_bodies,
 )
 from notion_task_tracker.notion_operations.load_current_task_tree_from_notion import (
@@ -46,12 +36,6 @@ from notion_task_tracker.notion_operations.load_current_task_tree_from_notion im
 from notion_task_tracker.notion_operations.resolve_tracker_resources import (
     ResolvedTrackerResources,
     resolve_tracker_resources,
-)
-from notion_task_tracker.notion_operations.refresh_task_tracker_from_notion import (
-    plan_repairs_for_task_tree_changes,
-    refresh_tracker_state_for_task_ids,
-    refresh_tracker_state_for_task_command,
-    refresh_tracker_state_from_notion_task_database,
 )
 from notion_task_tracker.notion_operations.reconcile_task_execution_order_page import (
     reconcile_task_execution_order_page,
@@ -62,7 +46,6 @@ from notion_task_tracker.notion_operations.reconcile_task_landing_pages import (
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_page_registry_for_task_tree,
 )
-from notion_task_tracker.notion_operations.write_executor import execute_command_result_writes
 from notion_task_tracker.google_calendar_sync.synchronise_notion_task_tracker_with_google_calendar import (
     synchronise_notion_task_tracker_with_google_calendar,
 )
@@ -80,7 +63,6 @@ from notion_task_tracker.tasks import (
 )
 from notion_task_tracker.tasks.timeline_log import parse_timeline_entries_from_fetched_task_page_content
 from notion_task_tracker.tracker_action_execution_summary import TrackerActionExecutionSummary
-from notion_task_tracker.tracked_pages import fixed_tracked_page_from_tracker_state
 
 
 STATE_FREE_TASK_COMMAND_NAMES = frozenset({
@@ -107,14 +89,7 @@ STATE_FREE_TASK_COMMAND_NAMES = frozenset({
 })
 
 
-APP_HOME_PATH = Path.home() / ".notion-task-tracker"
-TRACKER_STATE_FILE_NAME = "notion_tasks_tree.json"
-DEFAULT_TRACKER_STATE_PATH = APP_HOME_PATH / TRACKER_STATE_FILE_NAME
 DEFAULT_OUTPUT_PATH = Path("/tmp/notion_task_refreshed_result.json")
-LANDING_PAGE_REPLACEMENT_OPERATION_KEYS = frozenset({
-    "replace:ongoing_landing_page",
-    "replace:completed_landing_page",
-})
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -180,7 +155,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--child", action="store_true")
     action_group.add_argument("--sibling", action="store_true")
     action_group.add_argument("--move-logs", action="store_true")
-    parser.add_argument("--tracker-state-path")
     parser.add_argument("--config-path")
     parser.add_argument("--output-path")
     parser.add_argument("--display-name")
@@ -228,7 +202,6 @@ def _run_requested_cli_action(args: argparse.Namespace) -> None:
     execution_summary = execute_tracker_command(
         command=command,
         config=config,
-        tracker_state_path=args.tracker_state_path,
         output_path=args.output_path,
     )
     print(json.dumps(execution_summary.to_json_summary(), indent=2, sort_keys=True))
@@ -260,9 +233,7 @@ def _run_initialise_tracker_action(arguments: argparse.Namespace) -> None:
 
 def execute_tracker_command(
     command: dict[str, Any],
-    tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
-    backup_path: str | Path | None = None,
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
@@ -271,9 +242,7 @@ def execute_tracker_command(
     return asyncio.run(_run_tracker_command(
         command=command,
         config=config,
-        tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
-        backup_path=backup_path,
         notion_client=notion_client,
         google_calendar_client=google_calendar_client,
         google_calendar_state_client=google_calendar_state_client,
@@ -281,16 +250,13 @@ def execute_tracker_command(
 
 
 def refresh_task_tracker_from_notion(
-    tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
-    backup_path: str | Path | None = None,
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
 ) -> "TrackerActionExecutionSummary":
     return asyncio.run(_run_state_free_task_command(
         command={"command": "refresh_notion_task_tracker"},
         config=config,
-        legacy_tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
         notion_client=notion_client,
     ))
@@ -298,7 +264,6 @@ def refresh_task_tracker_from_notion(
 
 def read_task_pages(
     task_ids: list[str],
-    tracker_state_path: str | Path | None = None,
     output_path: str | Path | None = None,
     notion_client: NotionRestClient | None = None,
     config: TrackerConfig | None = None,
@@ -306,17 +271,9 @@ def read_task_pages(
     return asyncio.run(_run_state_free_task_command(
         command={"command": "read_tasks", "task_ids": task_ids},
         config=config,
-        legacy_tracker_state_path=resolve_tracker_state_path(tracker_state_path),
         output_path=resolve_output_path(output_path),
         notion_client=notion_client,
     ))
-
-
-def resolve_tracker_state_path(tracker_state_path: str | Path | None = None) -> Path:
-    if tracker_state_path:
-        return Path(tracker_state_path).expanduser()
-
-    return DEFAULT_TRACKER_STATE_PATH
 
 
 def resolve_output_path(output_path: str | Path | None = None) -> Path:
@@ -329,9 +286,7 @@ def resolve_output_path(output_path: str | Path | None = None) -> Path:
 async def _run_tracker_command(
     command: dict[str, Any],
     config: TrackerConfig | None,
-    tracker_state_path: str | Path,
     output_path: str | Path,
-    backup_path: str | Path | None,
     notion_client: NotionRestClient | None,
     google_calendar_client: GoogleCalendarClient | None,
     google_calendar_state_client: CloudflareGoogleCalendarStateClient | None,
@@ -343,7 +298,6 @@ async def _run_tracker_command(
             current_time_milliseconds=int(time.time() * 1000),
             replace_within_milliseconds=2 * 24 * 60 * 60 * 1000,
             config=config,
-            tracker_state_path=tracker_state_path,
             output_path=output_path,
             google_calendar_client=google_calendar_client,
             google_calendar_state_client=google_calendar_state_client,
@@ -353,7 +307,6 @@ async def _run_tracker_command(
         return await synchronise_notion_task_tracker_with_google_calendar(
             tracker_user=command["tracker_user"],
             config=config,
-            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
             google_calendar_client=google_calendar_client,
@@ -364,7 +317,6 @@ async def _run_tracker_command(
         return await _run_state_free_task_command(
             command=command,
             config=config,
-            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
         )
@@ -373,7 +325,6 @@ async def _run_tracker_command(
         return await _run_state_free_task_command(
             command=command,
             config=config,
-            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
         )
@@ -382,7 +333,6 @@ async def _run_tracker_command(
         return await _run_state_free_task_command(
             command=command,
             config=config,
-            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
         )
@@ -391,24 +341,16 @@ async def _run_tracker_command(
         return await _run_state_free_task_command(
             command=command,
             config=config,
-            legacy_tracker_state_path=tracker_state_path,
             output_path=output_path,
             notion_client=notion_client,
         )
 
-    return await _run_write_tracker_command(
-        command=command,
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        backup_path=backup_path,
-        notion_client=notion_client,
-    )
+    raise ValueError(f"Unsupported tracker command {command['command']!r}")
 
 
 async def _run_state_free_task_command(
     command: dict[str, Any],
     config: TrackerConfig | None,
-    legacy_tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient | None,
 ) -> "TrackerActionExecutionSummary":
@@ -423,7 +365,6 @@ async def _run_state_free_task_command(
             current_tasks.task_tree,
             current_tasks.repair_intents,
             current_tasks.warnings,
-            legacy_tracker_state_path,
             output_path,
             client,
         )
@@ -434,7 +375,6 @@ async def _run_state_free_task_command(
             current_tasks.repair_intents,
             current_tasks.warnings,
             resources,
-            legacy_tracker_state_path,
             output_path,
             client,
         )
@@ -446,7 +386,6 @@ async def _run_state_free_task_command(
             current_tasks.repair_intents,
             current_tasks.warnings,
             resources,
-            legacy_tracker_state_path,
             output_path,
             client,
         )
@@ -462,7 +401,6 @@ async def _run_state_free_task_command(
             current_tasks.repair_intents,
             current_tasks.warnings,
             resources,
-            legacy_tracker_state_path,
             output_path,
             client,
         )
@@ -490,8 +428,7 @@ async def _run_state_free_task_command(
     return _write_task_action_summary(
         action_name=_action_name_from_tracker_command(command),
         output_path=output_path,
-        legacy_tracker_state_path=legacy_tracker_state_path,
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=completed_operation_keys,
         warnings=[*current_tasks.warnings, *command_plan.warnings],
     )
 
@@ -502,7 +439,6 @@ async def _create_current_tasks(
     repair_intents,
     warnings: list[dict[str, str]],
     resources: ResolvedTrackerResources,
-    legacy_tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
@@ -517,13 +453,13 @@ async def _create_current_tasks(
         )
     )
     completed_operation_keys = await create_tasks_in_current_tree(
-            command=command,
-            task_tree=task_tree,
-            ticket_prefix=resources.config.ticket_prefix,
-            task_data_source_id=resources.task_data_source_id,
-            fetched_page_content_by_task_id=fetched_page_content_by_task_id,
-            notion_client=notion_client,
-        )
+        command=command,
+        task_tree=task_tree,
+        ticket_prefix=resources.config.ticket_prefix,
+        task_data_source_id=resources.task_data_source_id,
+        fetched_page_content_by_task_id=fetched_page_content_by_task_id,
+        notion_client=notion_client,
+    )
     completed_operation_keys.extend(
         await _execute_task_command_plan(
             TaskCommandPlan(
@@ -544,8 +480,7 @@ async def _create_current_tasks(
     return _write_task_action_summary(
         action_name=_action_name_from_tracker_command(command),
         output_path=output_path,
-        legacy_tracker_state_path=legacy_tracker_state_path,
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=completed_operation_keys,
         warnings=warnings,
     )
 
@@ -565,7 +500,6 @@ async def _read_current_task_pages(
     task_tree: TaskTree,
     repair_intents,
     warnings: list[dict[str, str]],
-    legacy_tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
@@ -587,8 +521,7 @@ async def _read_current_task_pages(
     summary = TrackerActionExecutionSummary(
         action_name=_action_name_from_tracker_command(command),
         output_path=Path(output_path),
-        tracker_state_path=Path(legacy_tracker_state_path),
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=completed_operation_keys,
         tasks=[
             _task_read_item_from_current_tree(
                 task_tree.tasks[task_id],
@@ -599,7 +532,7 @@ async def _read_current_task_pages(
         ],
         warnings=warnings,
     )
-    _write_json(Path(output_path), summary.to_json_summary())
+    write_json_file(summary.to_json_summary(), output_path)
     return summary
 
 
@@ -608,7 +541,6 @@ async def _reconcile_current_task_tracker(
     repair_intents,
     warnings: list[dict[str, str]],
     resources: ResolvedTrackerResources,
-    legacy_tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
@@ -621,13 +553,12 @@ async def _reconcile_current_task_tracker(
     summary = TrackerActionExecutionSummary(
         action_name="refresh_notion_task_tracker",
         output_path=Path(output_path),
-        tracker_state_path=Path(legacy_tracker_state_path),
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=completed_operation_keys,
         task_count=len(task_tree.tasks),
         repair_operation_count=len(repair_intents),
         warnings=warnings,
     )
-    _write_json(Path(output_path), summary.to_json_summary())
+    write_json_file(summary.to_json_summary(), output_path)
     return summary
 
 
@@ -637,7 +568,6 @@ async def _move_current_task_timeline_log(
     repair_intents,
     warnings: list[dict[str, str]],
     resources: ResolvedTrackerResources,
-    legacy_tracker_state_path: str | Path,
     output_path: str | Path,
     notion_client: NotionRestClient,
 ) -> "TrackerActionExecutionSummary":
@@ -658,12 +588,11 @@ async def _move_current_task_timeline_log(
     summary = TrackerActionExecutionSummary(
         action_name="move_logs",
         output_path=Path(output_path),
-        tracker_state_path=Path(legacy_tracker_state_path),
         completed_operation_keys=completed_operation_keys,
         movement=movement,
         warnings=warnings,
     )
-    _write_json(Path(output_path), summary.to_json_summary())
+    write_json_file(summary.to_json_summary(), output_path)
     return summary
 
 
@@ -786,18 +715,16 @@ async def _execute_task_command_plan(
 def _write_task_action_summary(
     action_name: str,
     output_path: str | Path,
-    legacy_tracker_state_path: str | Path,
     completed_operation_keys: list[str],
     warnings: list[dict[str, str]],
 ) -> "TrackerActionExecutionSummary":
     summary = TrackerActionExecutionSummary(
         action_name=action_name,
         output_path=Path(output_path),
-        tracker_state_path=Path(legacy_tracker_state_path),
         completed_operation_keys=completed_operation_keys,
         warnings=warnings,
     )
-    _write_json(Path(output_path), summary.to_json_summary())
+    write_json_file(summary.to_json_summary(), output_path)
     return summary
 
 
@@ -834,388 +761,6 @@ def _task_read_item_from_current_tree(
     return task_read_item
 
 
-async def _run_move_task_timeline_log_command(
-    command: dict[str, Any],
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    notion_client: NotionRestClient | None,
-) -> "TrackerActionExecutionSummary":
-    source_tracker_state_path = Path(tracker_state_path)
-    destination_output_path = Path(output_path)
-    tracker_state = _read_json(source_tracker_state_path)
-    client = _notion_rest_client_from_optional_instance(notion_client)
-
-    refreshed_result = await refresh_tracker_state_for_task_ids(
-        task_ids=[command["source_task_id"], command["destination_task_id"]],
-        tracker_state=tracker_state,
-        notion_client=client,
-    )
-    refreshed_tracker_state = refreshed_result.tracker_state
-    movement_result = await move_task_timeline_log(
-        source_page_id=_task_notion_page_id(refreshed_tracker_state, command["source_task_id"]),
-        destination_page_id=_task_notion_page_id(refreshed_tracker_state, command["destination_task_id"]),
-        requested_log_id=command["log_id"],
-        notion_client=client,
-    )
-
-    _write_json(source_tracker_state_path, refreshed_tracker_state)
-    execution_summary = TrackerActionExecutionSummary(
-        action_name="move_logs",
-        output_path=destination_output_path,
-        tracker_state_path=source_tracker_state_path,
-        warnings=list(refreshed_result.warnings or []),
-        movement=movement_result,
-    )
-    _write_json(destination_output_path, execution_summary.to_json_summary())
-    return execution_summary
-
-
-def _task_notion_page_id(tracker_state: dict[str, Any], task_id: str) -> str:
-    notion_page_id = tracker_state["tasks"][task_id].get("notion_page_id")
-    if notion_page_id is None:
-        raise ValueError(f"Task {task_id} has no Notion page id; run notion_task update")
-    return notion_page_id
-
-
-async def _run_refresh_notion_task_tracker_command(
-    config: TrackerConfig | None,
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
-) -> "TrackerActionExecutionSummary":
-    source_tracker_state_path = Path(tracker_state_path)
-    destination_output_path = Path(output_path)
-    destination_backup_path = Path(backup_path) if backup_path else _timestamped_backup_path()
-    client = _notion_rest_client_from_optional_instance(notion_client)
-
-    tracker_state = await _read_or_create_refreshable_tracker_state(
-        source_tracker_state_path=source_tracker_state_path,
-        config=config,
-        notion_client=client,
-    )
-    _write_json(destination_backup_path, tracker_state)
-
-    refreshed_result = await refresh_tracker_state_from_notion_task_database(tracker_state, client)
-    return await repair_and_write_refreshed_tracker_state(
-        source_tracker_state_path=source_tracker_state_path,
-        destination_output_path=destination_output_path,
-        destination_backup_path=destination_backup_path,
-        before_tracker_state=tracker_state,
-        refreshed_result=refreshed_result,
-        notion_client=client,
-    )
-
-
-async def _read_or_create_refreshable_tracker_state(
-    source_tracker_state_path: Path,
-    config: TrackerConfig | None,
-    notion_client: NotionRestClient,
-) -> dict[str, Any]:
-    if source_tracker_state_path.exists():
-        tracker_state = _read_json(source_tracker_state_path)
-        if "ready_priority_page" in tracker_state:
-            return tracker_state
-
-        configured_tracker = config or load_config()
-        return add_configured_ready_priority_page_to_tracker_state(
-            tracker_state,
-            configured_tracker,
-        )
-
-    configured_tracker = config or load_config()
-    return await create_tracker_state_from_configured_pages(
-        configured_tracker=configured_tracker,
-        tracker_state_path=source_tracker_state_path,
-        notion_client=notion_client,
-    )
-
-
-async def _run_read_task_pages_command(
-    command: dict[str, Any],
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    notion_client: NotionRestClient | None,
-) -> "TrackerActionExecutionSummary":
-    return await _run_read_task_pages(
-        action_name=_action_name_from_tracker_command(command),
-        task_ids=list(command["task_ids"]),
-        include_full_page_content=command["command"] == "read_all_tasks",
-        tracker_state_path=tracker_state_path,
-        output_path=output_path,
-        notion_client=notion_client,
-    )
-
-
-async def _run_write_tracker_command(
-    command: dict[str, Any],
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    backup_path: str | Path | None,
-    notion_client: NotionRestClient | None,
-) -> "TrackerActionExecutionSummary":
-    source_tracker_state_path = Path(tracker_state_path)
-    destination_output_path = Path(output_path)
-    destination_backup_path = Path(backup_path) if backup_path else _timestamped_backup_path()
-
-    tracker_state = _read_json(source_tracker_state_path)
-    _write_json(destination_backup_path, tracker_state)
-
-    client = _notion_rest_client_from_optional_instance(notion_client)
-    command_ready_result = await refresh_tracker_state_for_task_command(
-        command=command,
-        tracker_state=tracker_state,
-        notion_client=client,
-    )
-    command_ready_tracker_state = command_ready_result.tracker_state
-
-    command_tracker_state, command_operation_keys, command_warnings = await _run_notion_writes_for_write_command(
-        command=command,
-        before_tracker_state=tracker_state,
-        command_ready_result=command_ready_result,
-        command_ready_tracker_state=command_ready_tracker_state,
-        notion_client=client,
-    )
-
-    _write_json(source_tracker_state_path, command_tracker_state)
-    execution_summary = TrackerActionExecutionSummary(
-        action_name=_action_name_from_tracker_command(command),
-        backup_path=destination_backup_path,
-        completed_operation_keys=command_operation_keys,
-        output_path=destination_output_path,
-        tracker_state_path=source_tracker_state_path,
-        warnings=list(command_ready_result.warnings or []) + list(command_warnings),
-    )
-    _write_json(destination_output_path, execution_summary.to_json_summary())
-    return execution_summary
-
-
-async def _run_notion_writes_for_write_command(
-    command: dict[str, Any],
-    before_tracker_state: dict[str, Any],
-    command_ready_result,
-    command_ready_tracker_state: dict[str, Any],
-    notion_client: NotionRestClient,
-) -> tuple[dict[str, Any], list[str], list[dict[str, str]]]:
-    if should_create_task_database_page_for_command(command, command_ready_tracker_state):
-        command_tracker_state, command_operation_keys = await execute_create_task_database_page_command(
-            command=command,
-            tracker_state=command_ready_tracker_state,
-            notion_client=notion_client,
-        )
-        command_operation_keys.extend(
-            await _reconcile_current_task_execution_order(
-                command_tracker_state,
-                notion_client,
-            )
-        )
-        return command_tracker_state, command_operation_keys, []
-
-    context_repair_result = plan_context_repair_result(
-        before_tracker_state=before_tracker_state,
-        command_ready_result=command_ready_result,
-    )
-    command_result = await prepare_command_result_from_current_task_page(
-        command=command,
-        tracker_state=command_ready_tracker_state,
-        notion_client=notion_client,
-    )
-    command_result = merge_context_repairs_into_command_result(context_repair_result, command_result)
-    command_tracker_state, command_operation_keys = await _execute_command_writes_with_fresh_landing_page_render(
-        command_result,
-        notion_client,
-    )
-    command_operation_keys.extend(
-        await _reconcile_current_task_execution_order(
-            command_result.tracker_state,
-            notion_client,
-        )
-    )
-    return command_tracker_state, command_operation_keys, command_result.warnings or []
-
-
-async def _reconcile_current_task_execution_order(
-    tracker_state: dict[str, Any],
-    notion_client: NotionRestClient,
-) -> list[str]:
-    return await reconcile_task_execution_order_page(
-        task_tree=TaskTree.from_tracker_state(tracker_state),
-        task_data_source_id=str(tracker_state["task_database"]["data_source_id"]),
-        ready_priority_page=fixed_tracked_page_from_tracker_state(
-            tracker_state.get("ready_priority_page"),
-            READY_PRIORITY_PAGE_LOCAL_KEY,
-        ),
-        notion_client=notion_client,
-    )
-
-
-async def _execute_command_writes_with_fresh_landing_page_render(
-    command_result: TrackerCommandResult,
-    notion_client: NotionRestClient,
-) -> tuple[dict[str, Any], list[str]]:
-    landing_operation_keys = _landing_page_replacement_keys_in_write_order(command_result)
-    if not landing_operation_keys:
-        return await execute_command_result_writes(command_result, notion_client)
-
-    command_result_without_landing_pages = _command_result_without_landing_page_replacements(command_result)
-    tracker_state_after_command_writes, command_operation_keys = await execute_command_result_writes(
-        command_result_without_landing_pages,
-        notion_client,
-    )
-    landing_source_tracker_state = tracker_state_after_command_writes
-    if not _command_changes_task_relations(command_result):
-        refreshed_result = await refresh_tracker_state_from_notion_task_database(
-            tracker_state_after_command_writes,
-            notion_client,
-        )
-        landing_source_tracker_state = refreshed_result.tracker_state
-    landing_task_tree = TaskTree.from_tracker_state(landing_source_tracker_state)
-    landing_page_repair_intents = await plan_task_landing_page_reconciliation(
-        landing_task_tree,
-        notion_client,
-    )
-    landing_refresh_result = TrackerCommandResult(
-        tracker_state=landing_source_tracker_state,
-        write_intents=landing_page_repair_intents,
-        page_registry=build_page_registry_for_task_tree(landing_task_tree),
-    )
-    tracker_state_after_landing_pages, landing_operation_keys = await execute_command_result_writes(
-        landing_refresh_result,
-        notion_client,
-    )
-    return tracker_state_after_landing_pages, command_operation_keys + landing_operation_keys
-
-
-def _command_changes_task_relations(command_result: TrackerCommandResult) -> bool:
-    relation_operation_prefixes = (
-        "update_dependencies:task:",
-        "update_dependants:task:",
-        "update_parent:task:",
-    )
-    return any(
-        write_intent.operation_key.startswith(relation_operation_prefixes)
-        for write_intent in command_result.write_intents
-    )
-
-
-def _landing_page_replacement_keys_in_write_order(command_result: TrackerCommandResult) -> list[str]:
-    return [
-        write_intent.operation_key
-        for write_intent in command_result.write_intents
-        if write_intent.operation_key in LANDING_PAGE_REPLACEMENT_OPERATION_KEYS
-    ]
-
-
-def _command_result_without_landing_page_replacements(command_result: TrackerCommandResult) -> TrackerCommandResult:
-    return TrackerCommandResult(
-        tracker_state=command_result.tracker_state,
-        write_intents=[
-            write_intent
-            for write_intent in command_result.write_intents
-            if write_intent.operation_key not in LANDING_PAGE_REPLACEMENT_OPERATION_KEYS
-        ],
-        page_registry=command_result.page_registry,
-        warnings=command_result.warnings,
-        refreshed_task_ids=command_result.refreshed_task_ids,
-    )
-
-
-async def _run_read_task_pages(
-    action_name: str,
-    task_ids: list[str],
-    tracker_state_path: str | Path,
-    output_path: str | Path,
-    notion_client: NotionRestClient | None,
-    include_full_page_content: bool = False,
-) -> "TrackerActionExecutionSummary":
-    source_tracker_state_path = Path(tracker_state_path)
-    destination_output_path = Path(output_path)
-    tracker_state = _read_json(source_tracker_state_path)
-
-    client = _notion_rest_client_from_optional_instance(notion_client)
-    refreshed_result = await refresh_tracker_state_for_task_ids(
-        task_ids=task_ids,
-        tracker_state=tracker_state,
-        notion_client=client,
-    )
-    refreshed_tracker_state = refreshed_result.tracker_state
-    page_content_by_task_id = await _fetch_task_page_content_by_task_id(
-        task_ids=task_ids,
-        tracker_state=refreshed_tracker_state,
-        notion_client=client,
-    )
-
-    _write_json(source_tracker_state_path, refreshed_tracker_state)
-    read_summary = TrackerActionExecutionSummary(
-        action_name=action_name,
-        output_path=destination_output_path,
-        tracker_state_path=source_tracker_state_path,
-        tasks=[
-            _task_read_item_from_tracker_state(
-                task_id=task_id,
-                tracker_state=refreshed_tracker_state,
-                fetched_page_content=page_content_by_task_id[task_id],
-                include_full_page_content=include_full_page_content,
-            )
-            for task_id in task_ids
-        ],
-        warnings=refreshed_result.warnings or [],
-    )
-    _write_json(destination_output_path, read_summary.to_json_summary())
-    return read_summary
-
-
-async def _fetch_task_page_content_by_task_id(
-    task_ids: list[str],
-    tracker_state: dict[str, Any],
-    notion_client: NotionRestClient,
-) -> dict[str, str]:
-    page_content_by_task_id = {}
-    for task_id in task_ids:
-        notion_page_id = tracker_state["tasks"][task_id].get("notion_page_id")
-        if notion_page_id is None:
-            raise ValueError(f"Task {task_id} has no Notion page id; run notion_task update")
-        page_content_by_task_id[task_id] = await notion_client.fetch_task_page_content(notion_page_id)
-    return page_content_by_task_id
-
-
-def _task_read_item_from_tracker_state(
-    task_id: str,
-    tracker_state: dict[str, Any],
-    fetched_page_content: str,
-    include_full_page_content: bool,
-) -> dict[str, Any]:
-    task = tracker_state["tasks"][task_id]
-    timeline_entries = parse_timeline_entries_from_fetched_task_page_content(fetched_page_content)
-    task_read_item = {
-        "task_id": task_id,
-        "ticket_number": _ticket_number_from_task_id(task_id),
-        "title": task["title"],
-        "status": task["status"],
-        "configured_priority": task["configured_priority"],
-        "displayed_priority": task["displayed_priority"],
-        "parent_task_id": task["parent_task_id"],
-        "child_task_ids": list(task["child_task_ids"]),
-        "notion_url": _task_notion_url(task),
-        "recent_timeline_headings": [
-            timeline_entry["heading"]
-            for timeline_entry in timeline_entries[:5]
-        ],
-        "summary": _summarise_fetched_page_content(fetched_page_content),
-    }
-    if include_full_page_content:
-        task_read_item["full_page_content"] = fetched_page_content
-    return task_read_item
-
-
-def _task_notion_url(task: dict[str, Any]) -> str | None:
-    notion_page_id = task.get("notion_page_id")
-    if notion_page_id is None:
-        return None
-
-    return f"https://www.notion.so/{notion_page_id.replace('-', '')}"
-
-
 def _ticket_number_from_task_id(task_id: str) -> int:
     _ticket_prefix, separator, ticket_number = task_id.rpartition("-")
     if not separator or not ticket_number.isdigit():
@@ -1243,60 +788,6 @@ def _summarise_fetched_page_content(fetched_page_content: str) -> list[str]:
         if len(summary_lines) == 5:
             break
     return summary_lines
-
-
-async def repair_and_write_refreshed_tracker_state(
-    source_tracker_state_path: Path,
-    destination_output_path: Path,
-    destination_backup_path: Path,
-    before_tracker_state: dict[str, Any],
-    refreshed_result,
-    notion_client: NotionRestClient,
-) -> "TrackerActionExecutionSummary":
-    task_changes = TaskTree.changes_between_tracker_states(
-        before_tracker_state,
-        refreshed_result.tracker_state,
-    )
-    repair_result = plan_repairs_for_task_tree_changes(
-        refreshed_result=refreshed_result,
-        task_tree_changes=task_changes,
-    )
-    landing_page_repair_intents = await plan_task_landing_page_reconciliation(
-        TaskTree.from_tracker_state(repair_result.tracker_state),
-        notion_client,
-    )
-    repair_result = TrackerCommandResult(
-        tracker_state=repair_result.tracker_state,
-        write_intents=[
-            *repair_result.write_intents,
-            *landing_page_repair_intents,
-        ],
-        page_registry=repair_result.page_registry,
-        warnings=repair_result.warnings,
-        refreshed_task_ids=repair_result.refreshed_task_ids,
-    )
-    repaired_tracker_state, completed_operation_keys = await execute_command_result_writes(repair_result, notion_client)
-    completed_operation_keys.extend(
-        await _reconcile_current_task_execution_order(
-            repaired_tracker_state,
-            notion_client,
-        )
-    )
-    _write_json(source_tracker_state_path, repaired_tracker_state)
-
-    refresh_summary = TrackerActionExecutionSummary(
-        action_name="refresh_notion_task_tracker",
-        backup_path=destination_backup_path,
-        completed_operation_keys=completed_operation_keys,
-        output_path=destination_output_path,
-        tracker_state_path=source_tracker_state_path,
-        task_tree_changes=task_changes,
-        task_count=len(repaired_tracker_state["tasks"]),
-        warnings=refreshed_result.warnings or [],
-        repair_operation_count=len(repair_result.write_intents),
-    )
-    _write_json(destination_output_path, refresh_summary.to_json_summary())
-    return refresh_summary
 
 
 def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
@@ -1334,22 +825,6 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "split_task_with_sibling": "sibling",
         "move_task_timeline_log": "move_logs",
     }[command["command"]]
-
-
-def _timestamped_backup_path() -> Path:
-    return Path("/tmp") / f"notion_tasks_tree_before_refresh_{int(time.time())}.json"
-
-
-def _read_json(source_path: Path) -> dict[str, Any]:
-    return json.loads(source_path.read_text(encoding="utf-8"))
-
-
-def _write_json(destination_path: Path, tracker_state: dict[str, Any]) -> None:
-    destination_path.parent.mkdir(parents=True, exist_ok=True)
-    destination_path.write_text(
-        json.dumps(tracker_state, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
 
 
 def _notion_rest_client_from_optional_instance(

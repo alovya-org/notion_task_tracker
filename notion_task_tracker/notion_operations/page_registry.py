@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-
 from notion_task_tracker.notion_operations.write_intent import NotionPlanningError
 from notion_task_tracker.notion_operations.notion_id import canonical_notion_page_id, notion_page_id_from_url
 from notion_task_tracker.tracked_pages import TrackedPage
@@ -50,15 +48,6 @@ class NotionPageRegistry:
             }
         )
 
-    @classmethod
-    def from_tracker_state(cls, tracker_state: dict[str, Any]) -> "NotionPageRegistry":
-        return cls(
-            pages={
-                local_page_key: notion_page_reference_from_tracker_state(reference_state)
-                for local_page_key, reference_state in tracker_state.items()
-            }
-        )
-
     def page_reference(self, local_page_key: str) -> NotionPageReference:
         try:
             return self.pages[local_page_key]
@@ -94,30 +83,4 @@ class NotionPageRegistry:
             parent_page_key=page.parent_page_key,
         )
         return NotionPageRegistry(pages={**self.pages, local_page_key: updated_page})
-
-    def to_tracker_state(self) -> dict[str, Any]:
-        return {
-            local_page_key: notion_page_reference_to_tracker_state(page)
-            for local_page_key, page in sorted(self.pages.items())
-        }
-
-
-def notion_page_reference_to_tracker_state(page: NotionPageReference) -> dict[str, Any]:
-    return {
-        "local_page_key": page.local_page_key,
-        "title": page.title,
-        "notion_page_id": page.notion_page_id,
-        "notion_url": page.notion_url,
-        "parent_page_key": page.parent_page_key,
-    }
-
-
-def notion_page_reference_from_tracker_state(tracker_state: dict[str, Any]) -> NotionPageReference:
-    return NotionPageReference(
-        local_page_key=tracker_state["local_page_key"],
-        title=tracker_state["title"],
-        notion_page_id=tracker_state.get("notion_page_id"),
-        notion_url=tracker_state.get("notion_url"),
-        parent_page_key=tracker_state.get("parent_page_key"),
-    )
 

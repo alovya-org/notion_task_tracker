@@ -9,12 +9,9 @@ from typing import Any
 class TrackerActionExecutionSummary:
     action_name: str
     output_path: Path
-    tracker_state_path: Path
     warnings: list[dict[str, str]]
-    backup_path: Path | None = None
-    completed_operation_keys: list[str] | None = None
+    notion_operation_keys: list[str] | None = None
     tasks: list[dict[str, Any]] | None = None
-    task_tree_changes: list[dict[str, Any]] | None = None
     task_count: int | None = None
     repair_operation_count: int | None = None
     movement: dict[str, Any] | None = None
@@ -27,17 +24,12 @@ class TrackerActionExecutionSummary:
         summary = {
             "action_name": self.action_name,
             "output_path": str(self.output_path),
-            "tracker_state_path": str(self.tracker_state_path),
             "warnings": list(self.warnings),
         }
-        if self.backup_path is not None:
-            summary["backup_path"] = str(self.backup_path)
-        if self.completed_operation_keys is not None:
-            summary["completed_operations"] = list(self.completed_operation_keys)
+        if self.notion_operation_keys is not None:
+            summary["notion_operations"] = list(self.notion_operation_keys)
         if self.tasks is not None:
             summary["tasks"] = self.tasks
-        if self.task_tree_changes is not None:
-            summary["task_tree_changes"] = self.task_tree_changes
         if self.task_count is not None:
             summary["task_count"] = self.task_count
         if self.repair_operation_count is not None:

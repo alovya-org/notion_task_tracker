@@ -22,7 +22,7 @@ from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_timeline_log_write_intent,
 )
 from notion_task_tracker.notion_operations.write_intent import NotionWriteIntent
-from notion_task_tracker.tasks import TaskStatus, TaskTree, TimelineLog
+from notion_task_tracker.tasks import TaskStatus, TaskTree, TimelineEntry, TimelineLog
 from notion_task_tracker.tasks.task import generate_timeline_log_id
 
 
@@ -38,13 +38,16 @@ def apply_command_to_task_tree(
     command: dict,
     task_tree: TaskTree,
     ticket_prefix: str,
+    current_timeline_entries_by_task_id: dict[str, list[TimelineEntry]] | None = None,
 ) -> TaskCommandPlan:
     command_name = command["command"]
+    timeline_entries_by_task_id = current_timeline_entries_by_task_id or {}
 
     if command_name == "append_task_timeline_log":
         timeline_change = task_tree.append_task_timeline_log(
             command["task_id"],
             TimelineLog.from_command(command["timeline_entry"]),
+            timeline_entries_by_task_id.get(command["task_id"], []),
         )
         return _build_task_command_plan(
             task_tree,
@@ -52,10 +55,19 @@ def apply_command_to_task_tree(
         )
 
     if command_name in {"complete_task", "cancel_task"}:
-        return _apply_task_completion(command, task_tree)
+        return _apply_task_completion(
+            command,
+            task_tree,
+            timeline_entries_by_task_id,
+        )
 
     if command_name == "complete_task_with_all_children":
-        return _complete_task_subtree(command, task_tree, ticket_prefix)
+        return _complete_task_subtree(
+            command,
+            task_tree,
+            ticket_prefix,
+            timeline_entries_by_task_id,
+        )
 
     if command_name == "delete_task":
         return _delete_task(command, task_tree)
@@ -174,12 +186,21 @@ def apply_command_to_task_tree(
 def _apply_task_completion(
     command: dict,
     task_tree: TaskTree,
+    current_timeline_entries_by_task_id: dict[str, list[TimelineEntry]],
 ) -> TaskCommandPlan:
     timeline_log = TimelineLog.from_command(command["timeline_entry"])
     if command["command"] == "complete_task":
-        completion_change = task_tree.complete_task(command["task_id"], timeline_log)
+        completion_change = task_tree.complete_task(
+            command["task_id"],
+            timeline_log,
+            current_timeline_entries_by_task_id.get(command["task_id"], []),
+        )
     else:
-        completion_change = task_tree.cancel_task(command["task_id"], timeline_log)
+        completion_change = task_tree.cancel_task(
+            command["task_id"],
+            timeline_log,
+            current_timeline_entries_by_task_id.get(command["task_id"], []),
+        )
     task = task_tree.tasks[completion_change.task_id]
     return _build_task_command_plan(
         task_tree,
@@ -194,6 +215,7 @@ def _complete_task_subtree(
     command: dict,
     task_tree: TaskTree,
     ticket_prefix: str,
+    current_timeline_entries_by_task_id: dict[str, list[TimelineEntry]],
 ) -> TaskCommandPlan:
     write_intents = []
     for task_id in _collect_task_ids_in_subtree_postorder(task_tree, command["task_id"]):
@@ -205,6 +227,7 @@ def _complete_task_subtree(
         completion_change = task_tree.complete_task(
             task_id,
             TimelineLog.from_command(timeline_entry),
+            current_timeline_entries_by_task_id.get(task_id, []),
         )
         write_intents.extend([
             build_task_database_property_refresh_intent(task_tree.tasks[task_id]),

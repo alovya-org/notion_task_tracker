@@ -43,7 +43,6 @@ from notion_task_tracker.tracker_action_execution_summary import TrackerActionEx
 async def synchronise_notion_task_tracker_with_google_calendar(
     tracker_user: str,
     output_path: str | Path,
-    legacy_tracker_state_path: str | Path,
     config: TrackerConfig | None = None,
     notion_client: NotionRestClient | None = None,
     google_calendar_client: GoogleCalendarClient | None = None,
@@ -131,14 +130,13 @@ async def synchronise_notion_task_tracker_with_google_calendar(
     summary = TrackerActionExecutionSummary(
         action_name="synchronise_notion_task_tracker_with_google_calendar",
         output_path=Path(output_path),
-        tracker_state_path=Path(legacy_tracker_state_path),
         warnings=[
             *current_tasks.warnings,
             *selected_changes.warnings,
             *applied_changes.warnings,
             *projection_warnings,
         ],
-        completed_operation_keys=completed_notion_operations,
+        notion_operation_keys=completed_notion_operations,
         calendar_operation_keys=calendar_operations,
         task_count=len(current_tasks.task_tree.tasks),
         repair_operation_count=len(current_tasks.repair_intents),

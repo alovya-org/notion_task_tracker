@@ -15,9 +15,6 @@ from notion_task_tracker.tasks import (
     Uncertainty,
 )
 from notion_task_tracker.tasks.database import (
-    build_task_database_tracker_state,
-    task_database_data_source_url_from_tracker_state,
-    task_database_query_for_tracker_state,
     build_task_tree_from_database_query_results,
     task_id_from_fetched_task_database_page,
 )
@@ -25,18 +22,6 @@ from notion_task_tracker.tasks.database import (
 
 class TestTaskTreeFromDatabaseQueryResults:
     def test_builds_tree_from_ticket_ids_and_parent_relations(self):
-        previous_task_tree = TaskTree()
-        previous_task_tree.add_task(
-            Task(
-                task_id="ALOVYA-68",
-                title="Old root title",
-                configured_priority=Priority.P1,
-                status=TaskStatus.ACTIVE,
-                status_update="Keep local status detail.",
-                notion_page_id="11111111111111111111111111111111",
-            )
-        )
-
         task_tree = _build_task_tree(
             query_results=[
                 _build_task_database_row(
@@ -58,62 +43,13 @@ class TestTaskTreeFromDatabaseQueryResults:
                 title=ONGOING_LANDING_PAGE_TITLE,
                 notion_page_id="landing-page-id",
             ),
-            previous_task_tree=previous_task_tree,
         )
 
         assert task_tree.tasks["ALOVYA-68"].title == "Root task"
-        assert task_tree.tasks["ALOVYA-68"].status_update == "Keep local status detail."
         assert task_tree.tasks["ALOVYA-68"].child_task_ids == ["ALOVYA-69"]
         assert task_tree.tasks["ALOVYA-69"].parent_task_id == "ALOVYA-68"
         assert task_tree.tasks["ALOVYA-69"].configured_priority == Priority.P2
         assert task_tree.tasks["ALOVYA-69"].status == TaskStatus.BLOCKED
-
-    def test_uses_current_unique_task_id_when_a_known_page_reports_a_different_id(self):
-        previous_task_tree = TaskTree()
-        previous_task_tree.add_task(
-            Task(
-                task_id="ALOVYA-118",
-                title="Stage 1",
-                configured_priority=Priority.P2,
-                status=TaskStatus.ACTIVE,
-                notion_page_id="11111111111111111111111111111111",
-            )
-        )
-
-        task_tree = _build_task_tree(
-            query_results=[
-                _build_task_database_row(
-                    ticket_page="Stage 1",
-                    ticket_id="127",
-                    page_id="11111111111111111111111111111111",
-                ),
-            ],
-            landing_page=TrackedPage(
-                local_page_key="ongoing_landing_page",
-                title=ONGOING_LANDING_PAGE_TITLE,
-                notion_page_id="landing-page-id",
-            ),
-            previous_task_tree=previous_task_tree,
-        )
-
-        assert list(task_tree.tasks) == ["ALOVYA-127"]
-
-    def test_preserves_completed_landing_page_from_previous_tree(self):
-        previous_task_tree = TaskTree()
-        previous_task_tree.completed_tasks_landing_page.page.notion_page_id = "completed-landing-page-id"
-
-        task_tree = _build_task_tree(
-            query_results=[],
-            landing_page=TrackedPage(
-                local_page_key="ongoing_landing_page",
-                title=ONGOING_LANDING_PAGE_TITLE,
-                notion_page_id="landing-page-id",
-            ),
-            previous_task_tree=previous_task_tree,
-        )
-
-        assert task_tree.completed_tasks_landing_page.page.title == COMPLETED_LANDING_PAGE_TITLE
-        assert task_tree.completed_tasks_landing_page.page.notion_page_id == "completed-landing-page-id"
 
     def test_uses_notion_ticket_id_for_task_id(self):
         task_tree = _build_task_tree(
@@ -368,20 +304,6 @@ class TestTaskTreeFromDatabaseQueryResults:
                     notion_page_id="landing-page-id",
                 ),
             )
-
-
-class TestTaskDatabaseTrackerState:
-    def test_builds_task_property_filtered_query_for_configured_data_source(self):
-        tracker_state = build_task_database_tracker_state(
-            data_source_id="configured-data-source-id",
-        )
-
-        assert task_database_data_source_url_from_tracker_state(tracker_state={"task_database": tracker_state}) == (
-            "collection://configured-data-source-id"
-        )
-        assert task_database_query_for_tracker_state({"task_database": tracker_state}) == (
-            'SELECT * FROM "collection://configured-data-source-id"'
-        )
 
 
 class TestTaskIdFromFetchedTaskDatabasePage:

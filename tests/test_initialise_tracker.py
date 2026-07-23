@@ -5,10 +5,7 @@ from typing import Any
 import pytest
 
 from notion_task_tracker.config import ManagedPageUrls, TrackerConfig, load_config
-from notion_task_tracker.initialise_tracker import (
-    add_configured_ready_priority_page_to_tracker_state,
-    initialise_tracker,
-)
+from notion_task_tracker.initialise_tracker import initialise_tracker
 from notion_task_tracker.tasks.database import (
     TASK_DATABASE_DEADLINE_PROPERTY,
     TASK_DATABASE_DEPENDENCIES_PROPERTY,
@@ -128,32 +125,6 @@ def test_initialise_tracker_refuses_to_replace_existing_config_before_notion_wri
 
     assert notion_client.fetched_database_ids == []
     assert notion_client.created_pages == []
-
-
-def test_add_configured_ready_priority_page_to_existing_tracker_state() -> None:
-    configured_tracker = TrackerConfig(
-        display_name="Alovya",
-        ticket_prefix="ALOVYA",
-        parent_page_url="https://www.notion.so/parent-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        task_database_url="https://www.notion.so/tasks-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        pages=ManagedPageUrls(
-            ready_priority_page_url=(
-                "https://www.notion.so/execution-cccccccccccccccccccccccccccccccc"
-            ),
-        ),
-    )
-
-    tracker_state = add_configured_ready_priority_page_to_tracker_state(
-        {"tasks": {}},
-        configured_tracker,
-    )
-
-    assert tracker_state["ready_priority_page"] == {
-        "local_page_key": "ready_priority_page",
-        "title": "Alovya's tasks in execution order",
-        "notion_page_id": "cccccccccccccccccccccccccccccccc",
-        "parent_page_key": None,
-    }
 
 
 def test_initialise_tracker_rejects_incompatible_fixed_property_type(tmp_path: Path) -> None:

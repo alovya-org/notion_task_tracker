@@ -35,10 +35,7 @@ def test_workflow_modules_do_not_import_notion_protocol_details():
         "execute_write_intent",
         "send_call",
     ]
-    workflow_files = [
-        "run_notion_task_tracker.py",
-        "notion_operations/write_executor.py",
-    ]
+    workflow_files = ["run_notion_task_tracker.py"]
 
     for workflow_file in workflow_files:
         source = _source(workflow_file)
@@ -99,8 +96,6 @@ def test_tracker_metadata_modules_do_not_import_notion_operations():
         "tasks/landing_pages.py",
         "tasks/timeline_log.py",
         "tasks/create_task.py",
-        "tasks/derive_task_timeline_log.py",
-        "tasks/refresh_task_tracker_state.py",
     ]
 
     for metadata_file in metadata_files:
@@ -117,6 +112,18 @@ def test_rest_client_uses_notion_sdk_not_raw_http_layer():
     assert "from notion_client import AsyncClient" in source
     assert "urlopen" not in source
     assert "urllib.request" not in source
+
+
+def test_production_modules_have_no_persistent_tracker_state_surface():
+    forbidden_text = [
+        "tracker_" + "state",
+        "notion_" + "tasks_tree",
+        "--tracker-" + "state-path",
+    ]
+
+    for source_path in PACKAGE_PATH.rglob("*.py"):
+        source = source_path.read_text(encoding="utf-8")
+        assert not any(forbidden in source for forbidden in forbidden_text), source_path
 
 
 def _source(relative_path: str) -> str:
