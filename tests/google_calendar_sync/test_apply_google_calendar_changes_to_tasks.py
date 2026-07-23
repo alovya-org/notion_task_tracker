@@ -221,6 +221,24 @@ def test_deleted_event_clears_the_complete_task_schedule():
     assert written_properties["Duration unit"] is None
 
 
+def test_legacy_cancellation_for_an_already_completed_task_is_a_successful_no_op():
+    completed_task = _scheduled_task(DurationUnit.HOURS)
+    completed_task.status = TaskStatus.COMPLETE
+    tracker_state = _tracker_state(completed_task)
+    deleted_event = _owned_event(task_id="ALOVYA-1")
+    deleted_event["status"] = "cancelled"
+
+    result = _plan_task_schedule_updates_from_google_events(
+        [deleted_event],
+        tracker_state,
+        "ALOVYA",
+        "Europe/London",
+    )
+
+    assert result.tracker_state["tasks"]["ALOVYA-1"]["status"] == "Complete"
+    assert result.write_intents == []
+
+
 def test_foreign_event_identity_fails_clearly():
     tracker_state = _tracker_state(_scheduled_task(DurationUnit.HOURS))
 

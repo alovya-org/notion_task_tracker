@@ -375,13 +375,20 @@ def _derive_unambiguous_task_schedule_changes(
     task_ids = _read_task_ids_from_owned_calendar_events(changed_events, tracker_id)
     schedule_changes = []
     for event, task_id in zip(changed_events, task_ids, strict=True):
-        task = _calendar_editable_leaf_task(task_tree, task_id)
         if event.get("status") == "cancelled":
+            task = task_tree.tasks.get(task_id)
+            if (
+                task is None
+                or task.status != TaskStatus.ACTIVE
+                or task.child_task_ids
+            ):
+                continue
             schedule_changes.append(CalendarTaskScheduleRemoval(
                 event_id=_required_event_id(event),
                 task_id=task.task_id,
             ))
         else:
+            task = _calendar_editable_leaf_task(task_tree, task_id)
             schedule_changes.append(_derive_task_schedule_change(event, task, timezone))
     return schedule_changes
 

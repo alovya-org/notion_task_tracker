@@ -226,7 +226,62 @@ miscellaneous_notes_url = "https://www.notion.so/..."
 synthesis_notes_url = "https://www.notion.so/..."
 ```
 
-Google Calendar synchronisation uses optional non-secret configuration:
+## Google Calendar synchronisation
+
+Google Calendar presents scheduled NTT work; Notion remains the task database. A task appears in Calendar only when it is active, has no children, and has a complete `Start`, `Duration`, and `Duration unit` schedule.
+
+For example:
+
+```text
+Notion task: [ALOVYA-42] Pay council tax
+Start:       2026-08-03 10:00
+Duration:    1 hour
+
+Google event: [NTT] Pay council tax
+Start:        2026-08-03 10:00
+End:          2026-08-03 11:00
+```
+
+The synchronisation supports three user-visible changes:
+
+1. Change the task schedule in Notion. The next synchronisation creates or updates its Google event.
+2. Move or resize the owned Google event. The next synchronisation writes the resulting start and duration to Notion.
+3. Delete the owned Google event. The next synchronisation clears the task's schedule in Notion.
+
+NTT also deletes Calendar events itself when their tasks become complete, cancelled, unscheduled, non-active, parents, or absent. Google reports those deletions through the same notification system as a deletion made by a person. NTT therefore keeps a small durable D1 ledger:
+
+```text
+Google event ID   NTT task ID   Lifecycle
+google-789        ALOVYA-42     active
+```
+
+Before NTT deletes an event, it changes that row to `deleted_by_ntt`. When Google's cancellation later arrives, NTT can distinguish the two meanings:
+
+1. An active mapping was cancelled: the person deleted the event, so unschedule the task.
+2. A `deleted_by_ntt` mapping was cancelled: NTT is seeing confirmation of its own deletion, so leave the task unchanged.
+
+Google may return a cancelled event containing only its event ID. The ledger supplies the missing task identity. It stores current mappings and short-lived deletion provenance, not edit history. Acknowledged cancellations are removed, and expired notification channels are pruned.
+
+### The synchronisation lifecycle
+
+Google's notification contains no changed event. It only tells the Cloudflare Worker that something may have changed. Every Notion webhook, Google notification, daily recovery, or manual wake-up enters the same tracker-scoped GitHub concurrency group and performs one ordered lifecycle:
+
+1. Build current local tracker state from Notion.
+2. Read the current Google change cursor and event ledger from D1 after the workflow enters concurrency.
+3. Ask Google for every change after that cursor.
+4. Apply owned Google moves, resizes, and user deletions to Notion.
+5. Persist the corresponding ledger transitions.
+6. Advance the D1 cursor only after those Notion and ledger writes succeed.
+7. Refresh authoritative Notion state again.
+8. Create, replace, or delete Google events until Calendar matches Notion.
+
+Dispatch payloads contain only `tracker_user`; they never carry the change cursor. Duplicate or coalesced wake-ups are safe because whichever run survives reads the latest durable cursor when it starts. If Google expires a cursor, NTT fetches a complete owned-event snapshot, compares it with the previous ledger, applies missing active events as user deletions, replaces the ledger, then saves the rebuilt cursor.
+
+Google notification channels expire and cannot be extended. The maintenance workflow creates a replacement before the current channel expires. If it finds that the previous channel already expired, it renews the channel and wakes the ordinary synchronisation workflow rather than reconciling concurrently. Notifications stop authenticating ten minutes after their recorded expiry, and later maintenance removes their D1 rows. Cloudflare also wakes synchronisation every day at `00:00 UTC` so a missed notification cannot permanently hide changes.
+
+### Calendar configuration
+
+Configure the non-secret Calendar identity and display behaviour:
 
 ```toml
 [calendar]
@@ -235,15 +290,29 @@ timezone_name = "Europe/London"
 colour_id = "8"
 ```
 
-Keep Google OAuth secrets outside this file. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REFRESH_TOKEN` in the process environment or deployment secret store. Obtain the refresh token through offline OAuth consent using only `https://www.googleapis.com/auth/calendar.events`; NTT does not request Gmail access. The Calendar client renews short-lived access tokens automatically.
+Keep Google OAuth secrets outside this file. Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REFRESH_TOKEN` in the process environment or deployment secret store. Obtain the refresh token through offline OAuth consent using only `https://www.googleapis.com/auth/calendar.events`; NTT does not request Gmail access. The Calendar client renews short-lived access tokens automatically. If the OAuth application is external and remains in Google's testing state, confirm its refresh-token lifetime before relying on unattended synchronisation.
 
 Sync scheduled active leaf tasks after refreshing the current Notion database:
 
 ```bash
-ntt --sync-tasks-to-google-calendar
+ntt --sync-tasks-to-google-calendar --tracker-user al0vya
 ```
 
-NTT identifies its events through private Google extended properties containing the configured ticket prefix and full task ID. It creates missing events, replaces changed events, and deletes only uniquely identified NTT events whose task is no longer eligible. Foreign, malformed, and duplicate events are preserved. Synced task slots use an `[NTT]` title, remain transparent so meetings may be booked over them, and may use the configured colour. Keep recurring daily routines as native recurring Google Calendar events; this command syncs only tasks stored in the NTT task database.
+Apply outstanding Google changes using the current cursor stored in D1:
+
+```bash
+ntt --apply-google-calendar-changes-to-tasks --tracker-user al0vya
+```
+
+Maintain the temporary Google notification channel:
+
+```bash
+ntt --maintain-google-calendar-notification-channel \
+  --tracker-user al0vya \
+  --calendar-notification-url https://<worker>/google-calendar-notifications
+```
+
+NTT identifies live owned events through private Google extended properties containing the configured ticket prefix and full task ID. It creates missing events, replaces changed events, and deletes only uniquely identified NTT events whose task is no longer eligible. Foreign, malformed, and duplicate events are preserved. Synced task slots use an `[NTT]` title, remain transparent so meetings may be booked over them, and may use the configured colour. Keep recurring daily routines as native recurring Google Calendar events; synchronisation covers only tasks stored in the NTT task database.
 
 Ordinary commands do not query the full database. They fetch the task pages they depend on. If a targeted fetch finds a parent page outside local tracker state, run the full update command before retrying.
 
@@ -264,14 +333,20 @@ Targeted preflight intentionally fails instead of guessing when the touched page
 
 Task ids are derived from Notion's `Task ID`. The visible Notion page title stays as the human title and does not include the `EXAMPLE-N` prefix.
 
-## Refresh from GitHub Actions
+## Synchronise from GitHub Actions
 
-`.github/workflows/refresh-notion-task-tracker.yml` refreshes one configured tracker from GitHub Actions. The workflow installs this package, writes the selected user's `config.toml` from GitHub secrets, then runs `ntt --refresh-notion-task-tracker` with a temporary tracker state path.
+`.github/workflows/refresh-notion-task-tracker.yml` owns the complete two-way lifecycle described above. Notion dispatches, Google dispatches, and manual runs all wake this workflow rather than selecting separate one-way workflows.
 
 Each tracker user is represented by one GitHub environment. The environment name is the `tracker_user` value passed to the workflow. Each environment must define:
 
 - `NTT_CONFIG_TOML`: the full `config.toml` created by that user's local `ntt --init`.
 - `NOTION_API_KEY`: the Notion integration token connected to that user's tracker parent page, task database, and managed pages.
+- `GOOGLE_CALENDAR_CLIENT_ID`: the OAuth application identity.
+- `GOOGLE_CALENDAR_CLIENT_SECRET`: the OAuth application credential.
+- `GOOGLE_CALENDAR_REFRESH_TOKEN`: the user's offline Calendar delegation.
+- `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN`: the shared secret used to call the Worker's authenticated Calendar state API.
+
+The environment must also define `NTT_GOOGLE_CALENDAR_NOTIFICATION_URL` and `NTT_GOOGLE_CALENDAR_STATE_API_URL` as non-secret variables.
 
 Provision a tracker environment with:
 
@@ -284,9 +359,13 @@ gh api \
 
 gh secret set NTT_CONFIG_TOML --env "$TRACKER_USER" < ~/.config/notion-task-tracker/config.toml
 gh secret set NOTION_API_KEY --env "$TRACKER_USER"
+gh secret set GOOGLE_CALENDAR_CLIENT_ID --env "$TRACKER_USER"
+gh secret set GOOGLE_CALENDAR_CLIENT_SECRET --env "$TRACKER_USER"
+gh secret set GOOGLE_CALENDAR_REFRESH_TOKEN --env "$TRACKER_USER"
+gh secret set NTT_GOOGLE_CALENDAR_STATE_API_TOKEN --env "$TRACKER_USER"
 ```
 
-`gh secret set NOTION_API_KEY` prompts for the token. Manual refreshes run from the GitHub Actions page by entering the tracker user. External refreshes use `repository_dispatch`:
+Commands without redirected input prompt for their value. Manual synchronisations run from the GitHub Actions page by entering the tracker user. External Notion wake-ups use `repository_dispatch`:
 
 ```json
 {
@@ -297,7 +376,11 @@ gh secret set NOTION_API_KEY --env "$TRACKER_USER"
 }
 ```
 
-The GitHub token used to dispatch the workflow is separate from `NOTION_API_KEY`.
+Google wake-ups use event type `apply-google-calendar-changes-to-notion-task-tracker` with the same identity-only payload. Neither event contains a Google cursor. The GitHub token used to dispatch the workflow is separate from the Notion and Google credentials.
+
+The scheduled notification-channel maintenance deployment deliberately uses the `al0vya` GitHub environment. The central workflow and D1 schema retain `tracker_user` as a tenant boundary, but adding another environment does not automatically schedule that user's channel renewal. The workflow contains a TODO at this boundary.
+
+Ordinary jobs receive only `contents: read`. A separate failure-reporting job receives `issues: write` only after its main job fails and creates an issue linking to the failed run.
 
 ## Refresh from a Notion webhook
 
@@ -323,7 +406,14 @@ npx wrangler secret put NOTION_WEBHOOK_SECRET
 npx wrangler secret put NTT_GOOGLE_CALENDAR_STATE_API_TOKEN
 ```
 
-`GITHUB_REPOSITORY_DISPATCH_TOKEN` is a GitHub token that can create repository dispatch events for this repository. `NOTION_WEBHOOK_SECRET` is any strong shared value that Notion will send to the Worker. `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN` authenticates GitHub when it reads notification channels or advances change cursors through the Worker. Store the same randomly generated value under that exact name in both Cloudflare and the GitHub environment.
+`GITHUB_REPOSITORY_DISPATCH_TOKEN` is a GitHub token that can create repository dispatch events for this repository. `NOTION_WEBHOOK_SECRET` is any strong shared value that Notion will send to the Worker. `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN` authenticates GitHub when it reads or changes channels, cursors and the event ledger or requests a synchronisation dispatch through the Worker. Store the same randomly generated value under that exact name in both Cloudflare and the GitHub environment.
+
+Apply D1 migrations before deploying code that uses a new schema:
+
+```bash
+cd cloudflare_worker
+npx wrangler d1 migrations apply GOOGLE_CALENDAR_STATE_DATABASE --remote
+```
 
 Deploy the Worker:
 
@@ -347,6 +437,8 @@ tracker_user: al0vya
 ```
 
 Both values are required as headers. The Worker deliberately rejects body fields, URL parameters, aliases, and other fallback formats. `tracker_user` is the GitHub environment name that owns `NTT_CONFIG_TOML` and `NOTION_API_KEY`.
+
+Configure a Cloudflare alert for failures of the Worker's scheduled `00:00 UTC` handler. GitHub failure issues cover synchronisation and channel-maintenance jobs, but they cannot report a failure that prevents the Worker from reaching GitHub at all.
 
 ## Task commands
 
