@@ -10,10 +10,8 @@ from typing import Any
 from notion_task_tracker.config import ManagedPageUrls, TrackerConfig, write_config
 from notion_task_tracker.fixed_pages import (
     COMPLETED_LANDING_PAGE_LOCAL_KEY,
-    MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
     ONGOING_LANDING_PAGE_LOCAL_KEY,
     READY_PRIORITY_PAGE_LOCAL_KEY,
-    SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
     derive_managed_page_titles,
 )
 from notion_task_tracker.notion_operations.notion_id import canonical_notion_page_id, notion_page_id_from_url
@@ -39,8 +37,6 @@ class TrackerInitialisationResult:
                 "ongoing_tasks_url": self.created_page_urls.ongoing_tasks_url,
                 "completed_tasks_url": self.created_page_urls.completed_tasks_url,
                 "ready_priority_page_url": self.created_page_urls.ready_priority_page_url,
-                "miscellaneous_notes_url": self.created_page_urls.miscellaneous_notes_url,
-                "synthesis_notes_url": self.created_page_urls.synthesis_notes_url,
             },
         }
 
@@ -147,8 +143,6 @@ def _managed_page_urls(created_pages: dict[str, dict[str, Any]]) -> ManagedPageU
         ongoing_tasks_url=created_pages[ONGOING_LANDING_PAGE_LOCAL_KEY]["url"],
         completed_tasks_url=created_pages[COMPLETED_LANDING_PAGE_LOCAL_KEY]["url"],
         ready_priority_page_url=created_pages[READY_PRIORITY_PAGE_LOCAL_KEY]["url"],
-        miscellaneous_notes_url=created_pages[MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY]["url"],
-        synthesis_notes_url=created_pages[SYNTHESIS_NOTES_PAGE_LOCAL_KEY]["url"],
     )
 
 
@@ -189,29 +183,6 @@ def _tracker_state_from_configured_pages(
                 "ready_priority_page_url",
             ),
         ),
-        "miscellaneous_notes": {
-            "page": _created_page_state(
-                MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
-                page_titles,
-                _required_managed_page_url(
-                    configured_tracker.pages.miscellaneous_notes_url,
-                    "miscellaneous_notes_url",
-                ),
-            ),
-            "dated_pages": {},
-        },
-        "synthesis_notes": {
-            "page": _created_page_state(
-                SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
-                page_titles,
-                _required_managed_page_url(
-                    configured_tracker.pages.synthesis_notes_url,
-                    "synthesis_notes_url",
-                ),
-            ),
-            "existing_page_mentions": {},
-            "pages": {},
-        },
         "tasks": {},
     }
 

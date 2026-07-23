@@ -176,6 +176,14 @@ def test_main_rejects_removed_token_file_flag():
     assert error.value.code == 2
 
 
+@pytest.mark.parametrize("removed_action", ["misc", "synth"])
+def test_main_rejects_removed_note_page_actions(removed_action: str):
+    with pytest.raises(SystemExit) as error:
+        main(["--" + removed_action])
+
+    assert error.value.code == 2
+
+
 def test_main_rejects_unknown_flag():
     with pytest.raises(SystemExit) as error:
         main(["--unknown-flag", "result.json"])
@@ -654,12 +662,6 @@ def test_refresh_notion_task_tracker_creates_missing_tracker_state_from_configur
     assert tracker_state["ongoing_landing_page"]["notion_page_id"] == "dddddddddddddddddddddddddddddddd"
     assert tracker_state["completed_landing_page"]["notion_page_id"] == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     assert tracker_state["ready_priority_page"]["notion_page_id"] == "77777777777777777777777777777777"
-    assert tracker_state["miscellaneous_notes"]["page"]["notion_page_id"] == (
-        "ffffffffffffffffffffffffffffffff"
-    )
-    assert tracker_state["synthesis_notes"]["page"]["notion_page_id"] == (
-        "99999999999999999999999999999999"
-    )
     assert tracker_state["tasks"] == {}
     assert backed_up_tracker_state == tracker_state
     assert notion_client.created_pages == []
@@ -672,10 +674,10 @@ def test_refresh_notion_task_tracker_creates_missing_tracker_state_from_configur
 
 
 def test_refresh_notion_task_tracker_rejects_missing_configured_page_url(tmp_path: Path):
-    with pytest.raises(ValueError, match="synthesis_notes_url"):
+    with pytest.raises(ValueError, match="ready_priority_page_url"):
         asyncio.run(
             _run_refresh_notion_task_tracker_command(
-                config=_configured_tracker(synthesis_notes_url=None),
+                config=_configured_tracker(ready_priority_page_url=None),
                 tracker_state_path=tmp_path / "notion_tasks_tree.json",
                 output_path=tmp_path / "output.json",
                 backup_path=tmp_path / "backup.json",
@@ -1027,7 +1029,6 @@ def _markdown_for_call(notion_client: FakeNotionClient, operation_key: str) -> s
 
 
 def _configured_tracker(
-    synthesis_notes_url: str | None = "https://www.notion.so/synthesis-99999999999999999999999999999999",
     ready_priority_page_url: str | None = "https://www.notion.so/priorities-77777777777777777777777777777777",
 ) -> TrackerConfig:
     return TrackerConfig(
@@ -1039,8 +1040,6 @@ def _configured_tracker(
             ongoing_tasks_url="https://www.notion.so/ongoing-dddddddddddddddddddddddddddddddd",
             completed_tasks_url="https://www.notion.so/completed-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
             ready_priority_page_url=ready_priority_page_url,
-            miscellaneous_notes_url="https://www.notion.so/misc-ffffffffffffffffffffffffffffffff",
-            synthesis_notes_url=synthesis_notes_url,
         ),
     )
 

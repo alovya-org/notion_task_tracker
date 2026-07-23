@@ -190,16 +190,6 @@ def _resolved_resources() -> ResolvedTrackerResources:
             title="Alovya's tasks in execution order",
             notion_page_id="88888888888888888888888888888888",
         ),
-        miscellaneous_notes_page=TrackedPage(
-            local_page_key="miscellaneous_notes",
-            title="Alovya's miscellaneous notes",
-            notion_page_id="99999999999999999999999999999999",
-        ),
-        synthesis_notes_page=TrackedPage(
-            local_page_key="synthesis_notes",
-            title="Alovya's synthesis notes",
-            notion_page_id="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ),
     )
 
 

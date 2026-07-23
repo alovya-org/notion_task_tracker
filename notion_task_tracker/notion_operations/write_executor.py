@@ -62,10 +62,4 @@ def _refresh_command_for_captured_page_ids(captured_page_ids: dict[str, str]) ->
             "operation_keys": ["replace:completed_landing_page"],
         }
 
-    if captured_page_key_prefixes == {"miscellaneous"}:
-        return {"command": "refresh_miscellaneous_pages"}
-
-    if captured_page_key_prefixes == {"synthesis"}:
-        return {"command": "refresh_synthesis_pages"}
-
     raise ValueError(f"Cannot refresh mixed captured page keys {sorted(captured_page_ids)}")

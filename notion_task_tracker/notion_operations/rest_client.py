@@ -249,10 +249,6 @@ class NotionRestClient:
             return await self._execute_trash_page_intent(write_intent, page_registry)
         if write_intent.operation_name == "update_timeline_log":
             return await self._execute_timeline_log_update_intent(write_intent, page_registry)
-        if write_intent.operation_name == "append_miscellaneous_context":
-            return await self._execute_miscellaneous_context_append_intent(write_intent, page_registry)
-        if write_intent.operation_name == "create_synthesis_page":
-            return await self._execute_synthesis_page_creation_intent(write_intent, page_registry)
         raise ValueError(f"Notion REST client cannot execute write intent {write_intent.operation_name!r}")
 
     async def create_database_page(
@@ -386,74 +382,6 @@ class NotionRestClient:
                 page_id=page_id,
                 anchor_markdown=f"## {arguments['timeline_log_heading']}",
                 inserted_markdown=arguments["timeline_section_markdown"],
-            )
-        return _write_result(write_intent.operation_key)
-
-    async def _execute_miscellaneous_context_append_intent(
-        self,
-        write_intent: NotionWriteIntent,
-        page_registry: NotionPageRegistry,
-    ) -> dict[str, Any]:
-        dated_page = write_intent.arguments["dated_page"]
-        dated_page_key = dated_page["local_page_key"]
-        if not _page_has_id(page_registry, dated_page_key):
-            return await self._execute_create_page_intent(
-                NotionWriteIntent(
-                    operation_key=f"create:{dated_page_key}",
-                    operation_name="create_page",
-                    target_page_key=None,
-                    arguments={
-                        "local_page_key": dated_page_key,
-                        "title": dated_page["title"],
-                        "parent_page_key": dated_page.get("parent_page_key"),
-                        "markdown": write_intent.arguments["dated_page_markdown"],
-                    },
-                ),
-                page_registry,
-            )
-
-        await self.replace_page_content(
-            page_registry.page_id(dated_page_key),
-            write_intent.arguments["dated_page_markdown"],
-        )
-        if write_intent.arguments.get("root_page_markdown") is not None:
-            await self.replace_page_content(
-                page_registry.page_id(write_intent.arguments["root_page_key"]),
-                write_intent.arguments["root_page_markdown"],
-            )
-        return _write_result(write_intent.operation_key)
-
-    async def _execute_synthesis_page_creation_intent(
-        self,
-        write_intent: NotionWriteIntent,
-        page_registry: NotionPageRegistry,
-    ) -> dict[str, Any]:
-        synthesis_page = write_intent.arguments["page"]
-        synthesis_page_key = synthesis_page["local_page_key"]
-        if not _page_has_id(page_registry, synthesis_page_key):
-            return await self._execute_create_page_intent(
-                NotionWriteIntent(
-                    operation_key=f"create:{synthesis_page_key}",
-                    operation_name="create_page",
-                    target_page_key=None,
-                    arguments={
-                        "local_page_key": synthesis_page_key,
-                        "title": synthesis_page["title"],
-                        "parent_page_key": synthesis_page.get("parent_page_key"),
-                        "markdown": write_intent.arguments["markdown"],
-                    },
-                ),
-                page_registry,
-            )
-
-        await self.replace_page_content(
-            page_registry.page_id(synthesis_page_key),
-            write_intent.arguments["markdown"],
-        )
-        if write_intent.arguments.get("root_page_markdown") is not None:
-            await self.replace_page_content(
-                page_registry.page_id(write_intent.arguments["root_page_key"]),
-                write_intent.arguments["root_page_markdown"],
             )
         return _write_result(write_intent.operation_key)
 

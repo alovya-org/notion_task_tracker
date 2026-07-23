@@ -50,8 +50,6 @@ def test_resolve_configured_tracker_resources_loads_and_validates_every_notion_r
             resources.ongoing_tasks_page,
             resources.completed_tasks_page,
             resources.ready_priority_page,
-            resources.miscellaneous_notes_page,
-            resources.synthesis_notes_page,
         ]
     ] == [
         (
@@ -68,16 +66,6 @@ def test_resolve_configured_tracker_resources_loads_and_validates_every_notion_r
             "ready_priority_page",
             "Alovya's tasks in execution order",
             "33333333333333333333333333333333",
-        ),
-        (
-            "miscellaneous_notes",
-            "Alovya's miscellaneous notes",
-            "44444444444444444444444444444444",
-        ),
-        (
-            "synthesis_notes",
-            "Alovya's synthesis notes",
-            "55555555555555555555555555555555",
         ),
     ]
     assert notion_client.fetched_database_ids == [
@@ -97,8 +85,6 @@ def test_resolve_configured_tracker_resources_requires_every_managed_page_url(
             ongoing_tasks_url=None,
             completed_tasks_url="https://www.notion.so/completed-22222222222222222222222222222222",
             ready_priority_page_url="https://www.notion.so/ready-33333333333333333333333333333333",
-            miscellaneous_notes_url="https://www.notion.so/miscellaneous-44444444444444444444444444444444",
-            synthesis_notes_url="https://www.notion.so/synthesis-55555555555555555555555555555555",
         ),
     )
 
@@ -153,8 +139,6 @@ def _write_complete_config(
                 ongoing_tasks_url="https://www.notion.so/ongoing-11111111111111111111111111111111",
                 completed_tasks_url="https://www.notion.so/completed-22222222222222222222222222222222",
                 ready_priority_page_url="https://www.notion.so/ready-33333333333333333333333333333333",
-                miscellaneous_notes_url="https://www.notion.so/miscellaneous-44444444444444444444444444444444",
-                synthesis_notes_url="https://www.notion.so/synthesis-55555555555555555555555555555555",
             ),
         ),
         tmp_path / "config.toml",

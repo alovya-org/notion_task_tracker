@@ -177,10 +177,6 @@ class FakeNotionClient:
             return _write_result(write_intent.operation_key)
         if write_intent.operation_name == "update_timeline_log":
             return self._execute_timeline_log_update_intent(write_intent, page_registry)
-        if write_intent.operation_name == "append_miscellaneous_context":
-            return self._execute_miscellaneous_context_append_intent(write_intent, page_registry)
-        if write_intent.operation_name == "create_synthesis_page":
-            return self._execute_synthesis_page_creation_intent(write_intent, page_registry)
 
         raise ValueError(f"Fake Notion client cannot execute write intent {write_intent.operation_name!r}")
 
@@ -226,70 +222,6 @@ class FakeNotionClient:
                 "inserted_markdown": arguments["timeline_section_markdown"],
             }
         self._record_call(write_intent.operation_key, operation_name, operation_arguments)
-        return _write_result(write_intent.operation_key)
-
-    def _execute_miscellaneous_context_append_intent(
-        self,
-        write_intent: NotionWriteIntent,
-        page_registry: NotionPageRegistry,
-    ) -> dict:
-        dated_page = write_intent.arguments["dated_page"]
-        dated_page_key = dated_page["local_page_key"]
-        if not _page_has_id(page_registry, dated_page_key):
-            return self._execute_create_page_intent(
-                NotionWriteIntent(
-                    operation_key=f"create:{dated_page_key}",
-                    operation_name="create_page",
-                    target_page_key=None,
-                    arguments={
-                        "local_page_key": dated_page_key,
-                        "title": dated_page["title"],
-                        "parent_page_key": dated_page.get("parent_page_key"),
-                        "markdown": write_intent.arguments["dated_page_markdown"],
-                    },
-                ),
-                page_registry,
-            )
-
-        self._record_replace_page_content(dated_page_key, write_intent.arguments["dated_page_markdown"], page_registry)
-        if write_intent.arguments.get("root_page_markdown") is not None:
-            self._record_replace_page_content(
-                write_intent.arguments["root_page_key"],
-                write_intent.arguments["root_page_markdown"],
-                page_registry,
-            )
-        return _write_result(write_intent.operation_key)
-
-    def _execute_synthesis_page_creation_intent(
-        self,
-        write_intent: NotionWriteIntent,
-        page_registry: NotionPageRegistry,
-    ) -> dict:
-        synthesis_page = write_intent.arguments["page"]
-        synthesis_page_key = synthesis_page["local_page_key"]
-        if not _page_has_id(page_registry, synthesis_page_key):
-            return self._execute_create_page_intent(
-                NotionWriteIntent(
-                    operation_key=f"create:{synthesis_page_key}",
-                    operation_name="create_page",
-                    target_page_key=None,
-                    arguments={
-                        "local_page_key": synthesis_page_key,
-                        "title": synthesis_page["title"],
-                        "parent_page_key": synthesis_page.get("parent_page_key"),
-                        "markdown": write_intent.arguments["markdown"],
-                    },
-                ),
-                page_registry,
-            )
-
-        self._record_replace_page_content(synthesis_page_key, write_intent.arguments["markdown"], page_registry)
-        if write_intent.arguments.get("root_page_markdown") is not None:
-            self._record_replace_page_content(
-                write_intent.arguments["root_page_key"],
-                write_intent.arguments["root_page_markdown"],
-                page_registry,
-            )
         return _write_result(write_intent.operation_key)
 
     def _record_replace_page_content(self, page_key: str, markdown: str, page_registry: NotionPageRegistry) -> None:

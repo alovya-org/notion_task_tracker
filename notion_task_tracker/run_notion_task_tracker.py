@@ -180,8 +180,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     action_group.add_argument("--parent", action="store_true")
     action_group.add_argument("--child", action="store_true")
     action_group.add_argument("--sibling", action="store_true")
-    action_group.add_argument("--misc", action="store_true")
-    action_group.add_argument("--synth", action="store_true")
     action_group.add_argument("--move-logs", action="store_true")
     parser.add_argument("--tracker-state-path")
     parser.add_argument("--config-path")
@@ -205,7 +203,6 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--uncertainty", choices=_enum_values(Uncertainty))
     parser.add_argument("--friction", choices=_enum_values(Friction))
     parser.add_argument("--content-path")
-    parser.add_argument("--synthesis-key")
     parser.add_argument("--entry-date")
     parser.add_argument("--destination-ticket-number", type=int)
     parser.add_argument("--log-id")
@@ -1348,8 +1345,6 @@ def _action_name_from_tracker_command(command: dict[str, Any]) -> str:
         "create_top_level_task": "parent",
         "split_task_into_children": "child",
         "split_task_with_sibling": "sibling",
-        "append_miscellaneous_note": "misc",
-        "create_synthesis_page": "synth",
         "move_task_timeline_log": "move_logs",
     }[command["command"]]
 

@@ -9,10 +9,8 @@ from typing import Any
 from notion_task_tracker.config import TrackerConfig, load_config
 from notion_task_tracker.fixed_pages import (
     COMPLETED_LANDING_PAGE_LOCAL_KEY,
-    MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
     ONGOING_LANDING_PAGE_LOCAL_KEY,
     READY_PRIORITY_PAGE_LOCAL_KEY,
-    SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
     derive_managed_page_titles,
 )
 from notion_task_tracker.notion_operations.notion_id import (
@@ -48,8 +46,6 @@ class ResolvedTrackerResources:
     ongoing_tasks_page: TrackedPage
     completed_tasks_page: TrackedPage
     ready_priority_page: TrackedPage
-    miscellaneous_notes_page: TrackedPage
-    synthesis_notes_page: TrackedPage
 
 
 @dataclass(frozen=True)
@@ -89,18 +85,6 @@ async def resolve_tracker_resources(
         config.pages.ready_priority_page_url,
         "ready_priority_page_url",
     )
-    miscellaneous_notes_page = _resolve_managed_page(
-        MISCELLANEOUS_NOTES_PAGE_LOCAL_KEY,
-        page_titles,
-        config.pages.miscellaneous_notes_url,
-        "miscellaneous_notes_url",
-    )
-    synthesis_notes_page = _resolve_managed_page(
-        SYNTHESIS_NOTES_PAGE_LOCAL_KEY,
-        page_titles,
-        config.pages.synthesis_notes_url,
-        "synthesis_notes_url",
-    )
     task_database = await resolve_task_database(
         config.task_database_url,
         notion_client,
@@ -112,8 +96,6 @@ async def resolve_tracker_resources(
         ongoing_tasks_page=ongoing_tasks_page,
         completed_tasks_page=completed_tasks_page,
         ready_priority_page=ready_priority_page,
-        miscellaneous_notes_page=miscellaneous_notes_page,
-        synthesis_notes_page=synthesis_notes_page,
     )
 
 

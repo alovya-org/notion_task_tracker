@@ -53,8 +53,6 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
         "Alovya's ongoing tasks",
         "Alovya's completed tasks",
         "Alovya's tasks in execution order",
-        "Alovya's miscellaneous notes",
-        "Alovya's synthesis notes",
     ]
     assert all(
         created_page["parent"] == {
@@ -79,8 +77,6 @@ def test_initialise_tracker_creates_managed_pages_and_writes_local_configuration
             "ongoing_tasks_url": "https://www.notion.so/created-00000000000000000000000000000001",
             "completed_tasks_url": "https://www.notion.so/created-00000000000000000000000000000002",
             "ready_priority_page_url": "https://www.notion.so/created-00000000000000000000000000000003",
-            "miscellaneous_notes_url": "https://www.notion.so/created-00000000000000000000000000000004",
-            "synthesis_notes_url": "https://www.notion.so/created-00000000000000000000000000000005",
         },
     }
     assert obsolete_tracker_state_path.read_text(encoding="utf-8") == (

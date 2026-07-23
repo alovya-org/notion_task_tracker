@@ -505,48 +505,6 @@ def test_set_enum_field_actions_build_field_specific_commands():
     }
 
 
-def test_synthesis_action_keeps_rich_sources_inside_content_payload(tmp_path):
-    content_path = tmp_path / "content.json"
-    content_path.write_text(
-        json.dumps({
-            "summary": "Reusable tracker CLI design.",
-            "sources": [
-                {
-                    "source_type": "Notion page",
-                    "label": "ALOVYA-67",
-                    "page_key": "task:ALOVYA-67",
-                }
-            ],
-            "lines": ["Actions freeze schemas; content remains free-form."],
-        }),
-        encoding="utf-8",
-    )
-
-    command = _build_tracker_command(
-        _arguments(
-            synth=True,
-            synthesis_key="explicit_tracker_cli",
-            title=["Explicit tracker CLI"],
-            content_path=str(content_path),
-        )
-    )
-
-    assert command == {
-        "command": "create_synthesis_page",
-        "synthesis_key": "explicit_tracker_cli",
-        "title": "Explicit tracker CLI",
-        "summary": "Reusable tracker CLI design.",
-        "sources": [
-            {
-                "source_type": "Notion page",
-                "label": "ALOVYA-67",
-                "page_key": "task:ALOVYA-67",
-            }
-        ],
-        "lines": ["Actions freeze schemas; content remains free-form."],
-    }
-
-
 def test_ticket_ids_from_numbers_rejects_invalid_ticket_numbers():
     with pytest.raises(ValueError) as error:
         ticket_ids_from_numbers([0], "ALOVYA")
@@ -606,8 +564,6 @@ def _arguments(**overrides):
         "parent": False,
         "child": False,
         "sibling": False,
-        "misc": False,
-        "synth": False,
         "move_logs": False,
         "ticket_number": [],
         "tracker_user": None,
@@ -626,7 +582,6 @@ def _arguments(**overrides):
         "uncertainty": None,
         "friction": None,
         "content_path": None,
-        "synthesis_key": None,
         "entry_date": "2026-05-30",
         "destination_ticket_number": None,
         "log_id": None,

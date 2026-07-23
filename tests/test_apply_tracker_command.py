@@ -219,107 +219,6 @@ class TestApplyCommandToTrackerState:
         )
         assert timeline_write_intent.operation_name == "update_timeline_log"
 
-    def test_append_miscellaneous_note_command_updates_combined_tracker_state(self):
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "append_miscellaneous_note",
-                "note_date": "2026-05-24",
-                "lines": ["Recent context."],
-            },
-            tracker_state=_combined_tracker_state(),
-        )
-
-        assert "tasks" in command_result.tracker_state
-        assert command_result.tracker_state["miscellaneous_notes"]["dated_pages"]["2026-05-24"]["entries"][0]["lines"] == [
-            "Recent context."
-        ]
-        assert command_result.write_intents[0].operation_name == "append_miscellaneous_context"
-        assert command_result.write_intents[0].target_page_key == "miscellaneous:2026-05-24"
-
-    def test_create_synthesis_page_command_updates_combined_tracker_state(self):
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "create_synthesis_page",
-                "synthesis_key": "onnx_qdq",
-                "title": "ONNX QDQ",
-                "summary": "Reusable explanation.",
-                "sources": [
-                    {
-                        "source_type": "Notion page",
-                        "label": "ALOVYA-1",
-                        "page_key": "task:ALOVYA-1",
-                    }
-                ],
-                "lines": ["QDQ nodes preserve quantisation boundaries."],
-            },
-            tracker_state=_combined_tracker_state(),
-        )
-
-        assert "tasks" in command_result.tracker_state
-        assert command_result.tracker_state["synthesis_notes"]["pages"]["onnx_qdq"]["sources"][0]["page_key"] == (
-            "task:ALOVYA-1"
-        )
-        assert command_result.write_intents[0].operation_name == "create_synthesis_page"
-        assert command_result.write_intents[0].arguments["page"]["local_page_key"] == "synthesis:onnx_qdq"
-        assert command_result.write_intents[0].arguments["markdown"].startswith("## Sources")
-
-    def test_refresh_synthesis_root_page_mentions_updates_tracker_state_without_rest_writes(self):
-        tracker_state = _combined_tracker_state()
-        tracker_state["synthesis_notes"]["existing_page_mentions"] = {
-            "stale": {
-                "mention_key": "stale",
-                "title": "Stale page",
-                "notion_page_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            },
-        }
-
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "refresh_synthesis_root_page_mentions",
-                "root_page_content": (
-                    '<mention-page url="https://www.notion.so/wayve/Useful-guide-'
-                    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb">Useful guide</mention-page>'
-                ),
-            },
-            tracker_state=tracker_state,
-        )
-
-        assert command_result.tracker_state["synthesis_notes"]["existing_page_mentions"] == {
-            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": {
-                "mention_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                "title": "Useful guide",
-                "notion_page_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                "display_order": 0,
-                "root_block_type": "page_mention",
-            },
-        }
-        assert command_result.write_intents == []
-
-    def test_record_page_id_command_updates_combined_synthesis_tracker_state(self):
-        tracker_state = _combined_tracker_state()
-        tracker_state["synthesis_notes"]["pages"]["onnx_qdq"] = {
-            "synthesis_key": "onnx_qdq",
-            "title": "ONNX QDQ",
-            "summary": "",
-            "lines": [],
-            "sources": [],
-            "notion_page_id": None,
-        }
-
-        command_result = apply_command_to_tracker_state(
-            command={
-                "command": "record_page_id",
-                "local_page_key": "synthesis:onnx_qdq",
-                "notion_page_id": "66666666666666666666666666666666",
-            },
-            tracker_state=tracker_state,
-        )
-
-        assert command_result.tracker_state["tasks"] == tracker_state["tasks"]
-        assert command_result.tracker_state["synthesis_notes"]["pages"]["onnx_qdq"]["notion_page_id"] == (
-            "66666666666666666666666666666666"
-        )
-
     def test_set_task_dependencies_updates_dependency_relation(self):
         command_result = apply_command_to_tracker_state(
             command={
@@ -597,24 +496,6 @@ def _combined_tracker_state():
     tracker_state["identity"] = {
         "display_name": "Alovya",
         "ticket_prefix": "ALOVYA",
-    }
-    tracker_state["miscellaneous_notes"] = {
-        "page": {
-            "local_page_key": "miscellaneous_notes",
-            "title": "Alovya's miscellanous notes",
-            "notion_page_id": "44444444444444444444444444444444",
-            "parent_page_key": None,
-        },
-        "dated_pages": {},
-    }
-    tracker_state["synthesis_notes"] = {
-        "page": {
-            "local_page_key": "synthesis_notes",
-            "title": "Alovya's synthesis notes",
-            "notion_page_id": "55555555555555555555555555555555",
-            "parent_page_key": None,
-        },
-        "pages": {},
     }
     return tracker_state
 

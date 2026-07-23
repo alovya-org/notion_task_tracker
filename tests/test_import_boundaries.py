@@ -101,8 +101,6 @@ def test_tracker_metadata_modules_do_not_import_notion_operations():
         "tasks/create_task.py",
         "tasks/derive_task_timeline_log.py",
         "tasks/refresh_task_tracker_state.py",
-        "miscellaneous_pages.py",
-        "synthesis_pages.py",
     ]
 
     for metadata_file in metadata_files:

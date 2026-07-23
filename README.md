@@ -1,13 +1,12 @@
 # Notion task tracker
 
-This package turns explicit CLI actions into Notion writes. Each user supplies one parent page and one fixed-schema task database. Initialisation creates the four tracker-owned pages beneath that parent:
+This package turns explicit CLI actions into Notion writes. Each user supplies one parent page and one fixed-schema task database. Initialisation creates three tracker-owned pages beneath that parent:
 
 ```text
 Tracker parent page
 ├── <display name>'s ongoing tasks
 ├── <display name>'s completed tasks
-├── <display name>'s miscellaneous notes
-└── <display name>'s synthesis notes
+└── <display name>'s tasks in execution order
 ```
 
 Task metadata lives in the database. Task page bodies contain timeline logs, while the ongoing and completed pages are derived views.
@@ -81,7 +80,7 @@ Configuration is written to the platform user-configuration directory:
 
 Set `NTT_CONFIG_PATH` or pass `--config-path` to use another file. Mutable tracker state remains at `~/.notion-task-tracker/notion_tasks_tree.json` unless `--tracker-state-path` is supplied.
 
-The configuration contains identity, the two supplied URLs, and the five generated page URLs. Database property names are defined by the codebase, not user configuration. Keep `NOTION_API_KEY` in the environment or a private secret store; it is never written to configuration or state.
+The configuration contains identity, the two supplied URLs, and the three generated page URLs. Database property names are defined by the codebase, not user configuration. Keep `NOTION_API_KEY` in the environment or a private secret store; it is never written to configuration or state.
 
 ```toml
 [identity]
@@ -96,8 +95,6 @@ task_database_url = "https://www.notion.so/..."
 ongoing_tasks_url = "https://www.notion.so/..."
 completed_tasks_url = "https://www.notion.so/..."
 ready_priority_page_url = "https://www.notion.so/..."
-miscellaneous_notes_url = "https://www.notion.so/..."
-synthesis_notes_url = "https://www.notion.so/..."
 ```
 
 Run an explicit action after initialisation:
@@ -145,8 +142,6 @@ python -m notion_task_tracker --clear-duration --ticket-number 67
 python -m notion_task_tracker --parent --title "Measure activation mismatch" --priority P1 --content-path /tmp/initial.json
 python -m notion_task_tracker --child --parent-ticket-number 67 --title "Add explicit CLI actions" --priority P1 --content-path /tmp/initial.json
 python -m notion_task_tracker --sibling --sibling-ticket-number 67 --title "Document explicit CLI actions" --priority P2 --content-path /tmp/initial.json
-python -m notion_task_tracker --misc --content-path /tmp/misc.json
-python -m notion_task_tracker --synth --synthesis-key explicit_tracker_cli --title "Explicit tracker CLI" --content-path /tmp/synth.json
 python -m notion_task_tracker --move-logs --ticket-number 67 --destination-ticket-number 68 --log-id ALOVYA-LOG-55d04742-f584-4b28-b47d-e383f87406c0
 ```
 
@@ -177,30 +172,6 @@ Every timeline write creates one Notion toggle beneath its date heading. The CLI
 
 Move one identified timeline log by giving its source task, destination task, and logical identifier. The CLI reads both pages, copies the complete toggle to the same date on the destination, verifies the copy, removes the physical source block, then verifies its removal. A retry after an interrupted copy detects the logical identifier at the destination and continues with source removal. If `--log-id` is omitted and the source does not contain exactly one movable log, the CLI performs no writes and returns compact candidates containing only the date, title, and logical identifier. Raw legacy logs and toggles without an identifier are not candidates.
 
-Miscellaneous content files use `lines` or paragraph `blocks`:
-
-```json
-{
-  "lines": ["Captured context that does not yet belong on a task."]
-}
-```
-
-Synthesis content files use this shape:
-
-```json
-{
-  "summary": "Reusable tracker CLI design.",
-  "sources": [
-    {
-      "source_type": "Notion page",
-      "label": "EXAMPLE-67",
-      "page_key": "task:EXAMPLE-67"
-    }
-  ],
-  "lines": ["Actions freeze schemas; content remains free-form."]
-}
-```
-
 ## Refresh the Notion task tracker
 
 Use this when the user edited task rows in the Notion UI:
@@ -222,8 +193,6 @@ The state bootstrap requires the `[pages]` URLs written by `ntt --init`:
 ongoing_tasks_url = "https://www.notion.so/..."
 completed_tasks_url = "https://www.notion.so/..."
 ready_priority_page_url = "https://www.notion.so/..."
-miscellaneous_notes_url = "https://www.notion.so/..."
-synthesis_notes_url = "https://www.notion.so/..."
 ```
 
 ## Google Calendar synchronisation
@@ -324,8 +293,7 @@ Normal commands are fast because they only refresh the task pages they touch. Th
 2. `split_task_into_children` fetches the source task and parent chain, creates one child database row, clears the source task's dependency/dependant relations, updates the source timeline, and refreshes derived landing pages.
 3. `split_task_with_sibling` fetches the source sibling and parent chain, creates one new database row beside it, updates the parent timeline when there is a parent, and refreshes derived landing pages.
 4. `create_top_level_task` creates a new top-level database row without fetching the full database.
-5. Miscellaneous and synthesis commands do not use the task database.
-6. `--refresh-notion-task-tracker` is the only normal path that queries every task row and rebuilds the whole local task tree.
+5. `--refresh-notion-task-tracker` is the only normal path that queries every task row and rebuilds the whole local task tree.
 
 Run a full tracker refresh when a task was created only in the Notion UI and is missing locally, when broad unrelated database edits must be reflected locally, when a manually added child or sibling must appear in derived landing pages, or when targeted preflight reports a missing related parent page.
 
@@ -539,16 +507,6 @@ Add one child task under an existing parent task. The command does not include a
 }
 ```
 
-Record a page id returned by `notion-create-pages`. This is used by miscellaneous and synthesis page creation; task creation captures the created database row and assigned `Task ID` inside live command execution:
-
-```json
-{
-  "command": "record_page_id",
-  "local_page_key": "miscellaneous:2026-05-24",
-  "notion_page_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-}
-```
-
 Refresh task views and task database properties:
 
 ```json
@@ -562,66 +520,6 @@ Omit `operation_keys` to update every known task title/property and both task la
 
 The ongoing and completed landing pages are rendered task indexes. They are not the source of truth for task membership or hierarchy. The ongoing landing page starts entries only from incomplete top-level tasks, but still shows completed subtasks inside those trees. The completed landing page starts entries only from completed or cancelled top-level tasks.
 
-## Miscellaneous commands
-
-Append context to a dated miscellaneous page:
-
-```json
-{
-  "command": "append_miscellaneous_note",
-  "note_date": "2026-05-24",
-  "lines": ["Recent context to preserve before it becomes a task or synthesis page."]
-}
-```
-
-Refresh miscellaneous pages:
-
-```json
-{
-  "command": "refresh_miscellaneous_pages"
-}
-```
-
-## Synthesis commands
-
-Create a synthesis page with explicit sources:
-
-```json
-{
-  "command": "create_synthesis_page",
-  "synthesis_key": "onnx_qdq_export",
-  "title": "ONNX QDQ export behaviour",
-  "summary": "Reusable notes on export behaviour.",
-  "sources": [
-    {
-      "source_type": "Notion page",
-      "label": "EXAMPLE-2",
-      "page_key": "task:EXAMPLE-2"
-    },
-    {
-      "source_type": "Google doc",
-      "label": "Export notes",
-      "external_url": "https://example.invalid/doc"
-    }
-  ],
-  "lines": ["QDQ nodes preserve quantisation boundaries for export."]
-}
-```
-
-Refresh the synthesis root after editing page mentions in Notion:
-
-```json
-{
-  "command": "refresh_synthesis_root_page_mentions",
-  "root_page_content": "<mention-page url=\"https://www.notion.so/Guide-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\">Guide</mention-page>",
-  "page_titles_by_id": {
-    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb": "Title for a bare page mention"
-  }
-}
-```
-
-This replaces the local existing-page mention list with exactly the page mentions or child pages present on the fetched synthesis root. It emits no Notion write calls.
-
 ## Supported commands
 
 - `append_task_timeline_log`: add one UUID4-identified toggle beneath a task's date heading with targeted page content. New dates are prepended under `Timeline log`; existing dates receive another toggle. It must not replace the task page or landing pages.
@@ -634,11 +532,6 @@ This replaces the local existing-page mention list with exactly the page mention
 - `split_task_with_sibling`: create one task database row under the same parent as an existing source task, or top-level when the source has no parent. The new sibling copies the source task's dependencies and dependants. If the sibling has a parent, initialise the new page with a parent link and append a parent timeline entry linking to the new page.
 - `record_page_id`: record a page id returned by a page creation write.
 - `refresh_task_pages`: update task database properties and the derived task landing pages.
-- `append_miscellaneous_note`: add lines to a dated miscellaneous subpage.
-- `refresh_miscellaneous_pages`: regenerate the miscellaneous root and dated pages.
-- `create_synthesis_page`: create one synthesis subpage with sources and content.
-- `refresh_synthesis_root_page_mentions`: update local synthesis-root references from fetched Notion page mentions without writing to Notion.
-- `refresh_synthesis_pages`: regenerate the synthesis root page and tracker-created synthesis pages.
 
 ## Package shape
 
@@ -661,8 +554,6 @@ The package is Python metadata and Notion write execution code. Live fetch/write
 - `notion_task_tracker/tasks/refresh_task_tracker_state.py`: local task tree refresh from Notion database rows.
 - `notion_task_tracker/notion_operations/`: Notion boundary code for page references, write intents, Markdown helpers, database-property conversion, the REST client, and write execution.
 - `notion_task_tracker/fixed_pages.py`: stable local keys and generic defaults for tracker pages.
-- `notion_task_tracker/miscellaneous_pages.py`: dated miscellaneous notes.
-- `notion_task_tracker/synthesis_pages.py`: flat synthesis root mentions and synthesis subpages with sources.
 
 ## Tests
 

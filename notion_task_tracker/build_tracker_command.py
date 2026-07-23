@@ -39,8 +39,6 @@ WRITE_ACTIONS = {
     "parent",
     "child",
     "sibling",
-    "misc",
-    "synth",
     "move_logs",
 }
 
@@ -147,10 +145,6 @@ def build_tracker_command_from_cli_action(arguments: Namespace, ticket_prefix: s
         return _build_child_command(arguments, ticket_prefix)
     if action_name == "sibling":
         return _build_sibling_command(arguments, ticket_prefix)
-    if action_name == "misc":
-        return _build_miscellaneous_command(arguments)
-    if action_name == "synth":
-        return _build_synthesis_command(arguments)
     if action_name == "move_logs":
         return _build_move_logs_command(arguments, ticket_prefix)
 
@@ -423,27 +417,6 @@ def _build_sibling_command(arguments: Namespace, ticket_prefix: str) -> dict[str
             ticket_prefix,
         )
     return command
-
-
-def _build_miscellaneous_command(arguments: Namespace) -> dict[str, Any]:
-    content = _read_json_object(arguments.content_path)
-    return {
-        "command": "append_miscellaneous_note",
-        "note_date": _entry_date_from_arguments(arguments.entry_date),
-        "lines": _lines_from_content(content),
-    }
-
-
-def _build_synthesis_command(arguments: Namespace) -> dict[str, Any]:
-    content = _read_json_object(arguments.content_path)
-    return {
-        "command": "create_synthesis_page",
-        "synthesis_key": arguments.synthesis_key,
-        "title": parse_one_title_arg(arguments, "synth"),
-        "summary": content.get("summary", ""),
-        "sources": list(content.get("sources", [])),
-        "lines": _lines_from_content(content),
-    }
 
 
 def _single_task_id_from_ticket_numbers(ticket_numbers: list[int], ticket_prefix: str) -> str:
