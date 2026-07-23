@@ -15,7 +15,7 @@ def test_plan_task_landing_page_reconciliation_skips_semantically_matching_pages
             "## P1 (high impact)",
             "",
             (
-                '- [P1] <mention-page url="https://www.notion.so/'
+                '- \\[P1\\] <mention-page url="https://app.notion.com/p/'
                 '11111111-1111-1111-1111-111111111111"/>: Active {color="orange"}'
             ),
             "",

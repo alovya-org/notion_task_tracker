@@ -20,8 +20,11 @@ from notion_task_tracker.tasks.task import LANDING_HEADING_BY_PRIORITY
 from notion_task_tracker.tracked_pages import TrackedPage
 
 
-_PAGE_MENTION_URL_PATTERN = re.compile(
-    r'(<mention-page url="https://www\.notion\.so/)([^"]+)("/>)'
+_NOTION_PAGE_MENTION_PATTERN = re.compile(
+    r'<mention-page url="https://(?:www\.notion\.so/|app\.notion\.com/p/)([^"]+)"/>'
+)
+_ESCAPED_MANAGED_PRIORITY_PATTERN = re.compile(
+    r'^(\t*- )\\\[(P0|P1|P2|P3|N/A)\\\]( )'
 )
 _MANAGED_TASK_LINE_PATTERN = re.compile(
     r'^\t*- \[(?:P0|P1|P2|P3|N/A)\] '
@@ -94,24 +97,28 @@ def _plan_landing_page_replacement(
 
 def _normalise_notion_markdown(markdown: str) -> str:
     normalised_lines = [
-        line.rstrip()
+        _normalise_notion_exported_managed_task_line(line.rstrip())
         for line in markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
     ]
     normalised_markdown = "\n".join(normalised_lines)
-    return _PAGE_MENTION_URL_PATTERN.sub(
+    return _NOTION_PAGE_MENTION_PATTERN.sub(
         _canonical_page_mention_url,
         normalised_markdown,
     )
 
 
+def _normalise_notion_exported_managed_task_line(line: str) -> str:
+    return _ESCAPED_MANAGED_PRIORITY_PATTERN.sub(r"\1[\2]\3", line)
+
+
 def _canonical_page_mention_url(match: re.Match[str]) -> str:
     return (
-        match.group(1)
+        '<mention-page url="https://www.notion.so/'
         + canonical_notion_page_id(
-            notion_page_id_from_url("https://www.notion.so/" + match.group(2))
+            notion_page_id_from_url("https://www.notion.so/" + match.group(1))
         )
-        + match.group(3)
+        + '"/>'
     )
 
 
