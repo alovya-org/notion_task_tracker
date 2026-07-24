@@ -490,7 +490,7 @@ async def _read_current_task_pages(
             _task_read_item_from_current_tree(
                 task_tree.tasks[task_id],
                 fetched_page_content_by_task_id[task_id],
-                include_full_page_content=command["command"] == "read_all_tasks",
+                include_full_page_content=command["command"] in {"read_all_tasks", "work_task"},
             )
             for task_id in task_ids
         ],
