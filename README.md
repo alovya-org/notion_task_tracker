@@ -29,7 +29,17 @@ For local development:
 python -m pip install -e .
 ```
 
-The package installs the `ntt` and `notion-task-tracker` commands. `python -m notion_task_tracker` is also supported.
+The package installs the `ntt` and `notion-task-tracker` commands. `python -m notion_task_tracker` is also supported once dependencies are installed in that interpreter.
+
+### Running `ntt`
+
+Users often have no `ntt` on the default `PATH` and no `pip` on the system Python. Use one of these before any live Notion command:
+
+1. **`/workspace/venv/bin/ntt`** when that file exists (shared workspace virtual environment on this host).
+2. An activated project venv where `ntt` was installed, e.g. `source /path/to/venv/bin/activate` then `ntt …`.
+3. After `python -m pip install -e .` (or `pip install .`) inside a venv that has `pip`, use `ntt` from that venv’s `bin` directory.
+
+Do not run `python -m notion_task_tracker` from a bare checkout unless that interpreter already has the package and its dependencies (`notion-client`, `httpx`, and so on). If `which ntt` fails, use the absolute venv path above rather than guessing install commands on the system Python.
 
 ### Initialise Notion
 
