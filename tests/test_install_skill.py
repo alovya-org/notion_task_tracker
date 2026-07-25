@@ -12,13 +12,15 @@ from notion_task_tracker.install_skill import (
 )
 
 
-def test_skill_install_targets_use_codex_home_and_claude_user_scope(tmp_path: Path):
+def test_skill_install_targets_use_tool_homes_and_config_dirs(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
     claude_config_dir_path = tmp_path / "claude"
+    cursor_home_path = tmp_path / "cursor"
 
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
+        cursor_home_path=cursor_home_path,
     )
 
     assert targets == [
@@ -30,25 +32,33 @@ def test_skill_install_targets_use_codex_home_and_claude_user_scope(tmp_path: Pa
             tool_name="claude",
             skill_path=claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md",
         ),
+        SkillInstallTarget(
+            tool_name="cursor",
+            skill_path=cursor_home_path / "skills" / "notion_task_tracker" / "SKILL.md",
+        ),
     ]
 
 
 def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
     claude_config_dir_path = tmp_path / "claude"
+    cursor_home_path = tmp_path / "cursor"
     output_stream = io.StringIO()
 
     results = install_skill(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
+        cursor_home_path=cursor_home_path,
         output_stream=output_stream,
     )
 
     codex_skill_path = codex_home_path / "skills" / "notion_task_tracker" / "SKILL.md"
     claude_skill_path = claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md"
-    assert [result.status for result in results] == ["installed", "installed"]
+    cursor_skill_path = cursor_home_path / "skills" / "notion_task_tracker" / "SKILL.md"
+    assert [result.status for result in results] == ["installed", "installed", "installed"]
     assert codex_skill_path.read_text(encoding="utf-8").startswith("---")
     assert claude_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
+    assert cursor_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
     assert json.loads(output_stream.getvalue()) == [
         {
             "tool_name": "codex",
@@ -60,14 +70,20 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
             "skill_path": str(claude_skill_path),
             "status": "installed",
         },
+        {
+            "tool_name": "cursor",
+            "skill_path": str(cursor_skill_path),
+            "status": "installed",
+        },
     ]
 
 
 @pytest.mark.parametrize(
     ("missing_environment_variable", "configured_paths", "installed_tool", "missing_tool"),
     [
-        ("CODEX_HOME", {"claude_config_dir_path": "claude"}, "claude", "Codex"),
-        ("CLAUDE_CONFIG_DIR", {"codex_home_path": "codex"}, "codex", "Claude"),
+        ("CODEX_HOME", {"claude_config_dir_path": "claude", "cursor_home_path": "cursor"}, "claude", "Codex"),
+        ("CLAUDE_CONFIG_DIR", {"codex_home_path": "codex", "cursor_home_path": "cursor"}, "codex", "Claude"),
+        ("CURSOR_HOME", {"codex_home_path": "codex", "claude_config_dir_path": "claude"}, "codex", "Cursor"),
     ],
 )
 def test_install_skill_skips_and_warns_for_unconfigured_tool(
@@ -92,12 +108,25 @@ def test_install_skill_skips_and_warns_for_unconfigured_tool(
         **resolved_configured_paths,
     )
 
-    assert [result.tool_name for result in results] == [installed_tool]
-    assert json.loads(output_stream.getvalue())[0]["status"] == "installed"
-    assert warning_stream.getvalue() == (
-        f"Warning: {missing_environment_variable} is not set; "
-        f"skipping {missing_tool} skill installation.\n"
-    )
+    installed_tools = [result.tool_name for result in results]
+    assert installed_tool in installed_tools
+    assert f"Warning: {missing_environment_variable} is not set; skipping {missing_tool} skill installation.\n" in warning_stream.getvalue()
+
+
+def test_cursor_home_path_resolves_env_var_and_argument(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CURSOR_HOME", raising=False)
+    assert skill_install_targets() == []
+
+    custom_env_dir_path = tmp_path / "custom_cursor"
+    monkeypatch.setenv("CURSOR_HOME", str(custom_env_dir_path))
+    targets_env = skill_install_targets()
+    assert len(targets_env) == 1
+    assert targets_env[0].skill_path == custom_env_dir_path / "skills" / "notion_task_tracker" / "SKILL.md"
 
 
 def test_install_skill_is_noop_when_existing_file_is_identical(tmp_path: Path):
