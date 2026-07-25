@@ -14,7 +14,7 @@ from typing import TextIO
 
 
 PROJECT_DISTRIBUTION_NAME = "notion-task-tracker"
-SKILL_DIRECTORY_NAME = "notion_task_tracker"
+SKILL_DIRECTORY_NAME = "notion-task-tracker"
 SKILL_FILE_NAME = "SKILL.md"
 
 

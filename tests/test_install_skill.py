@@ -26,15 +26,15 @@ def test_skill_install_targets_use_tool_homes_and_config_dirs(tmp_path: Path):
     assert targets == [
         SkillInstallTarget(
             tool_name="codex",
-            skill_path=codex_home_path / "skills" / "notion_task_tracker" / "SKILL.md",
+            skill_path=codex_home_path / "skills" / "notion-task-tracker" / "SKILL.md",
         ),
         SkillInstallTarget(
             tool_name="claude",
-            skill_path=claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md",
+            skill_path=claude_config_dir_path / "skills" / "notion-task-tracker" / "SKILL.md",
         ),
         SkillInstallTarget(
             tool_name="cursor",
-            skill_path=cursor_home_path / "skills" / "notion_task_tracker" / "SKILL.md",
+            skill_path=cursor_home_path / "skills" / "notion-task-tracker" / "SKILL.md",
         ),
     ]
 
@@ -52,9 +52,9 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
         output_stream=output_stream,
     )
 
-    codex_skill_path = codex_home_path / "skills" / "notion_task_tracker" / "SKILL.md"
-    claude_skill_path = claude_config_dir_path / "skills" / "notion_task_tracker" / "SKILL.md"
-    cursor_skill_path = cursor_home_path / "skills" / "notion_task_tracker" / "SKILL.md"
+    codex_skill_path = codex_home_path / "skills" / "notion-task-tracker" / "SKILL.md"
+    claude_skill_path = claude_config_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
+    cursor_skill_path = cursor_home_path / "skills" / "notion-task-tracker" / "SKILL.md"
     assert [result.status for result in results] == ["installed", "installed", "installed"]
     assert codex_skill_path.read_text(encoding="utf-8").startswith("---")
     assert claude_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
@@ -126,7 +126,7 @@ def test_cursor_home_path_resolves_env_var_and_argument(
     monkeypatch.setenv("CURSOR_HOME", str(custom_env_dir_path))
     targets_env = skill_install_targets()
     assert len(targets_env) == 1
-    assert targets_env[0].skill_path == custom_env_dir_path / "skills" / "notion_task_tracker" / "SKILL.md"
+    assert targets_env[0].skill_path == custom_env_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
 
 
 def test_install_skill_is_noop_when_existing_file_is_identical(tmp_path: Path):

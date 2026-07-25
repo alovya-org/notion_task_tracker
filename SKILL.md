@@ -1,5 +1,5 @@
 ---
-name: notion_task_tracker
+name: notion-task-tracker
 description: Work or create tracker tasks, read tracker task context, log tracker task progress, or complete, cancel, and delete tracker tasks. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task delete N, notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], asks to continue an existing tracker task, or asks to write task context to Notion.
 ---
 
