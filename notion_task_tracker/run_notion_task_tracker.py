@@ -526,7 +526,7 @@ async def _move_current_task_timeline_log(
     summary = TrackerActionExecutionSummary(
         action_name="move_logs",
         output_path=Path(output_path),
-        completed_operation_keys=completed_operation_keys,
+        notion_operation_keys=completed_operation_keys,
         movement=movement,
         warnings=warnings,
     )
