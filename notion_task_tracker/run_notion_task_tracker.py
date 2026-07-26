@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import time
 from collections.abc import Sequence
 from pathlib import Path
@@ -191,6 +192,10 @@ def _run_requested_cli_action(args: argparse.Namespace) -> None:
     if args.install_skill:
         install_skill(force=args.force)
         return
+
+    # Auto-heal: silently install/update the skill if needed before running commands.
+    with open(os.devnull, "w") as devnull:
+        install_skill(force=True, output_stream=devnull, warning_stream=devnull)
 
     config = load_config(args.config_path)
     command = build_tracker_command_from_cli_action(args, ticket_prefix=config.ticket_prefix)
