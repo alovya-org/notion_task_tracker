@@ -24,7 +24,7 @@ import matplotlib.pyplot as plot
 import networkx
 
 
-DEFAULT_TRACKER_STATE_PATH = Path.home() / ".notion-task-tracker" / "notion_tasks_tree.json"
+DEFAULT_TRACKER_STATE_PATH = Path.home() / ".config" / "notion-task-tracker" / "config.toml"
 DEFAULT_OUTPUT_PATH = Path("/tmp/notion_task_dag.png")
 DEFAULT_DOT_OUTPUT_PATH = Path("/tmp/notion_task_dag.dot")
 GRAPH_VIEW_CHOICES = ("execution-dag", "task-tree", "combined")
