@@ -1,216 +1,60 @@
-# Notion Task Tracker Design
+# System design and architecture
 
-This package preserves three Notion page families:
+This document explains how the Notion Task Tracker (NTT) enforces authority boundaries, executes synchronisation, and maps behaviour to the codebase.
 
-1. A recursive ALOVYA task tree with ongoing and completed landing pages.
-2. A dated miscellaneous-notes inbox.
-3. A flat synthesis-notes index with reusable synthesis subpages.
+## Authority boundaries
 
-The tracker is deterministic. Agents provide semantic input; Python owns the derived task tree, priority rollup, rendering, REST requests, and write ordering.
+Each system owns a deliberately narrow part of the tracker:
 
-## Task Pages
+1. **Notion** is the absolute task authority. It owns task identity, title, hierarchy, dependencies, status, priority, schedule, timeline content, and the rendered managed pages. A Notion-only tracker never contacts Google or Cloudflare D1.
+2. **Google Calendar** (when configured) owns the current presentation of eligible scheduled tasks. A person may move, resize, or delete an event that is uniquely owned by the tracker. Google edits become Notion schedule changes before the resulting current Notion task data is projected back into Calendar.
+3. **Cloudflare D1** (when Calendar is configured) owns the Calendar synchronisation cursor, Google-event-to-task identity, and tracker-originated deletion provenance. It is not a task cache or an alternative source of tracker data.
+4. **GitHub Actions** owns wake-ups and serialised execution of the configured synchronisation lifecycle. A GitHub event says only *why* work should begin; it does not choose a different kind of synchronisation.
 
-Every task is a row in `Alovya's task database`. Notion owns the structured fields:
+## The universal synchronisation lifecycle
 
-```text
-Task ID: 72
-Task page: Measure activation mismatch after QNN export
-Priority: P1
-Status: Active
-Parent: ALOVYA-5
-Children: inverse relation
-```
+Every command that works with tasks follows the same opening sequence to ensure it acts on current, valid data:
 
-Task page bodies contain only timeline notes:
+1. Resolve the configured database and managed pages.
+2. Query the task database exactly once.
+3. Parse and validate one in-memory task tree.
+4. Derive narrow repairs for stale task titles or derived end values.
+5. Perform the requested work against that same tree.
+6. Write the execution summary and discard the tree.
 
-```text
-Timeline log
-2026-05-24
-Investigated the current blocker.
-```
+No command depends on a previous command’s JSON output. If current Notion rows contain an invalid identity, relationship, or schedule, construction fails instead of continuing from older data.
 
-Task-page body details:
+### Calendar opt-in lifecycle
 
-1. `Timeline log` contains dated entries, newest first.
-2. A dated entry can contain plain bullets or a subheading toggle with child bullets.
-3. Priority, status, parent, and children live in database properties, not the page body.
-4. PRs, Jira tickets, branches, docs, and source notes belong inside the relevant timeline entry.
-5. Completed task pages use strikethrough page titles and priority `N/A` in derived views.
+When Calendar is configured, the `--refresh-notion-task-tracker` command continues from the loaded task tree through a two-way Calendar lifecycle:
 
-Task ids are always derived from Notion's `Task ID`.
+1. Read the D1 cursor and event ledger.
+2. Fetch outstanding Google changes.
+3. Apply owned Google changes to Notion and the in-memory task tree.
+4. Reconcile affected managed Notion pages.
+5. Project the resulting task tree into Google (creating, updating, or deleting events).
+6. Update D1 event identity and deletion provenance.
+7. Advance the cursor.
 
-## Task Tree
+“Two-way” does not mean simultaneous conflict resolution. Outstanding Google changes are applied first, and the resulting tree is then projected into Google.
 
-Tasks form a parent-child tree. The database `Parent` relation is authoritative when refreshing tracker state.
+## Behaviour to file mapping
 
-Priority rolls upward only through `Active` and `Blocked` descendants:
+The codebase is divided by behaviour to ensure clear ownership:
 
-```text
-ALOVYA-2 P1
-  ALOVYA-6 P2
-    ALOVYA-7 P0 Active
-```
+- **CLI entrypoint (`notion_task_tracker/run_notion_task_tracker.py`)**: Parses actions, auto-heals the agent skill, and runs one task-bearing command from current Notion data.
+- **Lifecycle orchestration (`notion_task_tracker/refresh_notion_task_tracker.py`)**: Owns the universal one-load lifecycle and selects the configured mode (Notion-only or Calendar-enabled).
+- **Notion operations (`notion_task_tracker/notion_operations/`)**:
+  - `load_current_task_tree_from_notion.py` performs the single database query and validates the in-memory task tree.
+  - Other files resolve configured resources, plan narrow Notion writes, and reconcile managed pages.
+- **Task domain (`notion_task_tracker/tasks/`)**: Owns task, schedule, hierarchy, and rendering rules.
+- **Calendar protocol (`notion_task_tracker/google_calendar_sync/`)**: Continues an already loaded lifecycle through the optional Calendar protocol (`continue_synchronisation_with_google_calendar.py`).
+- **Worker deployment (`cloudflare_worker/`)**: Owns authenticated webhook wake-ups (Notion and Google) and exposes the narrow D1 Calendar protocol boundary.
 
-Displayed priority becomes:
+## Recovery and failure behaviour
 
-```text
-ALOVYA-7 P0
-ALOVYA-6 P0
-ALOVYA-2 P0
-```
-
-When ALOVYA-7 becomes `Complete`, `Cancelled`, or `Parked`, ancestors recalculate from their own configured priority and any remaining active or blocked descendants.
-
-## Task Landing Pages
-
-The ongoing landing page is a derived task index. It groups incomplete top-level task trees by displayed priority. Once a top-level task is shown, its subtree is rendered with completed subtasks included.
-
-```text
-P0 (high impact and urgent) red
-P1 (high impact) orange
-P2 (lower impact but urgent) yellow
-P3 (lower impact and not urgent) gray
-```
-
-The completed landing page contains terminal status sections for top-level tasks only. Completed children of ongoing top-level tasks stay off the completed landing page until their top-level task is also complete.
-
-```text
-Completed green
-Cancelled gray
-```
-
-Each entry is a page mention with priority label and status. Indentation communicates nestedness within that page's filtered tree. Completed entries use `N/A`, green, and strikethrough inherited from the task page title.
-
-## Task Locality
-
-Task updates should stay local:
-
-1. A parent lists direct children only.
-2. The database `Parent` relation records direct child links.
-3. A parent timeline records direct work and direct-child updates.
-4. Deep child details appear on ancestors only when they affect status, priority, blockers, milestones, or reporting.
-
-Example:
-
-```text
-ALOVYA-2
-  ALOVYA-3
-    ALOVYA-5
-  ALOVYA-4
-```
-
-ALOVYA-2 directly owns ALOVYA-3 and ALOVYA-4 through database relations. ALOVYA-5 belongs on ALOVYA-3 unless it changes top-level state.
-
-## Refreshing tracker tasks
-
-The relevant tasks are refreshed before every task, miscellaneous, or synthesis command. This updates local tracker state from database rows, then regenerates derived views only when it detects task tree changes.
-
-1. Query the saved `Alovya's task database` view.
-2. Convert rows into task metadata.
-3. Rebuild parent-child links from database `Parent` relations.
-4. Preserve local timeline metadata where the row maps to a known page.
-5. Validate the tree and recalculate displayed priorities.
-6. Repair derived landing pages and task titles when the task tree changes.
-
-If no change is detected, no repair write is sent. If repairs are needed, the CLI writes them before applying the user's requested command.
-
-## Miscellaneous Notes
-
-The miscellaneous root page is a dated inbox. It is independent of the task tree.
-
-```text
-Alovya's miscellanous notes
-
-2026-05-24
-2026-05-23
-```
-
-A dated subpage is just captured context:
-
-```text
-2026-05-24
-
-Random thought not yet tied to a task.
-Link to something potentially useful.
-Meeting fragment.
-```
-
-Use miscellaneous notes when the user wants to dump context before it has a task or synthesis home.
-
-## Synthesis Notes
-
-The synthesis root page is a flat dump of page mentions and child pages. It has no headings, summaries, bullets, or nested storage.
-
-```text
-Alovya's synthesis notes
-
-ONNX QDQ export behaviour
-Activation outliers after SwiGLU
-```
-
-The root may contain:
-
-1. Existing Notion pages that the tracker mentions but must not rewrite.
-2. Tracker-created synthesis subpages.
-
-A tracker-created synthesis subpage has:
-
-```text
-Title
-
-Sources
-Notion page: ALOVYA-2
-Miscellaneous notes: 2026-05-24
-Google doc: Export notes: https://example.invalid/doc
-
-Reusable synthesis content.
-```
-
-Refreshing synthesis-page mentions reads the root page, preserves root order, preserves child-page tags as child-page tags, and replaces the local existing-page mention list with exactly what the root contains. It emits no Notion write calls.
-
-## Agent Boundary
-
-Agents may decide:
-
-1. Task titles.
-2. Timeline prose.
-3. Whether work deserves a new task.
-4. Which existing task owns an update.
-5. Miscellaneous note content.
-6. Synthesis title, sources, summary, and content.
-7. Missing page titles for bare fetched synthesis mentions.
-
-The tracker owns:
-
-1. Ticket-id extraction from Notion database rows.
-2. Parent-child tree mutation.
-3. Priority rollup.
-4. Fixed page structure.
-5. Page mentions and colours.
-6. Notion block rendering.
-7. REST request construction.
-8. Page-id blockers and call ordering.
-9. Tracker-state shape.
-
-Agents should use command JSON through the CLI. Do not hand-build Notion calls when the tracker supports the requested operation.
-
-## Notion Boundary
-
-Live fetches and writes use the authenticated Notion REST client. Commands generate deterministic Notion writes internally so the business logic stays inspectable.
-
-Normal writes compile to:
-
-```text
-create data-source page
-update page properties
-replace page Markdown
-update page Markdown
-```
-
-After miscellaneous or synthesis page creation, the CLI records the returned page id and runs the needed refresh command. Task creation captures the new database row and assigned `Task ID` during live command execution.
-
-Footgun: page replacement overwrites the whole page body Markdown. Use it only for tracker-owned landing, miscellaneous, or synthesis pages.
-
-## Runtime
-
-Run from the local virtual environment. Alovya's bashrc defines `src_venv` as sourcing `/workspace/venv/bin/activate`.
+- **Cursor expiry**: If Google expires the cursor, NTT fetches current Google events and rebuilds the D1 event ledger from that current snapshot before continuing.
+- **Foreign events**: Foreign, malformed, and ambiguously owned Google events remain untouched.
+- **Deletion provenance**: Tracker-originated deletion provenance in D1 prevents Google’s cancellation record from reverse-unscheduling a task in Notion.
+- **Atomic cursor advancement**: The cursor advances only after all required Notion, Google, and D1 operations succeed. A failed operation leaves it unchanged so the outstanding changes can be retried.
+- **Serialised execution**: GitHub serialises each user’s lifecycle so overlapping wake-ups read the latest cursor when they begin. The Worker also wakes synchronisation daily at `00:00 UTC`, preventing a missed notification from hiding changes permanently.
