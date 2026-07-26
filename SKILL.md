@@ -1,15 +1,14 @@
 ---
 name: notion-task-tracker
-description: Work or create tracker tasks, read tracker task context, log tracker task progress, or complete, cancel, and delete tracker tasks. Use when the user types notion_task read N, notion_task work N, notion_task log N [notes], notion_task complete N [notes], notion_task cancel N [notes], notion_task delete N, notion_task parent [pX] [title], notion_task child PARENT [pX] [title], notion_task sibling EXISTING [pX] [title], asks to continue an existing tracker task, or asks to write task context to Notion.
+description: Manage Notion tasks using the `ntt` CLI. Use when the user asks to read, work on, log progress for, complete, cancel, delete, or create tasks (parent, child, sibling) in the Notion tracker.
 ---
 
 # Notion task
 
-Use the installed `ntt` CLI for all tracker reads and writes. The README owns exact flags, JSON shapes, command schemas, and implementation details; this skill only captures agent judgment.
+Use the installed `ntt` CLI for all tracker reads and writes. **Always read `/workspace/notion_task_tracker/README.md` for exact flags, JSON shapes, command schemas, and implementation details.** This skill only captures agent judgment.
 
 ## Operating principles
 
-- Treat every user request as one explicit tracker action: read, work, log, complete, cancel, delete, parent, child split, sibling split, or update.
 - Let the CLI own Notion reads, task writes, managed-page repair and command-result output.
 - Do not manually send Notion writes unless the user is explicitly debugging the tracker itself.
 - Run live Notion commands outside the network-restricted sandbox with `NOTION_API_KEY` available.
@@ -29,19 +28,15 @@ Logs should preserve the facts needed to resume work without rereading the chat.
 
 ## Task creation judgement
 
-- Use `parent` for new top-level work, never an implicit or generic "new" task.
-- Use `child` when one source task should gain exactly one child task.
-- Use `sibling` when one source task should gain exactly one peer.
-- For split actions, dependency and dependant relations come from the source task. Use explicit relation-edit actions later only when the user asks for manual metadata changes.
-- If a create action includes useful initial context, write that context as the new task's initial timeline entry rather than creating a bare task and logging afterward.
+- If a create action includes useful initial context, write that context as the new task's initial timeline entry via `--content-path` rather than creating a bare task and logging afterward.
+- Use explicit relation-edit actions later only when the user asks for manual metadata changes; let `ntt` handle inheritance during creation.
 
 ## Reading and working
 
-- For `read`, answer from the CLI summary plus fetched task context. The command may apply canonical repairs found during its current Notion load.
+- For `read`, answer from the CLI summary plus fetched task context.
 - For `work`, use the task page for intent, status, blockers, links, and recent timeline before editing any repo.
 - If the task points to repo work, obey the repo's local instructions and decision records before changing code.
-- If a task or related page is missing, refresh the tracker from Notion before continuing.
 
 ## Reporting back
 
-After a tracker write, report the task updated, important Notion operations completed, output path, warnings and blockers. Keep command syntax and schema details out of the skill response unless the user asks; point to README for exact forms.
+After a tracker write, report the task updated, important Notion operations completed, output path, warnings and blockers. Keep command syntax and schema details out of the skill response unless the user asks.
