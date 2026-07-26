@@ -1,61 +1,21 @@
 # Notion task tracker
 
-Notion task tracker turns explicit command-line actions into Notion task changes. Google Calendar synchronisation is an optional addition for trackers that configure it.
+Notion Task Tracker (NTT) is a system for tracking tasks in Notion. It is designed to be used manually by humans or autonomously by AI agents, providing a reliable interface for reading, creating, and updating tasks. Google Calendar synchronisation is an optional addition.
 
-## Authority boundaries
+## Installation
 
-Each system owns a deliberately narrow part of the tracker:
-
-| System | Values it owns |
-|---|---|
-| Notion | Task identity, title, hierarchy, dependencies, status, priority, schedule, timeline content and the rendered managed pages |
-| Google Calendar, when configured | The current presentation of eligible scheduled tasks; a person may move, resize or delete an event that is uniquely owned by the tracker |
-| Cloudflare D1, when Calendar is configured | The Calendar synchronisation cursor, Google-event-to-task identity and tracker-originated deletion provenance |
-| GitHub Actions | Wake-ups and serialised execution of the configured synchronisation lifecycle |
-
-Notion is always the task authority. A Notion-only tracker never contacts Google or D1. When Calendar is configured, Google edits become Notion schedule changes before the resulting current Notion task data is projected back into Calendar. D1 is not a task cache or an alternative source of tracker data. A GitHub event says only why work should begin; it does not choose a different kind of synchronisation.
-
-## Configuration
-
-Install the package from this repository using `pipx` to ensure it is isolated and globally available on your `PATH`:
-
-```bash
-pipx install .
-```
-
-For local development:
+Install the package from this repository using `pipx` to ensure it is isolated and globally available on your `PATH`. Using editable mode (`-e`) ensures the bundled agent skill auto-heals immediately when the source changes:
 
 ```bash
 pipx install -e .
 ```
 
-The package installs the `ntt` and `notion-task-tracker` commands to `~/.local/bin/` (or your pipx bin directory). `python -m notion_task_tracker` is also supported once dependencies are installed in that interpreter.
+This installs the `ntt` command.
 
-### Running tests
+## Configuration
 
-Because `ntt` is installed in an isolated `pipx` environment, you must use the `pytest` binary from that specific environment to run the test suite. 
-
-To run tests, use the following exact path:
-
-```bash
-~/.local/share/pipx/venvs/notion-task-tracker/bin/pytest tests
-```
-
-To ensure `pytest` is available in the environment, install it via injection:
-
-```bash
-pipx inject notion-task-tracker pytest pytest-mock pytest-asyncio
-```
-
-### Running `ntt`
-
-Because `pipx` places the commands in your global environment path, you can run `ntt` from anywhere without activating a virtual environment.
-
-Do not run `python -m notion_task_tracker` from a bare checkout unless that interpreter already has the package and its dependencies (`notion-client`, `httpx`, and so on). If `which ntt` fails, ensure `~/.local/bin` is in your `PATH` or re-run `pipx install`.
-
-### Initialise Notion
-
-Create one ordinary parent page and one task database in Notion. Connect the Notion integration to both. The task database must use this schema:
+### 1. Prepare Notion
+Create one parent page and one task database in Notion. Connect your Notion integration to both. The task database must use this exact schema:
 
 | Property | Notion type | Required values or relation |
 |---|---|---|
@@ -75,9 +35,8 @@ Create one ordinary parent page and one task database in Notion. Connect the Not
 | `Uncertainty` | Select | `Low`, `High` |
 | `Friction` | Select | `None`, `Insufficiently decomposed`, `Charged`, `Stale` |
 
-`Duration` and `Duration unit` are set together. They may exist without `Start`. Timed starts use hours; date-only starts use whole days or weeks. When a task has a complete schedule, NTT derives `End` as `Start + Duration`. Clearing either input clears `End` without clearing the other input.
-
-Set `NOTION_API_KEY`, then initialise the tracker:
+### 2. Initialise the tracker
+Set your `NOTION_API_KEY` environment variable, then initialise the tracker. This validates the database, creates three managed child pages (ongoing tasks, completed tasks, and execution order), and writes the configuration file:
 
 ```bash
 ntt --init \
@@ -87,395 +46,133 @@ ntt --init \
   --task-database-url "https://www.notion.so/..."
 ```
 
-Initialisation validates the database, creates three managed child pages and writes their returned URLs to the configuration:
+The configuration is saved to `$XDG_CONFIG_HOME/notion-task-tracker/config.toml` (or `~/.config/notion-task-tracker/config.toml` on Linux). You can override this location using the `NTT_CONFIG_PATH` environment variable or the `--config-path` flag.
 
-```text
-Tracker parent page
-├── Example's ongoing tasks
-├── Example's completed tasks
-└── Example's tasks in execution order
-```
+To opt in to two-way Google Calendar synchronisation, append calendar details to your `config.toml` and provide the required Google and Cloudflare D1 environment variables (see `DESIGN.md` for architecture details).
 
-The default configuration locations are:
+## Usage
 
-- Linux: `$XDG_CONFIG_HOME/notion-task-tracker/config.toml`, or `~/.config/notion-task-tracker/config.toml`
-- macOS: `~/Library/Application Support/notion-task-tracker/config.toml`
-- Windows: the application-data directory returned by `platformdirs`
+NTT commands manage the complete lifecycle of a task. Every command outputs a JSON execution summary to `/tmp/notion_task_refreshed_result.json` (override with `--output-path`).
 
-Use `NTT_CONFIG_PATH` or `--config-path` to select another file. Keep credentials in environment variables or a secret store.
-
-```toml
-[identity]
-display_name = "Example"
-ticket_prefix = "EXAMPLE"
-
-[notion]
-parent_page_url = "https://www.notion.so/..."
-task_database_url = "https://www.notion.so/..."
-
-[pages]
-ongoing_tasks_url = "https://www.notion.so/..."
-completed_tasks_url = "https://www.notion.so/..."
-ready_priority_page_url = "https://www.notion.so/..."
-```
-
-This minimal tracker needs only `NOTION_API_KEY`. It supports the complete Notion lifecycle locally and through GitHub without Google credentials, D1 state or notification channels.
-
-To opt in to two-way Google Calendar synchronisation, add:
-
-```toml
-[calendar]
-calendar_id = "primary"
-timezone_name = "Europe/London"
-colour_id = "8"
-```
-
-The Calendar-enabled tracker additionally requires:
-
-```text
-GOOGLE_CALENDAR_CLIENT_ID
-GOOGLE_CALENDAR_CLIENT_SECRET
-GOOGLE_CALENDAR_REFRESH_TOKEN
-NTT_GOOGLE_CALENDAR_STATE_API_TOKEN
-NTT_GOOGLE_CALENDAR_STATE_API_URL
-NTT_GOOGLE_CALENDAR_NOTIFICATION_URL
-```
-
-Obtain the Google refresh token through offline OAuth consent with `https://www.googleapis.com/auth/calendar.events`. NTT renews short-lived access tokens automatically.
-
-Every command writes one JSON execution summary. It defaults to `/tmp/notion_task_refreshed_result.json`; use `--output-path` for another output file. This summary is an output artefact, not input to a later command.
-
-Install the bundled agent skill with:
-
-```bash
-ntt --install-skill
-```
-
-## One current Notion load per command
-
-Every command that works with tasks follows the same opening:
-
-1. Resolve the configured database and managed pages.
-2. Query the task database once.
-3. Parse and validate one in-memory `TaskTree`.
-4. Derive narrow repairs for stale task titles or derived end values.
-5. Perform the requested work against that same tree.
-6. Write the execution summary and discard the tree.
-
-No command depends on a previous command’s JSON output. If current Notion rows contain an invalid identity, relationship or schedule, construction fails instead of continuing from older data. Commands may apply the narrow canonical repairs discovered during their load, including commands that otherwise only read task pages.
-
-## Ordinary commands
-
-### Read and reconcile
-
-Read one task summary:
-
-```bash
-ntt --read --ticket-number 67
-```
-
-Read its complete page content:
-
-```bash
-ntt --read-all --ticket-number 67
-```
-
-Mark a task active and return its summary:
-
-```bash
-ntt --work --ticket-number 67
-```
-
-Reconcile canonical task properties and all managed pages:
-
-```bash
-ntt --refresh-notion-task-tracker
-```
-
-### Create tasks
+### Creating tasks
 
 Create a top-level task:
-
 ```bash
 ntt --parent --title "Measure activation mismatch" --priority P1
 ```
 
-Create a child beneath task 67:
-
+Create a child beneath an existing task. The child inherits the parent's dependencies:
 ```bash
-ntt --child \
-  --parent-ticket-number 67 \
-  --title "Add explicit command-line actions" \
-  --priority P1
+ntt --child --parent-ticket-number 67 --title "Add explicit command-line actions" --priority P1
 ```
 
-Create a peer of task 67:
-
+Create a sibling peer. The sibling inherits the source task's parent and dependencies:
 ```bash
-ntt --sibling \
-  --sibling-ticket-number 67 \
-  --title "Document explicit command-line actions" \
-  --priority P2
+ntt --sibling --sibling-ticket-number 67 --title "Document explicit command-line actions" --priority P2
 ```
 
-Notion assigns each new task’s numeric identity. A child inherits the source task’s dependencies and dependants, while the source becomes a parent container and loses its own dependency relations. A sibling inherits the source task’s dependency relations and parent.
+### Reading and working on tasks
 
-`--content-path` may supply the initial timeline entry:
-
-```json
-{
-  "title": "Started activation measurement",
-  "blocks": [
-    {
-      "type": "paragraph",
-      "text": "Measure the exported model before changing conversion settings."
-    }
-  ]
-}
+Read a task's summary:
+```bash
+ntt --read --ticket-number 67
 ```
 
-### Change tasks
+Read a task's complete page content:
+```bash
+ntt --read-all --ticket-number 67
+```
 
-Common mutations are explicit:
+Mark a task as active and return its summary:
+```bash
+ntt --work --ticket-number 67
+```
 
+### Updating task properties
+
+Mutate task attributes explicitly:
 ```bash
 ntt --set-dependencies --ticket-number 67 --dependency-ticket-number 12
-ntt --set-dependants --ticket-number 67 --dependant-ticket-number 80
 ntt --set-deadline --ticket-number 67 --deadline 2026-08-03
-ntt --clear-deadline --ticket-number 67
-ntt --set-start --ticket-number 67 --start "2026-08-03T10:00"
-ntt --clear-start --ticket-number 67
 ntt --set-duration --ticket-number 67 --duration 2.5 --duration-unit Hours
-ntt --clear-duration --ticket-number 67
 ntt --set-external-coordination --ticket-number 67 --external-coordination Yes
-ntt --set-uncertainty --ticket-number 67 --uncertainty High
-ntt --set-friction --ticket-number 67 --friction Charged
 ntt --reparent --ticket-number 67 --parent-ticket-number 42
 ```
+*(Clear attributes using the corresponding `--clear-*` flags, e.g., `--clear-deadline`)*
 
-Append a dated timeline toggle:
+### Logging progress
 
+Append a dated timeline toggle to a task's page using a JSON content file:
 ```bash
 ntt --log --ticket-number 67 --content-path /tmp/log.json
 ```
 
-Move an identified timeline entry:
-
-```bash
-ntt \
-  --move-logs \
-  --ticket-number 67 \
-  --destination-ticket-number 68 \
-  --log-id EXAMPLE-LOG-55d04742-f584-4b28-b47d-e383f87406c0
-```
-
-The move copies and verifies the complete toggle at the destination before removing and verifying the source. Without `--log-id`, a source containing anything other than exactly one movable entry produces candidates and performs no writes.
-
-### Complete, cancel and delete tasks
-
-```bash
-ntt --complete --ticket-number 67 --content-path /tmp/complete.json
-ntt --complete-with-all-children --ticket-number 67 --content-path /tmp/complete.json
-ntt --cancel --ticket-number 67 --content-path /tmp/cancel.json
-ntt --delete --ticket-number 67
-```
-
-Completion and cancellation update status, append the supplied timeline entry and reconcile affected managed pages. Recursive completion applies to every unfinished task in the selected subtree. Deletion moves the Notion database page to trash, promotes its children to its parent and removes the deleted task from dependency relationships.
-
-## Managed-page reconciliation
-
-The ongoing and completed pages are derived indexes. The execution-order page is a linked database view of active leaf tasks whose dependencies are complete.
-
-For each managed page, NTT renders the desired current output, reads the existing page and compares the two. It writes only a page that is genuinely stale. Re-running reconciliation without changes therefore produces no managed-page writes.
-
-Task timeline bodies remain user-owned. Timeline commands make targeted changes around the `Timeline log` heading and dated toggles; managed-page reconciliation does not replace task bodies.
-
-## Universal synchronisation lifecycle
-
-Run the lifecycle selected by the configuration with:
-
-```bash
-ntt \
-  --refresh-notion-task-tracker \
-  --tracker-user example
-```
-
-Every tracker resolves its Notion resources, queries and validates Notion once, executes canonical repairs, reconciles only stale managed pages and emits one summary. Without `[calendar]`, the command finishes there and reports zero Calendar operations.
-
-When `[calendar]` exists, the same command continues from that already loaded `TaskTree` through the two-way Calendar lifecycle. Empty optional Google or D1 environment values are never validated on the Notion-only branch.
-
-## Calendar opt-in lifecycle
-
-A task is eligible for Calendar when it is active, has no children and has a complete start and duration. For example:
-
-```text
-Notion task:  [EXAMPLE-42] Pay council tax
-Start:        2026-08-03 10:00
-Duration:     1 hour
-
-Google event: [NTT] Pay council tax
-Start:        2026-08-03 10:00
-End:          2026-08-03 11:00
-```
-
-When Calendar is configured, the refresh performs one ordered story:
-
-```text
-resolve resources
-→ load and validate Notion once
-→ execute canonical Notion repairs
-→ read the D1 cursor and event ledger
-→ fetch outstanding Google changes
-→ apply owned Google changes to Notion and the same TaskTree
-→ reconcile affected managed Notion pages
-→ project the resulting TaskTree into Google
-→ update D1 event identity and deletion provenance
-→ advance the cursor
-→ emit one summary
-```
-
-“Two-way” does not mean simultaneous conflict resolution. Outstanding Google changes are applied first. The resulting in-memory tree, including those changes, is then projected into Google:
-
-1. A Notion schedule change creates or updates its Google event.
-2. Moving or resizing a uniquely owned Google event updates the Notion start and duration.
-3. Deleting a uniquely owned Google event clears the Notion schedule.
-4. Completing, cancelling, unscheduling or parenting a task removes an event that is no longer eligible.
-
-NTT identifies owned events through private Google extended properties containing the configured ticket prefix and full task identity. Synced events have an `[NTT]` title and remain transparent so meetings may overlap them. Foreign, malformed and ambiguously owned events remain untouched.
-
-## D1’s narrow Calendar role
-
-D1 stores only the protocol facts required to process Google changes safely:
-
-- The last completely applied Google change cursor.
-- The unique Google event mapped to each tracker task.
-- Whether NTT deleted an event and is awaiting Google’s cancellation record.
-- Temporary Google notification-channel records.
-
-When NTT deletes an event, it records deletion provenance before issuing the deletion. Google may later return only the cancelled event identity. The provenance distinguishes NTT’s own deletion from a person deleting an active owned event, preventing an NTT-originated deletion from clearing the Notion schedule.
-
-D1 contains no task snapshot, hierarchy, status, priority, schedule or managed-page content.
-
-## GitHub wake-up reasons
-
-`.github/workflows/refresh-notion-task-tracker.yml` accepts three wake-up routes:
-
-1. A Notion notification dispatch named `refresh-notion-task-tracker`.
-2. A Google notification dispatch named `apply-google-calendar-changes-to-notion-task-tracker`.
-3. A manual workflow dispatch.
-
-All three invoke the same `--refresh-notion-task-tracker` command in the same per-user concurrency group. The event name remains visible as the wake-up reason, but it does not select narrower work. Dispatch payloads contain only `tracker_user`; they do not carry Calendar progress. A Notion-only tracker uses the Notion and manual routes. It has no Google notification channel, so it cannot receive Google wake-ups.
-
-Each tracker user is one GitHub environment. Every environment supplies:
-
-- Secret `NTT_CONFIG_TOML`
-- Secret `NOTION_API_KEY`
-
-A Calendar-enabled environment additionally supplies:
-
-- Secrets `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET` and `GOOGLE_CALENDAR_REFRESH_TOKEN`
-- Secret `NTT_GOOGLE_CALENDAR_STATE_API_TOKEN`
-- Variable `NTT_GOOGLE_CALENDAR_NOTIFICATION_URL`
-- Variable `NTT_GOOGLE_CALENDAR_STATE_API_URL`
-
-Manual synchronisation asks for the environment name as `tracker_user`. A Notion wake-up uses:
+The JSON content file supports `blocks` (preferred) and `lines` (legacy). Here is a complete example showing all available options:
 
 ```json
 {
-  "event_type": "refresh-notion-task-tracker",
-  "client_payload": {
-    "tracker_user": "example"
-  }
+  "title": "Investigated activation mismatch",
+  "blocks": [
+    {
+      "type": "paragraph",
+      "text": "The exported model shows a discrepancy in the final layer."
+    },
+    {
+      "type": "code",
+      "text": "def measure_activation(tensor):\n    return tensor.abs().max()",
+      "language": "python"
+    }
+  ],
+  "lines": [
+    "Legacy string lines are also supported but blocks are preferred.",
+    "Another line of text."
+  ]
 }
 ```
 
-Google uses `apply-google-calendar-changes-to-notion-task-tracker` with the same identity-only payload for opted-in trackers.
-
-The separate notification-channel maintenance workflow runs:
-
+Move an identified timeline entry from one task to another:
 ```bash
-ntt \
-  --maintain-google-calendar-notification-channel \
-  --tracker-user example \
-  --calendar-notification-url https://<worker>/google-calendar-notifications
+ntt --move-logs --ticket-number 67 --destination-ticket-number 68 --log-id EXAMPLE-LOG-55d04742...
 ```
 
-Google notification channels expire and cannot be extended. Maintenance creates a replacement before expiry. If the old channel already expired, maintenance renews it and wakes the ordinary complete lifecycle. Provision this Calendar-only workflow only for opted-in tracker environments. The current scheduled workflow is deliberately configured for the Calendar-enabled `al0vya` environment.
+### Completing and deleting tasks
 
-## Worker deployment
-
-`cloudflare_worker/` authenticates Notion and Google webhook requests, dispatches GitHub wake-ups and exposes the authenticated D1 Calendar protocol API. Notion webhook dispatch uses only the tracker identity and remains valid for both modes; Notion-only trackers never use the Google or D1 endpoints.
-
-Inspect and run the package’s pinned scripts:
-
+Complete a task (optionally appending a final timeline entry):
 ```bash
-cd cloudflare_worker
-npm ci
-npm test
-npm run typecheck
+ntt --complete --ticket-number 67 --content-path /tmp/complete.json
 ```
 
-Configure Worker secrets:
-
+Complete a task and all its unfinished children recursively:
 ```bash
-cd cloudflare_worker
-npx wrangler secret put GITHUB_REPOSITORY_DISPATCH_TOKEN
-npx wrangler secret put NOTION_WEBHOOK_SECRET
-npx wrangler secret put NTT_GOOGLE_CALENDAR_STATE_API_TOKEN
+ntt --complete-with-all-children --ticket-number 67
 ```
 
-Apply D1 migrations and deploy:
-
+Cancel a task:
 ```bash
-cd cloudflare_worker
-npx wrangler d1 migrations apply GOOGLE_CALENDAR_STATE_DATABASE --remote
-npm run deploy
+ntt --cancel --ticket-number 67
 ```
 
-The deployed endpoints used by GitHub are:
-
-```text
-NTT_GOOGLE_CALENDAR_NOTIFICATION_URL=https://<worker>/google-calendar-notifications
-NTT_GOOGLE_CALENDAR_STATE_API_URL=https://<worker>/google-calendar
+Delete a task entirely (moves the Notion page to trash, promotes its children to its parent, and removes it from dependency relationships):
+```bash
+ntt --delete --ticket-number 67
 ```
 
-Configure Notion’s `Send webhook` action to send `POST /notion-task-tracker-changes` with `notion_webhook_secret` and `tracker_user` headers. The Worker rejects alternate body fields, query parameters and aliases.
+### Reconciling state
 
-## Recovery and failure behaviour
-
-- If Google expires the cursor, NTT fetches current Google events and rebuilds the D1 event ledger from that current snapshot before continuing.
-- Foreign, malformed and ambiguously owned Google events remain untouched.
-- Tracker-originated deletion provenance prevents Google’s cancellation record from reverse-unscheduling a task.
-- The cursor advances only after all required Notion, Google and D1 operations succeed. A failed operation leaves it unchanged so the outstanding changes can be retried.
-- A run with no changes performs no task or managed-page writes.
-- A Notion-only run never constructs Google or D1 clients and reports zero Calendar operations.
-- GitHub serialises each user’s lifecycle so overlapping wake-ups read the latest cursor when they begin.
-- The Worker also wakes synchronisation daily at `00:00 UTC`, preventing a missed notification from hiding changes permanently.
-
-## Package ownership
-
-The behaviour is divided at these boundaries:
-
-- `notion_task_tracker/run_notion_task_tracker.py` parses actions and runs one task-bearing command from current Notion data.
-- `notion_task_tracker/refresh_notion_task_tracker.py` owns the universal one-load lifecycle and selects the configured mode.
-- `notion_task_tracker/notion_operations/load_current_task_tree_from_notion.py` performs the single database query and validates the in-memory task tree.
-- `notion_task_tracker/notion_operations/` resolves configured resources, plans narrow Notion writes and reconciles managed pages.
-- `notion_task_tracker/tasks/` owns task, schedule, hierarchy and rendering rules.
-- `notion_task_tracker/google_calendar_sync/continue_synchronisation_with_google_calendar.py` continues an already loaded lifecycle through the optional Calendar protocol.
-- `cloudflare_worker/` owns authenticated wake-ups and the narrow D1 Calendar protocol boundary.
-
-## Tests
-
-Run the complete Python suite:
-
+Reconcile all canonical task properties and update the managed Notion pages (ongoing, completed, execution order), and sync with Google Calendar if configured:
 ```bash
-python -m pytest
+ntt --refresh-notion-task-tracker --tracker-user example
 ```
 
-Run Worker verification:
+## Agent skill
+
+The `notion-task-tracker` agent skill is bundled with this package. Every time you invoke `ntt`, it silently checks your agent configuration directories (e.g., `~/.cursor/skills/`) and auto-heals the `SKILL.md` file if it is missing or outdated.
+
+## Running tests
+
+Because `ntt` is installed in an isolated `pipx` environment, you must use the `pytest` binary from that specific environment to run the test suite:
 
 ```bash
-cd cloudflare_worker
-npm test
-npm run typecheck
+pipx inject notion-task-tracker pytest pytest-mock pytest-asyncio
+~/.local/share/pipx/venvs/notion-task-tracker/bin/pytest tests
 ```
