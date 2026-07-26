@@ -170,6 +170,12 @@ ntt --refresh-notion-task-tracker --tracker-user example
 
 The `notion-task-tracker` agent skill is bundled with this package. Every time you invoke `ntt`, it silently checks your agent configuration directories (e.g., `~/.cursor/skills/`) and auto-heals the `SKILL.md` file if it is missing or outdated.
 
+If you need to explicitly install or update the skill, you can run:
+
+```bash
+ntt --install-skill --force
+```
+
 ## Running tests
 
 Because `ntt` is installed in an isolated `pipx` environment, you must use the `pytest` binary from that specific environment to run the test suite:
