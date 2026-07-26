@@ -118,3 +118,23 @@ def _task_tree_with_one_active_task() -> TaskTree:
         notion_page_id="11111111111111111111111111111111",
     ))
     return task_tree
+def test_plan_task_landing_page_reconciliation_tolerates_empty_blocks():
+    task_tree = _task_tree_with_one_active_task()
+    notion_client = _LandingPageClient({
+        "66666666666666666666666666666666": "\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://www.notion.so/'
+                '11111111111111111111111111111111"/>: Blocked {color="orange"}'
+            ),
+            "<empty-block/>",
+        ]),
+        "77777777777777777777777777777777": "No completed tasks yet.",
+    })
+
+    write_intents = asyncio.run(
+        plan_task_landing_page_reconciliation(task_tree, notion_client)
+    )
+
+    assert len(write_intents) == 1
+    assert write_intents[0].operation_key == "replace:ongoing_landing_page"

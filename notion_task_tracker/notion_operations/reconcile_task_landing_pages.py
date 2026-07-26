@@ -132,6 +132,8 @@ def _require_managed_landing_page_content(
         return
 
     for line in current_markdown.splitlines():
+        if line == "<empty-block/>":
+            continue
         if line.startswith("## "):
             heading = line.removeprefix("## ")
             if heading in _MANAGED_LANDING_HEADINGS:
