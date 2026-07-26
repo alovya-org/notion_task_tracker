@@ -17,29 +17,41 @@ Notion is always the task authority. A Notion-only tracker never contacts Google
 
 ## Configuration
 
-Install the package from this repository:
+Install the package from this repository using `pipx` to ensure it is isolated and globally available on your `PATH`:
 
 ```bash
-python -m pip install .
+pipx install .
 ```
 
 For local development:
 
 ```bash
-python -m pip install -e .
+pipx install -e .
 ```
 
-The package installs the `ntt` and `notion-task-tracker` commands. `python -m notion_task_tracker` is also supported once dependencies are installed in that interpreter.
+The package installs the `ntt` and `notion-task-tracker` commands to `~/.local/bin/` (or your pipx bin directory). `python -m notion_task_tracker` is also supported once dependencies are installed in that interpreter.
+
+### Running tests
+
+Because `ntt` is installed in an isolated `pipx` environment, you must use the `pytest` binary from that specific environment to run the test suite. 
+
+To run tests, use the following exact path:
+
+```bash
+~/.local/share/pipx/venvs/notion-task-tracker/bin/pytest tests
+```
+
+To ensure `pytest` is available in the environment, install it via injection:
+
+```bash
+pipx inject notion-task-tracker pytest pytest-mock pytest-asyncio
+```
 
 ### Running `ntt`
 
-Users often have no `ntt` on the default `PATH` and no `pip` on the system Python. Use one of these before any live Notion command:
+Because `pipx` places the commands in your global environment path, you can run `ntt` from anywhere without activating a virtual environment.
 
-1. **`/workspace/venv/bin/ntt`** when that file exists (shared workspace virtual environment on this host).
-2. An activated project venv where `ntt` was installed, e.g. `source /path/to/venv/bin/activate` then `ntt …`.
-3. After `python -m pip install -e .` (or `pip install .`) inside a venv that has `pip`, use `ntt` from that venv’s `bin` directory.
-
-Do not run `python -m notion_task_tracker` from a bare checkout unless that interpreter already has the package and its dependencies (`notion-client`, `httpx`, and so on). If `which ntt` fails, use the absolute venv path above rather than guessing install commands on the system Python.
+Do not run `python -m notion_task_tracker` from a bare checkout unless that interpreter already has the package and its dependencies (`notion-client`, `httpx`, and so on). If `which ntt` fails, ensure `~/.local/bin` is in your `PATH` or re-run `pipx install`.
 
 ### Initialise Notion
 
