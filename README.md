@@ -4,13 +4,15 @@ Notion Task Tracker (NTT) is a system for tracking tasks in Notion. It is design
 
 ## Installation
 
-Install the package from this repository using `pipx` to ensure it is isolated and globally available on your `PATH`. Using editable mode (`-e`) ensures the bundled agent skill auto-heals immediately when the source changes:
+We recommend cloning the repository and installing it globally in editable mode using `pipx`. This ensures it is isolated, globally available on your `PATH`, and that the bundled agent skill auto-heals immediately when the source changes:
 
 ```bash
+git clone https://github.com/alovya/notion_task_tracker.git
+cd notion_task_tracker
 pipx install -e .
 ```
 
-This installs the `ntt` command.
+This installs the `ntt` command. To update the tracker in the future, simply run `git pull` in the repository directory.
 
 ## Configuration
 
