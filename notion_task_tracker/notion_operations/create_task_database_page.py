@@ -217,10 +217,10 @@ async def _write_current_task_creation_timeline(
     if timeline_command is None:
         return []
     timeline_owner_task_id = task_creation.parent_task_id or created_task_id
-    if timeline_owner_task_id == created_task_id:
-        fetched_page_content_by_task_id[created_task_id] = (
+    if timeline_owner_task_id not in fetched_page_content_by_task_id:
+        fetched_page_content_by_task_id[timeline_owner_task_id] = (
             await notion_client.fetch_task_page_content(
-                task_tree.tasks[created_task_id].notion_page_id
+                task_tree.tasks[timeline_owner_task_id].notion_page_id
             )
         )
     from notion_task_tracker.notion_operations.prepare_task_page_timeline_log_write import (
