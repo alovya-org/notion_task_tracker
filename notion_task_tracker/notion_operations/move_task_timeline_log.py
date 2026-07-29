@@ -91,23 +91,31 @@ async def _copy_timeline_log_to_destination(
 ) -> None:
     destination_date_heading = _find_date_heading(destination_blocks, selected_log.entry_date)
     if destination_date_heading is not None:
-        blocks_to_append = [_copyable_block(selected_log.toggle)]
+        blocks_to_append = [selected_log.toggle]
         insertion_anchor_id = destination_date_heading["id"]
     else:
         timeline_heading = _find_timeline_log_heading(destination_blocks)
         if timeline_heading is None:
             raise ValueError("Destination task has no Timeline log heading")
         blocks_to_append = [
-            _copyable_block(selected_log.date_heading),
-            _copyable_block(selected_log.toggle),
+            selected_log.date_heading,
+            selected_log.toggle,
         ]
         insertion_anchor_id = timeline_heading["id"]
 
-    await notion_client.append_block_children(
-        parent_block_id=destination_page_id,
-        children=blocks_to_append,
-        after_block_id=insertion_anchor_id,
-    )
+    copied_root_blocks: list[dict[str, Any]] = []
+    try:
+        await _append_copied_blocks(
+            destination_page_id,
+            blocks_to_append,
+            insertion_anchor_id,
+            notion_client,
+            copied_root_blocks,
+        )
+    except Exception:
+        for copied_root_block in reversed(copied_root_blocks):
+            await notion_client.delete_block(copied_root_block["id"])
+        raise
 
 
 async def _verify_page_contains_log(
@@ -196,17 +204,139 @@ def _block_plain_text(block: dict[str, Any]) -> str:
     return plain_text_from_rich_text_items(block_value.get("rich_text", []))
 
 
-def _copyable_block(block: dict[str, Any]) -> dict[str, Any]:
+async def _append_copied_blocks(
+    parent_block_id: str,
+    source_blocks: list[dict[str, Any]],
+    after_block_id: str | None,
+    notion_client: NotionRestClient,
+    copied_root_blocks: list[dict[str, Any]] | None = None,
+) -> None:
+    append_payload = [_build_initial_append_payload(block) for block in source_blocks]
+    created_blocks = await notion_client.append_block_children(
+        parent_block_id=parent_block_id,
+        children=append_payload,
+        after_block_id=after_block_id,
+    )
+    if len(created_blocks) != len(source_blocks):
+        raise ValueError(
+            f"Expected {len(source_blocks)} created blocks under {parent_block_id!r}, "
+            f"received {len(created_blocks)}"
+        )
+
+    if copied_root_blocks is not None:
+        copied_root_blocks.extend(created_blocks)
+
+    for source_block, created_block in zip(source_blocks, created_blocks, strict=True):
+        await _append_children_not_created_inline(source_block, created_block, notion_client)
+
+
+async def _append_children_not_created_inline(
+    source_block: dict[str, Any],
+    created_block: dict[str, Any],
+    notion_client: NotionRestClient,
+) -> None:
+    if not _has_children_not_created_inline(source_block):
+        return
+
+    block_type = source_block["type"]
+    if block_type == "column_list":
+        await _append_column_descendants_not_created_inline(source_block, created_block["id"], notion_client)
+        return
+
+    await _append_copied_blocks(created_block["id"], source_block["children"], None, notion_client)
+
+
+def _has_children_not_created_inline(source_block: dict[str, Any]) -> bool:
+    if not source_block.get("children"):
+        return False
+    return source_block["type"] != "table"
+
+
+async def _append_column_descendants_not_created_inline(
+    source_column_list: dict[str, Any],
+    created_column_list_id: str,
+    notion_client: NotionRestClient,
+) -> None:
+    source_columns = source_column_list.get("children", [])
+    created_columns = await notion_client.fetch_block_children(created_column_list_id)
+    if len(created_columns) != len(source_columns):
+        raise ValueError(
+            f"Expected {len(source_columns)} created columns under {created_column_list_id!r}, "
+            f"received {len(created_columns)}"
+        )
+
+    for source_column, created_column in zip(source_columns, created_columns, strict=True):
+        source_column_children = source_column.get("children", [])
+        if not source_column_children:
+            continue
+
+        created_column_children = await notion_client.fetch_block_children(created_column["id"])
+        if len(created_column_children) != len(source_column_children):
+            raise ValueError(
+                f"Expected {len(source_column_children)} created blocks under column {created_column['id']!r}, "
+                f"received {len(created_column_children)}"
+            )
+        for source_child, created_child in zip(source_column_children, created_column_children, strict=True):
+            await _append_children_not_created_inline(source_child, created_child, notion_client)
+
+
+def _build_initial_append_payload(block: dict[str, Any]) -> dict[str, Any]:
     block_type = block["type"]
-    copied_block = {
+    append_payload = {
         "object": "block",
         "type": block_type,
-        block_type: _copyable_block_value(block[block_type]),
+        block_type: _copyable_block_type_value(block),
     }
-    copied_block[block_type].pop("children", None)
-    if block.get("children"):
-        copied_block[block_type]["children"] = [_copyable_block(child) for child in block["children"]]
-    return copied_block
+    append_payload[block_type].pop("children", None)
+    if block_type == "table":
+        append_payload[block_type]["children"] = [
+            _build_append_payload_without_children(child)
+            for child in block.get("children", [])
+        ]
+    if block_type == "column_list":
+        append_payload[block_type]["children"] = [
+            _build_column_append_payload(column)
+            for column in block.get("children", [])
+        ]
+    return append_payload
+
+
+def _build_column_append_payload(column_block: dict[str, Any]) -> dict[str, Any]:
+    if column_block.get("type") != "column":
+        raise ValueError(f"Column list child must be a column block, not {column_block.get('type')!r}")
+
+    append_payload = _build_append_payload_without_children(column_block)
+    append_payload["column"]["children"] = [
+        _build_append_payload_without_children(child)
+        for child in column_block.get("children", [])
+    ]
+    return append_payload
+
+
+def _build_append_payload_without_children(block: dict[str, Any]) -> dict[str, Any]:
+    block_type = block["type"]
+    append_payload = {
+        "object": "block",
+        "type": block_type,
+        block_type: _copyable_block_type_value(block),
+    }
+    append_payload[block_type].pop("children", None)
+    return append_payload
+
+
+def _copyable_block_type_value(block: dict[str, Any]) -> dict[str, Any]:
+    block_type = block["type"]
+    block_value = _copyable_block_value(block[block_type])
+    if block_type == "image" and block_value.get("type") == "file":
+        return {
+            key: value
+            for key, value in block_value.items()
+            if key != "file"
+        } | {
+            "type": "external",
+            "external": {"url": block_value["file"]["url"]},
+        }
+    return block_value
 
 
 def _copyable_block_value(value: Any) -> Any:
@@ -218,5 +348,5 @@ def _copyable_block_value(value: Any) -> Any:
     return {
         key: _copyable_block_value(nested_value)
         for key, nested_value in value.items()
-        if key not in {"plain_text", "href"} and nested_value is not None
+        if key not in {"plain_text", "href", "list_format"} and nested_value is not None
     }

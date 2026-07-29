@@ -7,6 +7,7 @@ from notion_task_tracker import NotionPageReference, NotionPageRegistry, NotionW
 from notion_task_tracker.apply_task_command import TaskCommandPlan
 from notion_task_tracker.notion_operations.rest_client import (
     NotionRestClient,
+    _created_blocks_from_append_response,
     _notion_rest_access_token_from_environment,
     _notion_rest_error_message,
     _task_database_row_from_rest_page,
@@ -94,12 +95,13 @@ def test_append_block_children_uses_current_position_object():
     notion_client.client = _FakeNotionSdkClient(page_result={})
     children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
 
-    asyncio.run(notion_client.append_block_children(
+    appended_blocks = asyncio.run(notion_client.append_block_children(
         parent_block_id="page-a",
         children=children,
         after_block_id="heading-a",
     ))
 
+    assert appended_blocks == [{"id": "created-block"}]
     assert notion_client.client.blocks.children.requests == [
         {
             "block_id": "page-a",
@@ -121,16 +123,66 @@ def test_append_block_children_omits_position_for_an_empty_page():
     notion_client.client = _FakeNotionSdkClient(page_result={})
     children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": []}}]
 
-    asyncio.run(notion_client.append_block_children(
+    appended_blocks = asyncio.run(notion_client.append_block_children(
         parent_block_id="page-a",
         children=children,
         after_block_id=None,
     ))
 
+    assert appended_blocks == [{"id": "created-block"}]
     assert notion_client.client.blocks.children.requests == [{
         "block_id": "page-a",
         "children": children,
     }]
+
+
+def test_created_blocks_from_append_response_returns_exact_created_blocks():
+    created_blocks = [{"id": "created-a"}]
+
+    assert _created_blocks_from_append_response(
+        created_blocks,
+        appended_block_count=1,
+        after_block_id="heading-a",
+    ) == created_blocks
+
+
+def test_created_blocks_from_append_response_extracts_blocks_after_anchor():
+    response_blocks = [
+        {"id": "timeline-heading"},
+        {"id": "date-heading"},
+        {"id": "created-toggle"},
+        {"id": "next-toggle"},
+    ]
+
+    assert _created_blocks_from_append_response(
+        response_blocks,
+        appended_block_count=1,
+        after_block_id="date-heading",
+    ) == [{"id": "created-toggle"}]
+
+
+def test_created_blocks_from_append_response_returns_none_when_anchor_is_not_in_response_page():
+    assert _created_blocks_from_append_response(
+        [
+            {"id": "created-toggle"},
+            {"id": "next-toggle"},
+        ],
+        appended_block_count=1,
+        after_block_id="date-heading",
+    ) is None
+
+
+def test_created_blocks_from_append_response_extracts_blocks_appended_to_end():
+    response_blocks = [
+        {"id": "existing-child"},
+        {"id": "created-child"},
+    ]
+
+    assert _created_blocks_from_append_response(
+        response_blocks,
+        appended_block_count=1,
+        after_block_id=None,
+    ) == [{"id": "created-child"}]
 
 
 def test_from_environment_uses_notion_api_key(monkeypatch):
@@ -536,6 +588,7 @@ class _FakeBlockChildrenEndpoint:
 
     async def append(self, **arguments):
         self.requests.append(arguments)
+        return {"results": [{"id": "created-block"}]}
 
 
 def _page_registry() -> NotionPageRegistry:

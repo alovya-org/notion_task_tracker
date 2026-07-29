@@ -59,6 +59,26 @@ class NotionWriteExecutionResult:
     blocked_operation_count: int = 0
 
 
+def _created_blocks_from_append_response(
+    response_blocks: list[dict[str, Any]],
+    appended_block_count: int,
+    after_block_id: str | None,
+) -> list[dict[str, Any]] | None:
+    if len(response_blocks) == appended_block_count:
+        return response_blocks
+    if after_block_id is None:
+        return response_blocks[-appended_block_count:]
+
+    after_block_index = next((
+        index
+        for index, block in enumerate(response_blocks)
+        if block.get("id") == after_block_id
+    ), None)
+    if after_block_index is None:
+        return None
+    return response_blocks[after_block_index + 1:after_block_index + 1 + appended_block_count]
+
+
 class NotionRestClient:
     def __init__(self, access_token: str, base_url: str, notion_version: str) -> None:
         self.access_token = access_token
@@ -118,17 +138,44 @@ class NotionRestClient:
         parent_block_id: str,
         children: list[dict[str, Any]],
         after_block_id: str | None,
-    ) -> None:
+    ) -> list[dict[str, Any]]:
         arguments = {"block_id": parent_block_id, "children": children}
         if after_block_id is not None:
             arguments["position"] = {
                 "type": "after_block",
                 "after_block": {"id": after_block_id},
             }
-        await self.client.blocks.children.append(**arguments)
+        response = await self.client.blocks.children.append(**arguments)
+        created_blocks = _created_blocks_from_append_response(
+            response.get("results", []),
+            appended_block_count=len(children),
+            after_block_id=after_block_id,
+        )
+        if created_blocks is not None:
+            return created_blocks
+        return await self._fetch_created_blocks_after_append(parent_block_id, len(children), after_block_id)
 
     async def delete_block(self, block_id: str) -> None:
         await self.client.blocks.delete(block_id=block_id)
+
+    async def _fetch_created_blocks_after_append(
+        self,
+        parent_block_id: str,
+        appended_block_count: int,
+        after_block_id: str | None,
+    ) -> list[dict[str, Any]]:
+        parent_children = await self.fetch_block_children(parent_block_id)
+        if after_block_id is None:
+            return parent_children[-appended_block_count:]
+
+        after_block_index = next((
+            index
+            for index, block in enumerate(parent_children)
+            if block.get("id") == after_block_id
+        ), None)
+        if after_block_index is None:
+            raise ValueError(f"Fresh parent read did not include anchor block {after_block_id!r}")
+        return parent_children[after_block_index + 1:after_block_index + 1 + appended_block_count]
 
     async def ensure_checkbox_property(
         self,
