@@ -168,7 +168,7 @@ ntt --refresh-notion-task-tracker --tracker-user example
 
 ## Agent skill
 
-The `notion-task-tracker` agent skill is bundled with this package. Every time you invoke `ntt`, it silently checks your agent configuration directories (e.g., `~/.cursor/skills/`) and auto-heals the `SKILL.md` file if it is missing or outdated.
+The `notion-task-tracker` agent skill is bundled with this package. Every time you invoke `ntt`, it silently checks your agent configuration directories (e.g., `~/.cursor/skills/`) and auto-heals the `SKILL.md` file if it is missing or outdated. NTT recognises `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `CURSOR_HOME`, and `PI_CODING_AGENT_DIR`; each configured directory receives the skill under `skills/notion-task-tracker/SKILL.md`.
 
 If you need to explicitly install or update the skill, you can run:
 

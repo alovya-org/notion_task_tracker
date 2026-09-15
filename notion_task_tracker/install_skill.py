@@ -42,6 +42,7 @@ def install_skill(
     codex_home_path: str | Path | None = None,
     claude_config_dir_path: str | Path | None = None,
     cursor_home_path: str | Path | None = None,
+    pi_coding_agent_dir_path: str | Path | None = None,
     output_stream: TextIO = sys.stdout,
     warning_stream: TextIO = sys.stderr,
     force: bool = False,
@@ -59,10 +60,16 @@ def install_skill(
             "Warning: CURSOR_HOME is not set; skipping Cursor skill installation.",
             file=warning_stream,
         )
+    if pi_coding_agent_dir_path is None and not os.environ.get("PI_CODING_AGENT_DIR"):
+        print(
+            "Warning: PI_CODING_AGENT_DIR is not set; skipping Pi skill installation.",
+            file=warning_stream,
+        )
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
         cursor_home_path=cursor_home_path,
+        pi_coding_agent_dir_path=pi_coding_agent_dir_path,
     )
     results = [
         install_skill_for_target(source_skill_path, target, force=force)
@@ -93,10 +100,12 @@ def skill_install_targets(
     codex_home_path: str | Path | None = None,
     claude_config_dir_path: str | Path | None = None,
     cursor_home_path: str | Path | None = None,
+    pi_coding_agent_dir_path: str | Path | None = None,
 ) -> list[SkillInstallTarget]:
     resolved_codex_home_path = _codex_home_path(codex_home_path)
     resolved_claude_config_dir_path = _claude_config_dir_path(claude_config_dir_path)
     resolved_cursor_home_path = _cursor_home_path(cursor_home_path)
+    resolved_pi_coding_agent_dir_path = _pi_coding_agent_dir_path(pi_coding_agent_dir_path)
 
     targets: list[SkillInstallTarget] = []
     if resolved_codex_home_path is not None:
@@ -113,6 +122,11 @@ def skill_install_targets(
         targets.append(SkillInstallTarget(
             tool_name="cursor",
             skill_path=resolved_cursor_home_path / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
+        ))
+    if resolved_pi_coding_agent_dir_path is not None:
+        targets.append(SkillInstallTarget(
+            tool_name="pi",
+            skill_path=resolved_pi_coding_agent_dir_path / "skills" / SKILL_DIRECTORY_NAME / SKILL_FILE_NAME,
         ))
     return targets
 
@@ -181,5 +195,16 @@ def _cursor_home_path(cursor_home_path: str | Path | None) -> Path | None:
     configured_cursor_home_path = os.environ.get("CURSOR_HOME")
     if configured_cursor_home_path:
         return Path(configured_cursor_home_path).expanduser()
+
+    return None
+
+
+def _pi_coding_agent_dir_path(pi_coding_agent_dir_path: str | Path | None) -> Path | None:
+    if pi_coding_agent_dir_path:
+        return Path(pi_coding_agent_dir_path).expanduser()
+
+    configured_pi_coding_agent_dir_path = os.environ.get("PI_CODING_AGENT_DIR")
+    if configured_pi_coding_agent_dir_path:
+        return Path(configured_pi_coding_agent_dir_path).expanduser()
 
     return None

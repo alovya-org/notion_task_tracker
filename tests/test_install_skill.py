@@ -16,11 +16,13 @@ def test_skill_install_targets_use_tool_homes_and_config_dirs(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
     claude_config_dir_path = tmp_path / "claude"
     cursor_home_path = tmp_path / "cursor"
+    pi_coding_agent_dir_path = tmp_path / "pi"
 
     targets = skill_install_targets(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
         cursor_home_path=cursor_home_path,
+        pi_coding_agent_dir_path=pi_coding_agent_dir_path,
     )
 
     assert targets == [
@@ -36,6 +38,10 @@ def test_skill_install_targets_use_tool_homes_and_config_dirs(tmp_path: Path):
             tool_name="cursor",
             skill_path=cursor_home_path / "skills" / "notion-task-tracker" / "SKILL.md",
         ),
+        SkillInstallTarget(
+            tool_name="pi",
+            skill_path=pi_coding_agent_dir_path / "skills" / "notion-task-tracker" / "SKILL.md",
+        ),
     ]
 
 
@@ -43,22 +49,26 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
     codex_home_path = tmp_path / "codex"
     claude_config_dir_path = tmp_path / "claude"
     cursor_home_path = tmp_path / "cursor"
+    pi_coding_agent_dir_path = tmp_path / "pi"
     output_stream = io.StringIO()
 
     results = install_skill(
         codex_home_path=codex_home_path,
         claude_config_dir_path=claude_config_dir_path,
         cursor_home_path=cursor_home_path,
+        pi_coding_agent_dir_path=pi_coding_agent_dir_path,
         output_stream=output_stream,
     )
 
     codex_skill_path = codex_home_path / "skills" / "notion-task-tracker" / "SKILL.md"
     claude_skill_path = claude_config_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
     cursor_skill_path = cursor_home_path / "skills" / "notion-task-tracker" / "SKILL.md"
-    assert [result.status for result in results] == ["installed", "installed", "installed"]
+    pi_skill_path = pi_coding_agent_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
+    assert [result.status for result in results] == ["installed", "installed", "installed", "installed"]
     assert codex_skill_path.read_text(encoding="utf-8").startswith("---")
     assert claude_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
     assert cursor_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
+    assert pi_skill_path.read_text(encoding="utf-8") == codex_skill_path.read_text(encoding="utf-8")
     assert json.loads(output_stream.getvalue()) == [
         {
             "tool_name": "codex",
@@ -75,15 +85,21 @@ def test_install_skill_copies_root_skill_to_agent_tool_paths(tmp_path: Path):
             "skill_path": str(cursor_skill_path),
             "status": "installed",
         },
+        {
+            "tool_name": "pi",
+            "skill_path": str(pi_skill_path),
+            "status": "installed",
+        },
     ]
 
 
 @pytest.mark.parametrize(
     ("missing_environment_variable", "configured_paths", "installed_tool", "missing_tool"),
     [
-        ("CODEX_HOME", {"claude_config_dir_path": "claude", "cursor_home_path": "cursor"}, "claude", "Codex"),
-        ("CLAUDE_CONFIG_DIR", {"codex_home_path": "codex", "cursor_home_path": "cursor"}, "codex", "Claude"),
-        ("CURSOR_HOME", {"codex_home_path": "codex", "claude_config_dir_path": "claude"}, "codex", "Cursor"),
+        ("CODEX_HOME", {"claude_config_dir_path": "claude", "cursor_home_path": "cursor", "pi_coding_agent_dir_path": "pi"}, "claude", "Codex"),
+        ("CLAUDE_CONFIG_DIR", {"codex_home_path": "codex", "cursor_home_path": "cursor", "pi_coding_agent_dir_path": "pi"}, "codex", "Claude"),
+        ("CURSOR_HOME", {"codex_home_path": "codex", "claude_config_dir_path": "claude", "pi_coding_agent_dir_path": "pi"}, "codex", "Cursor"),
+        ("PI_CODING_AGENT_DIR", {"codex_home_path": "codex", "claude_config_dir_path": "claude", "cursor_home_path": "cursor"}, "codex", "Pi"),
     ],
 )
 def test_install_skill_skips_and_warns_for_unconfigured_tool(
@@ -113,13 +129,14 @@ def test_install_skill_skips_and_warns_for_unconfigured_tool(
     assert f"Warning: {missing_environment_variable} is not set; skipping {missing_tool} skill installation.\n" in warning_stream.getvalue()
 
 
-def test_cursor_home_path_resolves_env_var_and_argument(
+def test_skill_install_targets_resolve_environment_variables(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CURSOR_HOME", raising=False)
+    monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
     assert skill_install_targets() == []
 
     custom_env_dir_path = tmp_path / "custom_cursor"
@@ -127,6 +144,13 @@ def test_cursor_home_path_resolves_env_var_and_argument(
     targets_env = skill_install_targets()
     assert len(targets_env) == 1
     assert targets_env[0].skill_path == custom_env_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
+
+    custom_pi_dir_path = tmp_path / "custom_pi"
+    monkeypatch.delenv("CURSOR_HOME", raising=False)
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(custom_pi_dir_path))
+    pi_targets_env = skill_install_targets()
+    assert len(pi_targets_env) == 1
+    assert pi_targets_env[0].skill_path == custom_pi_dir_path / "skills" / "notion-task-tracker" / "SKILL.md"
 
 
 def test_install_skill_is_noop_when_existing_file_is_identical(tmp_path: Path):
