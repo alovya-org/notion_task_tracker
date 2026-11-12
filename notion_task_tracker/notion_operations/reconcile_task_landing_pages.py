@@ -8,6 +8,7 @@ from notion_task_tracker.notion_operations.notion_id import (
     canonical_notion_page_id,
     notion_page_id_from_url,
 )
+from notion_task_tracker.notion_operations.page_registry import NotionPageRegistry
 from notion_task_tracker.notion_operations.plan_task_page_write_intents import (
     build_page_registry_for_task_tree,
     render_completed_landing_page_markdown,
@@ -22,6 +23,10 @@ from notion_task_tracker.tracked_pages import TrackedPage
 
 _NOTION_PAGE_MENTION_PATTERN = re.compile(
     r'<mention-page url="https://(?:www\.notion\.so/|app\.notion\.com/p/)([^"]+)"/>'
+)
+_EXPANDED_NOTION_PAGE_MENTION_PATTERN = re.compile(
+    r'<mention-page url="(?P<url>https://(?:www\.notion\.so/|app\.notion\.com/p/)[^"]+)">'
+    r'(?P<title>[^<]*)</mention-page>'
 )
 _ESCAPED_MANAGED_PRIORITY_PATTERN = re.compile(
     r'^(\t*- )\\\[(P0|P1|P2|P3|N/A)\\\]( )'
@@ -60,16 +65,19 @@ async def plan_task_landing_page_reconciliation(
     current_completed_markdown = await notion_client.fetch_page_markdown(
         _required_page_id(completed_page)
     )
+    task_page_titles_by_notion_id = _task_page_titles_by_notion_id(page_registry)
     return [
         *_plan_landing_page_replacement(
             ongoing_page,
             current_ongoing_markdown,
             expected_ongoing_markdown,
+            task_page_titles_by_notion_id,
         ),
         *_plan_landing_page_replacement(
             completed_page,
             current_completed_markdown,
             expected_completed_markdown,
+            task_page_titles_by_notion_id,
         ),
     ]
 
@@ -78,9 +86,16 @@ def _plan_landing_page_replacement(
     page: TrackedPage,
     current_markdown: str,
     expected_markdown: str,
+    task_page_titles_by_notion_id: dict[str, str],
 ) -> list[NotionWriteIntent]:
-    normalised_current_markdown = _normalise_notion_markdown(current_markdown)
-    normalised_expected_markdown = _normalise_notion_markdown(expected_markdown)
+    normalised_current_markdown = _normalise_notion_markdown(
+        current_markdown,
+        task_page_titles_by_notion_id,
+    )
+    normalised_expected_markdown = _normalise_notion_markdown(
+        expected_markdown,
+        task_page_titles_by_notion_id,
+    )
     if normalised_current_markdown == normalised_expected_markdown:
         return []
 
@@ -95,13 +110,23 @@ def _plan_landing_page_replacement(
     ]
 
 
-def _normalise_notion_markdown(markdown: str) -> str:
+def _normalise_notion_markdown(
+    markdown: str,
+    task_page_titles_by_notion_id: dict[str, str],
+) -> str:
     normalised_lines = [
         _normalise_notion_exported_managed_task_line(line.rstrip())
         for line in markdown.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         if line.strip()
     ]
     normalised_markdown = "\n".join(normalised_lines)
+    normalised_markdown = _EXPANDED_NOTION_PAGE_MENTION_PATTERN.sub(
+        lambda match: _normalise_expanded_page_mention(
+            match,
+            task_page_titles_by_notion_id,
+        ),
+        normalised_markdown,
+    )
     return _NOTION_PAGE_MENTION_PATTERN.sub(
         _canonical_page_mention_url,
         normalised_markdown,
@@ -112,14 +137,44 @@ def _normalise_notion_exported_managed_task_line(line: str) -> str:
     return _ESCAPED_MANAGED_PRIORITY_PATTERN.sub(r"\1[\2]\3", line)
 
 
+def _normalise_expanded_page_mention(
+    match: re.Match[str],
+    task_page_titles_by_notion_id: dict[str, str],
+) -> str:
+    page_id = notion_page_id_from_url(match.group("url"))
+    expected_title = task_page_titles_by_notion_id.get(page_id)
+    if (
+        expected_title is None
+        or _unescape_markdown_punctuation(match.group("title")) != expected_title
+    ):
+        return match.group(0)
+
+    return _render_canonical_page_mention(page_id)
+
+
+def _unescape_markdown_punctuation(text: str) -> str:
+    return re.sub(r"\\([^\w\s])", r"\1", text)
+
+
 def _canonical_page_mention_url(match: re.Match[str]) -> str:
+    page_url = "https://www.notion.so/" + match.group(1)
+    return _render_canonical_page_mention(notion_page_id_from_url(page_url))
+
+
+def _render_canonical_page_mention(page_id: str) -> str:
     return (
         '<mention-page url="https://www.notion.so/'
-        + canonical_notion_page_id(
-            notion_page_id_from_url("https://www.notion.so/" + match.group(1))
-        )
+        + canonical_notion_page_id(page_id)
         + '"/>'
     )
+
+
+def _task_page_titles_by_notion_id(page_registry: NotionPageRegistry) -> dict[str, str]:
+    return {
+        canonical_notion_page_id(page.notion_page_id): page.title
+        for local_page_key, page in page_registry.pages.items()
+        if local_page_key.startswith("task:") and page.notion_page_id is not None
+    }
 
 
 def _require_managed_landing_page_content(

@@ -34,6 +34,68 @@ def test_plan_task_landing_page_reconciliation_skips_semantically_matching_pages
     assert write_intents == []
 
 
+def test_plan_task_landing_page_reconciliation_accepts_markdown_escaped_expanded_task_titles():
+    """Replace stale managed content after recognising an escaped Notion page mention.
+
+    Relevant call order:
+    plan_task_landing_page_reconciliation
+    -> fetch_page_markdown (faked: provide the Notion response without an API call)
+    -> plan the landing-page replacement (real: validate and canonicalise the mention).
+    """
+    task_tree = _task_tree_with_one_active_task("Investigate QAT -> QNN pipeline")
+    notion_client = _LandingPageClient({
+        "66666666666666666666666666666666": "\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://app.notion.com/p/'
+                '11111111-1111-1111-1111-111111111111">'
+                r'\[1\] Investigate QAT -\> QNN pipeline</mention-page>: Blocked {color="orange"}'
+            ),
+        ]),
+        "77777777777777777777777777777777": "No completed tasks yet.",
+    })
+
+    write_intents = asyncio.run(
+        plan_task_landing_page_reconciliation(task_tree, notion_client)
+    )
+
+    assert len(write_intents) == 1
+    assert write_intents[0].arguments["markdown"] == "\n".join([
+        "## P1 (high impact)",
+        (
+            '- [P1] <mention-page url="https://www.notion.so/'
+            '11111111111111111111111111111111"/>: Active {color="orange"}'
+        ),
+    ])
+
+
+def test_plan_task_landing_page_reconciliation_rejects_unexpected_expanded_task_title():
+    """Reject a title-bearing mention when its label contradicts the linked task.
+
+    Relevant call order:
+    plan_task_landing_page_reconciliation
+    -> fetch_page_markdown (faked: supply the mismatched response without an API call)
+    -> plan the landing-page replacement (real: reject unsupported content).
+    """
+    task_tree = _task_tree_with_one_active_task()
+    notion_client = _LandingPageClient({
+        "66666666666666666666666666666666": "\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://app.notion.com/p/'
+                '11111111-1111-1111-1111-111111111111">'
+                r'\[1\] Different task</mention-page>: Active {color="orange"}'
+            ),
+        ]),
+        "77777777777777777777777777777777": "No completed tasks yet.",
+    })
+
+    with pytest.raises(ValueError, match="contains unsupported content"):
+        asyncio.run(
+            plan_task_landing_page_reconciliation(task_tree, notion_client)
+        )
+
+
 def test_plan_task_landing_page_reconciliation_replaces_only_stale_managed_content():
     task_tree = _task_tree_with_one_active_task()
     notion_client = _LandingPageClient({
@@ -99,7 +161,7 @@ class _LandingPageClient:
         return self.markdown_by_page_id[page_id]
 
 
-def _task_tree_with_one_active_task() -> TaskTree:
+def _task_tree_with_one_active_task(title: str = "Active task") -> TaskTree:
     task_tree = TaskTree()
     task_tree.ongoing_tasks_landing_page.page.title = "Alovya's ongoing tasks"
     task_tree.ongoing_tasks_landing_page.page.notion_page_id = (
@@ -111,7 +173,7 @@ def _task_tree_with_one_active_task() -> TaskTree:
     )
     task_tree.add_task(Task(
         task_id="ALOVYA-1",
-        title="Active task",
+        title=title,
         configured_priority=Priority.P1,
         displayed_priority=Priority.P1,
         status=TaskStatus.ACTIVE,
