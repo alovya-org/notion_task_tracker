@@ -26,7 +26,7 @@ _NOTION_PAGE_MENTION_PATTERN = re.compile(
 )
 _EXPANDED_NOTION_PAGE_MENTION_PATTERN = re.compile(
     r'<mention-page url="(?P<url>https://(?:www\.notion\.so/|app\.notion\.com/p/)[^"]+)">'
-    r'(?P<title>[^<]*)</mention-page>'
+    r'(?P<title>(?:\\.|[^<])*)</mention-page>'
 )
 _ESCAPED_MANAGED_PRIORITY_PATTERN = re.compile(
     r'^(\t*- )\\\[(P0|P1|P2|P3|N/A)\\\]( )'

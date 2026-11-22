@@ -69,6 +69,30 @@ def test_plan_task_landing_page_reconciliation_accepts_markdown_escaped_expanded
     ])
 
 
+def test_plan_task_landing_page_reconciliation_accepts_escaped_angle_brackets_in_task_title():
+    task_tree = _task_tree_with_one_active_task(
+        "Notion<>NTT<>Google Calender setup and configuration"
+    )
+    notion_client = _LandingPageClient({
+        "66666666666666666666666666666666": "\n".join([
+            "## P1 (high impact)",
+            (
+                '- [P1] <mention-page url="https://app.notion.com/p/'
+                '11111111-1111-1111-1111-111111111111">'
+                r'\[1\] Notion\<\>NTT\<\>Google Calender setup and configuration'
+                '</mention-page>: Active {color="orange"}'
+            ),
+        ]),
+        "77777777777777777777777777777777": "No completed tasks yet.",
+    })
+
+    write_intents = asyncio.run(
+        plan_task_landing_page_reconciliation(task_tree, notion_client)
+    )
+
+    assert write_intents == []
+
+
 def test_plan_task_landing_page_reconciliation_rejects_unexpected_expanded_task_title():
     """Reject a title-bearing mention when its label contradicts the linked task.
 
