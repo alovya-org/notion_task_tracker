@@ -167,6 +167,23 @@ class _GoogleOAuthAccessTokenProvider:
                 "grant_type": "refresh_token",
             },
         )
+        if response.is_error:
+            error_body = response.json()
+            error_details = ": ".join(
+                detail
+                for detail in (
+                    error_body.get("error"),
+                    error_body.get("error_description"),
+                )
+                if isinstance(detail, str) and detail
+            )
+            if error_details:
+                raise HTTPStatusError(
+                    f"Google OAuth token request failed with HTTP {response.status_code}: "
+                    f"{error_details}",
+                    request=response.request,
+                    response=response,
+                )
         response.raise_for_status()
         response_body = response.json()
         access_token = response_body.get("access_token")

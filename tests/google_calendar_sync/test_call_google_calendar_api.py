@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from httpx import AsyncClient, MockTransport, Request, Response
+from httpx import AsyncClient, HTTPStatusError, MockTransport, Request, Response
 import pytest
 
 from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
@@ -13,6 +13,24 @@ from notion_task_tracker.google_calendar_sync.call_google_calendar_api import (
 
 
 TEST_CREDENTIALS = GoogleCalendarCredentials("client", "secret", "refresh")
+
+
+def test_google_oauth_failure_includes_provider_error_without_credentials():
+    def reject_refresh(request: Request) -> Response:
+        return Response(400, json={
+            "error": "invalid_grant",
+            "error_description": "Token has been expired or revoked",
+        })
+
+    client = _calendar_client(reject_refresh)
+
+    with pytest.raises(HTTPStatusError) as error:
+        asyncio.run(client.list_calendar_events())
+
+    assert "invalid_grant" in str(error.value)
+    assert "expired or revoked" in str(error.value)
+    assert TEST_CREDENTIALS.client_secret not in str(error.value)
+    assert TEST_CREDENTIALS.refresh_token not in str(error.value)
 
 
 def test_first_request_renews_the_access_token_and_later_requests_reuse_it():
