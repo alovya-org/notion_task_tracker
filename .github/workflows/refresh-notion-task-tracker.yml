@@ -1,4 +1,4 @@
-name: Wake Notion task tracker synchronisation
+name: Refresh Notion task tracker
 
 on:
   workflow_dispatch:
